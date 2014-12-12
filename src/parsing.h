@@ -46,10 +46,10 @@
 #define STATUS_FAILED     'X'
 #define STATUS_ENDED      'E'
 
-#define SINGLE       '1'
-#define OPTIONAL     '?'
-#define ZERO_OR_MORE '*'
-#define ONE_OR_MORE  '+'
+#define CARD_SINGLE       '1'
+#define CARD_OPTIONAL     '?'
+#define CARD_ZERO_OR_MORE '*'
+#define CARD_ONE_OR_MORE  '+'
 
 // SEE: https://en.wikipedia.org/wiki/C_data_types
 
@@ -194,8 +194,18 @@ const char   ParsingElement_T = 'P';
 const char   Reference_T      = 'R';
 const char*  ANONYMOUS        = "_";
 
+#define NOREF (Reference*)NULL
 #define ParsingElement_is(v) v->type == ParsingElement_T
 #define Reference_is(v)      v->type == Reference_T
+
+#define ONE(v)            Reference_cardinality(ParsingElement_asReference(v), CARD_SINGLE)
+#define OPTIONAL(v)       Reference_cardinality(ParsingElement_asReference(v), CARD_OPTIONAL)
+#define MANY(v)           Reference_cardinality(ParsingElement_asReference(v), CARD_ONE_OR_MORE)
+#define MANY_OPTIONAL(v)  Reference_cardinality(ParsingElement_asReference(v), CARD_ZERO_OR_MORE)
+
+// TODO: Automatically declare everything
+ParsingElement* ParsingElement_add(ParsingElement *this, Reference *child);
+Reference* ParsingElement_asReference(ParsingElement *this);
 
 #endif
 // EOF

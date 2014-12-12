@@ -42,11 +42,23 @@ void Parser_parse(Parser* this, Iterator* iterator) {
 Reference* Reference_new() {
 	__ALLOC(Reference, this);
 	this->type        = Reference_T;
-	this->cardinality = ZERO_OR_MORE;
+	this->cardinality = CARD_ZERO_OR_MORE;
 	this->name        = ANONYMOUS;
 	this->element     = NULL;
 	this->next        = NULL;
 	return this;
+}
+
+Reference* Reference_ensure(Reference* r) {
+	assert(r!=NULL);
+	if (ParsingElement_is(r)) {r = ParsingElement_asReference((ParsingElement*)r);}
+	return r;
+}
+
+Reference* Reference_cardinality(Reference* r, char cardinality) {
+	assert(r!=NULL);
+	r->cardinality = cardinality;
+	return r;
 }
 
 // ----------------------------------------------------------------------------
@@ -55,7 +67,13 @@ Reference* Reference_new() {
 //
 // ----------------------------------------------------------------------------
 
-ParsingElement* ParsingElement_new() {
+Reference* ParsingElement_asReference(ParsingElement *this) {
+	NEW(Reference, ref);
+	ref->element = this;
+	return ref;
+}
+
+ParsingElement* ParsingElement_new(Reference* children[]) {
 	__ALLOC(ParsingElement, this);
 	this->id       = 0;
 	this->name     = ANONYMOUS;
@@ -63,16 +81,24 @@ ParsingElement* ParsingElement_new() {
 	this->children = NULL;
 	this->match    = NULL;
 	this->process  = NULL;
+	if (children != NULL ) {
+		Reference* r = *children;
+		while ( r != NULL ) {
+			// FIXME: Make sure how memory is managed here
+			if (ParsingElement_is(r)) {r = ParsingElement_asReference((ParsingElement*)r);}
+			ParsingElement_add(this, r);
+			r = *(++children);
+		}
+	}
+	return this;
 }
 
-Reference* ParsingElement_asReference(ParsingElement *this) {
-	NEW(Reference, ref);
-	ref->element = this;
-	return ref;
+void ParsingElement_destroy(ParsingElement* this) {
+	__DEALLOC(this);
 }
 
 ParsingElement* ParsingElement_add(ParsingElement *this, Reference *child) {
-	if (ParsingElement_is(child)) {child = ParsingElement_asReference((ParsingElement*)child);}
+	child = Reference_ensure(child);
 	assert(child->next == NULL);
 	if (this->children) {
 		// If there are children, we skip until the end and add it
@@ -86,10 +112,6 @@ ParsingElement* ParsingElement_add(ParsingElement *this, Reference *child) {
 	return this;
 }
 
-void ParsingElement_destroy(ParsingElement* this) {
-	__DEALLOC(this);
-}
-
 // ----------------------------------------------------------------------------
 //
 // TOKEN
@@ -98,7 +120,7 @@ void ParsingElement_destroy(ParsingElement* this) {
 
 ParsingElement* Token_new(const char* expr) {
 	__ALLOC(TokenConfig, config);
-	ParsingElement* this = ParsingElement_new();
+	ParsingElement* this = ParsingElement_new(NULL);
 	if ( regcomp( &(config->regex), expr, REG_EXTENDED) == 0) {
 		this->config = config;
 		return this;
@@ -117,14 +139,18 @@ ParsingElement* Token_new(const char* expr) {
 // ----------------------------------------------------------------------------
 
 ParsingElement* Group_new(Reference* children[]) {
-	ParsingElement* this = ParsingElement_new();
-	// FIXME: Make sure how memory is managed here
-	Reference* r = *children;
-	while ( r != NULL ) {
-		if (ParsingElement_is(r)) {r = ParsingElement_asReference((ParsingElement*)r);}
-		ParsingElement_add(this, r);
-		r = *(++children);
-	}
+	ParsingElement* this = ParsingElement_new(children);
+	return this;
+}
+
+// ----------------------------------------------------------------------------
+//
+// RULE
+//
+// ----------------------------------------------------------------------------
+
+ParsingElement* Rule_new(Reference* children[]) {
+	ParsingElement* this = ParsingElement_new(children);
 	return this;
 }
 
@@ -262,28 +288,49 @@ void Iterator_destroy( Iterator* this ) {
 // ----------------------------------------------------------------------------
 
 int main (int argc, char* argv[]) {
-	NEW(Iterator, i);
-	Iterator_open(i, "expression.txt");
-	Context* context = NULL;
-	assert(i != NULL);
-	DEBUG("REf: %zd PAR:%zd", sizeof(Reference*), sizeof(ParsingElement*));
 
+
+	// We defined the grammar
 	Grammar* g                 = Grammar_new();
 
 	ParsingElement* s_NUMBER   = Token_new("[0-9]+(\\.[0-9]+)?");
 	ParsingElement* s_VARIABLE = Token_new("[A-Z]+");
 	ParsingElement* s_OP       = Token_new("\\-|\\+|\\*");
-	ParsingElement* s_Value    = Group_new( (Reference*[]) {s_NUMBER, s_VARIABLE, NULL});
+	ParsingElement* s_SPACES   = Token_new("[ ]+");
 
-	/*
-	ParsingElement* s_Suffix   = Rule_new ( s_OP,     s_Value);
-	ParsingElement* s_Expr     = Rule_new ( s_Value,  Reference_Many(s_Suffix) );
-	*/
+	// FIXME: This is not very elegant, but I did not really find a better
+	// way. I tried passing the elements as an array, but it doesn't really
+	// work.
+	//
+	// Alternative:
+	// GROUP(s_Value) ONE(s_NUMBER) MANY(s_VARIABLE) END_GROUP
+	ParsingElement* s_Value    = Group_new(NULL);
+		ParsingElement_add( s_Value, ONE(s_NUMBER)   );
+		ParsingElement_add( s_Value, ONE(s_VARIABLE) );
 
-	while (context == NULL || context->status != STATUS_ENDED) {
-		context = i->next(i);
-		assert(context != NULL);
-		printf("Read: %c at %d, context.status=%c\n", *(context->head), context->offset, context->status);
+	ParsingElement* s_Suffix   = Rule_new (NULL);
+		ParsingElement_add( s_Suffix, ONE(s_OP)   );
+		ParsingElement_add( s_Suffix, ONE(s_Value) );
+
+	ParsingElement* s_Expr    = Rule_new (NULL);
+		ParsingElement_add( s_Expr, ONE (s_Value)  );
+		ParsingElement_add( s_Expr, MANY(s_Suffix) );
+
+	g->axiom = s_Expr;
+	g->skip  = s_SPACES;
+
+	Iterator* i = Iterator_new();
+	const char* path = "expression.txt";
+
+	if (!Iterator_open(i, path)) {
+		ERROR("Cannot open file: %s", path);
+	} else {
+		Context* context = NULL;
+		while (context == NULL || context->status != STATUS_ENDED) {
+			context = i->next(i);
+			assert(context != NULL);
+			printf("Read: %c at %d, context.status=%c\n", *(context->head), context->offset, context->status);
+		}
 	}
 }
 
