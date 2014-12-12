@@ -46,8 +46,8 @@
 #define STATUS_FAILED     'X'
 #define STATUS_ENDED      'E'
 
-#define CARD_SINGLE       '1'
 #define CARD_OPTIONAL     '?'
+#define CARD_SINGLE       '1'
 #define CARD_ZERO_OR_MORE '*'
 #define CARD_ONE_OR_MORE  '+'
 
@@ -62,12 +62,12 @@ typedef char iterated_t;
 
 /**
  * A parsing result defines the number of matched `iterated_t`
- * and holds a `recognized` result and a `processed` result.
+ * and holds a `matched` result and a `processed` result.
 */
 typedef struct {
-	unsigned short matched;
-	int            *recognized;
-	int            *processed;
+	unsigned short status;
+	void            *matched;
+	void            *processed;
 } Match;
 typedef Match Result;
 
@@ -120,8 +120,8 @@ typedef struct ParsingElement {
 	void          *config;       // The configuration of the parsing element
 	// FIXME: These should be references
 	Reference     *children;
-	Match            (*match)     (struct ParsingElement*, Context*);
-	Result           (*process)   (struct ParsingElement*, Context*, Match*);
+	Match            (*match)     (struct ParsingElement*, Iterator*);
+	Result           (*process)   (struct ParsingElement*, Iterator*, Match*);
 } ParsingElement;
 
 typedef struct {
@@ -187,12 +187,13 @@ typedef struct {
 	ParsingOffset *current;      // The current offset to be processed
 } Parser;
 
-Match  FAILURE;
 Result NOTHING;
 char         EOL              = '\n';
 const char   ParsingElement_T = 'P';
 const char   Reference_T      = 'R';
 const char*  ANONYMOUS        = "_";
+
+#define FAILURE (Match){.status=STATUS_FAILED, .processed=NULL, .matched=NULL}
 
 #define NOREF (Reference*)NULL
 #define ParsingElement_is(v) v->type == ParsingElement_T
@@ -206,6 +207,9 @@ const char*  ANONYMOUS        = "_";
 // TODO: Automatically declare everything
 ParsingElement* ParsingElement_add(ParsingElement *this, Reference *child);
 Reference* ParsingElement_asReference(ParsingElement *this);
+Match Group_match(ParsingElement* this, Iterator* iterator);
+Match Rule_match(ParsingElement* this, Iterator* iterator);
+Match Token_match(ParsingElement* this, Iterator* iterator);
 
 #endif
 // EOF

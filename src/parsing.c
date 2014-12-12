@@ -112,6 +112,14 @@ ParsingElement* ParsingElement_add(ParsingElement *this, Reference *child) {
 	return this;
 }
 
+Match ParsingElement_match( ParsingElement* this, Iterator* iterator ) {
+	if (this->match) {
+		return this->match(this, iterator);
+	} else {
+		return FAILURE;
+	}
+}
+
 // ----------------------------------------------------------------------------
 //
 // TOKEN
@@ -121,6 +129,7 @@ ParsingElement* ParsingElement_add(ParsingElement *this, Reference *child) {
 ParsingElement* Token_new(const char* expr) {
 	__ALLOC(TokenConfig, config);
 	ParsingElement* this = ParsingElement_new(NULL);
+	this->match = Token_match;
 	if ( regcomp( &(config->regex), expr, REG_EXTENDED) == 0) {
 		this->config = config;
 		return this;
@@ -132,6 +141,28 @@ ParsingElement* Token_new(const char* expr) {
 	}
 }
 
+// TODO: Implement Token_destroy and regfree
+
+Match Token_match(ParsingElement* this, Iterator* iterator) {
+	// We get the current parsing context and make sure we have
+	// at least TOKEN_MATCH_RANGE characters available (or the EOF). The
+	// limitation here is that we don't necessarily want ot load the whole
+	// file in memory, but could do it 1MB/time for instance.
+
+	// NOTE: This means we need to pass the context
+	//
+	// Context_preload(context, TOKEN_MATCH_RANGE);
+	//
+	// regmatch_t matches[2];
+	// regexec(
+	//      ((TokenConfig*)this->config)->regex,
+	//      context->rest,
+	//      1,
+	//      matches,
+	//      0)
+}
+
+
 // ----------------------------------------------------------------------------
 //
 // GROUP
@@ -140,7 +171,20 @@ ParsingElement* Token_new(const char* expr) {
 
 ParsingElement* Group_new(Reference* children[]) {
 	ParsingElement* this = ParsingElement_new(children);
+	this->match = Group_match;
 	return this;
+}
+
+Match Group_match(ParsingElement* this, Iterator* iterator){
+	Reference* child = this->children;
+	Match      result;
+	while (child != NULL ) {
+		// FIXME: We should do a Reference_match instead
+		result = ParsingElement_match(child->element, iterator);
+		if (result.status == STATUS_MATCHED) {return result;}
+		else                                 {child++;}
+	}
+	return FAILURE;
 }
 
 // ----------------------------------------------------------------------------
@@ -151,9 +195,27 @@ ParsingElement* Group_new(Reference* children[]) {
 
 ParsingElement* Rule_new(Reference* children[]) {
 	ParsingElement* this = ParsingElement_new(children);
+	this->match = Rule_match;
 	return this;
 }
 
+Match Rule_match(ParsingElement* this, Iterator* iterator){
+	Reference* child = this->children;
+	Match      result;
+	while (child != NULL ) {
+		// FIXME: We should do a Reference_match instead
+		result = ParsingElement_match(child->element, iterator);
+		if (result.status != STATUS_MATCHED) {
+			switch (child->cardinality) {
+				case CARD_SINGLE:
+					return FAILURE;
+				case CARD_ONE_OR_MORE:
+					return FAILURE;
+			}
+		}
+	}
+	return result;
+}
 // ----------------------------------------------------------------------------
 //
 // GRAMMAR
@@ -281,6 +343,16 @@ void Iterator_destroy( Iterator* this ) {
 	__DEALLOC(this);
 }
 
+Match Grammar_match( Grammar* this, Iterator* iterator ) {
+	return ParsingElement_match(this->axiom, iterator);
+}
+
+void Grammar_parseWithIterator( Grammar* this, Iterator* iterator ) {
+	while (iterator->context.status != STATUS_ENDED) {
+		Grammar_match(this, iterator);
+	}
+}
+
 // ----------------------------------------------------------------------------
 //
 // MAIN
@@ -325,12 +397,7 @@ int main (int argc, char* argv[]) {
 	if (!Iterator_open(i, path)) {
 		ERROR("Cannot open file: %s", path);
 	} else {
-		Context* context = NULL;
-		while (context == NULL || context->status != STATUS_ENDED) {
-			context = i->next(i);
-			assert(context != NULL);
-			printf("Read: %c at %d, context.status=%c\n", *(context->head), context->offset, context->status);
-		}
+		Grammar_parseWithIterator( g, i );
 	}
 }
 
