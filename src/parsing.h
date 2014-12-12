@@ -75,10 +75,9 @@ typedef Match Result;
 */
 typedef struct {
 	char           status;
+	iterated_t     separator;
 	unsigned int   offset;
 	unsigned int   lines;    // Counter for lines that have been encountered
-	// FIXME: Current should a pointer within the head
-	iterated_t     current;
 	// FIXME: The head should be freed when the offsets have been parsed,
 	// no need to keep in memory stuff we won't need.
 	iterated_t*    head;
@@ -88,10 +87,10 @@ typedef struct {
  * An iterator wraps a context in an input and a next function that
  * allow to update the iterated_t
 */
-typedef struct {
+typedef struct Iterator {
 	void          *input;
 	Context       context;
-	Context*      (*next) (Context*);
+	Context*      (*next) (struct Iterator*);
 } Iterator;
 
 /**
@@ -99,7 +98,9 @@ typedef struct {
 */
 typedef struct {
 	FILE*        file;
+	// FIXME: Refactor to size_t?
 	unsigned int bufferSize;
+	unsigned int readableSize;
 	char*        buffer;
 } FileInput;
 
@@ -179,6 +180,7 @@ typedef struct {
 
 Match  FAILURE;
 Result NOTHING;
+char   EOL='\n';
 
 #endif
 // EOF

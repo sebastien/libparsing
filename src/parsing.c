@@ -35,6 +35,22 @@ void Parser_parse(Parser* this, Iterator* iterator) {
 
 // ----------------------------------------------------------------------------
 //
+// CONTEXT
+//
+// ----------------------------------------------------------------------------
+
+Context* Context_new() {
+	__ALLOC(Context, this);
+	this->status    = STATUS_INIT;
+	this->separator = EOL;
+	this->offset    = 0;
+	this->lines     = 0;
+	this->head      = NULL;
+	return this;
+}
+
+// ----------------------------------------------------------------------------
+//
 // FILE INPUT
 //
 // ----------------------------------------------------------------------------
@@ -49,9 +65,11 @@ FileInput* FileInput_new(const char* path, unsigned int bufferSize ) {
 		__DEALLOC(this);
 		return NULL;
 	} else {
-		// And allocate the buffer
+		// And allocate the buffer. We make sure that the buffer size is a multiple
+		// of the iterated_t.
+		bufferSize       = (bufferSize/sizeof(iterated_t)) * sizeof(iterated_t);
 		this->bufferSize = bufferSize;
-		this->buffer     = malloc(sizeof(char) * bufferSize);
+		this->buffer     = malloc(bufferSize);
 		return this;
 	}
 }
@@ -59,6 +77,38 @@ FileInput* FileInput_new(const char* path, unsigned int bufferSize ) {
 void FileInput_destroy(FileInput* this) {
 	if (this->file != NULL) { fclose(this->file);   }
 	__DEALLOC(this->buffer);
+}
+
+Context* FileInput_next( Iterator* this ) {
+	// We want to know if there is at one more element
+	// in the file input.
+	FileInput*   input         = (FileInput*)this->input;
+	char*        head          = (char*)     this->context.head;
+	unsigned int bytes_left_to_read = (head - input->buffer);
+	assert (bytes_left_to_read >= 0);
+	if ( bytes_left_to_read >= input->bufferSize ) {
+		// We've reached the end of the buffer, so we need to re-create a new
+		// buffer.
+		size_t to_read        = input->bufferSize/sizeof(iterated_t);
+		size_t read           = fread(input->buffer, sizeof(iterated_t), to_read, input->file);
+		input->readableSize = read * sizeof(iterated_t);
+		assert(input->readableSize % sizeof(iterated_t) == 0);
+		// We we've read the size of the buffer, we'll need to refesh it
+		this->context.head         = (iterated_t*) input->buffer;
+		if (read >= 0) {
+			DEBUG("Parsed %d parsing units", (int)read);
+		} else {
+			DEBUG("End of file reached at offset %d", this->context.offset);
+			this->context.status = STATUS_ENDED;
+			return &this->context;
+		}
+	}
+	// We have enough space left in the buffer to read at least one character.
+	// We increase the head, copy
+	this->context.head++;
+	this->context.offset++;
+	if (*(this->context.head) == this->context.separator) {this->context.lines++;}
+	return &this->context;
 }
 
 // ----------------------------------------------------------------------------
@@ -78,6 +128,7 @@ bool Iterator_open( Iterator* this, const char *path ) {
 		this->input          = (void*)input;
 		this->context.status = STATUS_PROCESSING;
 		this->context.offset = 0;
+		this->next           = FileInput_next;
 		ENSURE(input->file) {};
 		return TRUE;
 	} else {
@@ -85,22 +136,6 @@ bool Iterator_open( Iterator* this, const char *path ) {
 	}
 }
 
-Context* Iterator_next( Iterator* this ) {
-	size_t read = fread(
-		&(this->context.current),
-		sizeof(iterated_t),
-		1,
-		((FileInput*)this->input)->file
-	);
-	this->context.offset += read;
-	if (read == 0) {
-		this->context.status = STATUS_ENDED;
-		printf("End reached\n", read);
-	} else {
-		printf("Read %d bytes\n", read);
-	}
-	return &(this->context);
-}
 
 void Iterator_destroy( Iterator* this ) {
 	__DEALLOC(this);
@@ -110,9 +145,11 @@ int main (int argc, char* argv[]) {
 	NEW(Iterator, i);
 	Iterator_open(i, "expression.txt");
 	Context* context = NULL;
+	assert(i != NULL);
 	while (context == NULL || context->status != STATUS_ENDED) {
-		context = Iterator_next(i);
-		printf("Read: %c at %d\n", context->current, context->offset);
+		context = i->next(i);
+		assert(context != NULL);
+		printf("Read: %c at %d, context.status=%c\n", *(context->head), context->offset, context->status);
 	}
 }
 
