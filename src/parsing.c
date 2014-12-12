@@ -1,6 +1,9 @@
 #include "parsing.h"
 #include "oo.h"
 
+// SEE: http://stackoverflow.com/questions/18329532/pcre-is-not-matching-utf8-characters
+// HASH: search.h, hcreate, hsearch, etc
+
 Match Word_match(ParsingElement* this, Context* context) {
 	return FAILURE;
 }
@@ -24,25 +27,62 @@ ParsingStep* ParsingElement_next(ParsingElement* this, ParsingStep* step) {
 
 // Match* ParsingElement_match(ParsingElement* this, Context* step) {
 // }
-//
 // Match* ParsingElement_process(ParsingElement* this, Context* step) {
 // }
 
 void Parser_parse(Parser* this, Iterator* iterator) {
 }
 
+// ----------------------------------------------------------------------------
+//
+// FILE INPUT
+//
+// ----------------------------------------------------------------------------
+
+FileInput* FileInput_new(const char* path, unsigned int bufferSize ) {
+	__ALLOC(FileInput, this);
+	assert(this != NULL);
+	// We open the file
+	this->file = fopen(path, "r");
+	if (this->file==NULL) {
+		ERROR("Cannot open file: %s", path);
+		__DEALLOC(this);
+		return NULL;
+	} else {
+		// And allocate the buffer
+		this->bufferSize = bufferSize;
+		this->buffer     = malloc(sizeof(char) * bufferSize);
+		return this;
+	}
+}
+
+void FileInput_destroy(FileInput* this) {
+	if (this->file != NULL) { fclose(this->file);   }
+	__DEALLOC(this->buffer);
+}
+
+// ----------------------------------------------------------------------------
+//
+// ITERATOR
+//
+// ----------------------------------------------------------------------------
+
 Iterator* Iterator_new( void ) {
 	__ALLOC(Iterator, this);
 	return this;
 }
 
-void Iterator_open( Iterator* this, const char *path ) {
-	__ALLOC(FileInput, input);
-	this->input = (void*)input;
-	input->file = fopen(path, "r");
-	this->context.status=STATUS_PROCESSING;
-	this->context.offset=0;
-	ENSURE(input->file) {};
+bool Iterator_open( Iterator* this, const char *path ) {
+	NEW(FileInput,input, path,65000);
+	if (input!=NULL) {
+		this->input          = (void*)input;
+		this->context.status = STATUS_PROCESSING;
+		this->context.offset = 0;
+		ENSURE(input->file) {};
+		return TRUE;
+	} else {
+		return FALSE;
+	}
 }
 
 Context* Iterator_next( Iterator* this ) {

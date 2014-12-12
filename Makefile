@@ -1,7 +1,8 @@
 PRODUCTS = parsing
 SOURCES  = $(wildcard src/*.c)
 OBJECTS  = $(SOURCES:src/%.c=build/%.o)
-CC       = gcc
+CC       = colorgcc
+CFLAGS  += -g
 
 parsing: build/parsing.o
 	gcc $< -o parsing
@@ -10,10 +11,10 @@ parsing: build/parsing.o
 clean:
 	rm $(OBJECTS) $(PRODUCTS) ; true
 
-build/%.o: src/%.c build
-	$(CC) -c $< -o $@
-
 build:
 	mkdir build
+
+build/%.o: src/%.c src/%.h src/oo.h build
+	$(CC) $(CFLAGS) -c $< -o $@
 
 # EOF

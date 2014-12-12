@@ -1,3 +1,13 @@
+// ----------------------------------------------------------------------------
+// Project           : Parsing
+// ----------------------------------------------------------------------------
+// Author            : Sebastien Pierre              <www.github.com/sebastien>
+// License           : BSD License
+// ----------------------------------------------------------------------------
+// Creation date     : 12-Dec-2014
+// Last modification : 12-Dec-2014
+// ----------------------------------------------------------------------------
+//
 #include <stdlib.h>
 #include <stdio.h>
 #include <errno.h>
@@ -6,6 +16,26 @@
 
 #ifndef __PARSING__
 #define __PARSING__
+
+/**
+ * == parsing.h
+ * -- Parsing Elements Library
+ *
+ * `parsing.h` is a library to create grammars based on parsing elements.
+ * As opposed to most "classic" parsing libraries, parsing elements don't do
+ * tokenizaiton. Instead, an input stream is consumed and parsing elements
+ * are run on the input stream. Once parsing elements match, the resulting
+ * matched input is processed and an action is triggered.
+ *
+ * Parsing elements support backtracking, cherry-picking (skipping unrecognized
+ * input), context-based rules (a rule that will match or not depending on the
+ * current parsing state) and dynamic grammar update (you can change the grammar
+ * on the fly).
+ *
+ * Parsing elements are usually slower than FSM-based parsers as they trade
+ * performance for flexibility.
+ *
+*/
 
 #define STATUS_INIT       '-'
 #define STATUS_PROCESSING '~'
@@ -68,7 +98,9 @@ typedef struct {
  * Using a file as an input
 */
 typedef struct {
-	FILE* file;
+	FILE*        file;
+	unsigned int bufferSize;
+	char*        buffer;
 } FileInput;
 
 typedef struct Reference Reference;
