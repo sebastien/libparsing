@@ -10,9 +10,12 @@
 //
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdarg.h>
 #include <errno.h>
 #include <string.h>
 #include <assert.h>
+#include <sys/types.h>
+#include <regex.h>
 
 #ifndef __PARSING__
 #define __PARSING__
@@ -43,10 +46,10 @@
 #define STATUS_FAILED     'X'
 #define STATUS_ENDED      'E'
 
-#define TYPE_SINGLE       '1'
-#define TYPE_OPTIONAL     '?'
-#define TYPE_ZERO_OR_MORE '*'
-#define TYPE_ONE_OR_MORE  '+'
+#define SINGLE       '1'
+#define OPTIONAL     '?'
+#define ZERO_OR_MORE '*'
+#define ONE_OR_MORE  '+'
 
 // SEE: https://en.wikipedia.org/wiki/C_data_types
 
@@ -111,20 +114,26 @@ typedef struct Reference Reference;
  * to the axiom. It can try to `match` an input and then `process` the resulting
 */
 typedef struct ParsingElement {
+	char     type;
 	unsigned short id;         // The ID, assigned by the grammar, as the relative distance to the axiom
 	const char    *name;       // The parsing element's name, for debugging
-	void          *args;       // The configuration of the parsing element
+	void          *config;       // The configuration of the parsing element
 	// FIXME: These should be references
-	Reference* children;
+	Reference     *children;
 	Match            (*match)     (struct ParsingElement*, Context*);
 	Result           (*process)   (struct ParsingElement*, Context*, Match*);
 } ParsingElement;
+
+typedef struct {
+	regex_t regex;
+} TokenConfig;
 
 /**
  * A reference references a parsing element, allowing to name it, give
  * it a cardinality and create a chain.
 */
 typedef struct Reference {
+	char            type;
 	char            cardinality;
 	const char*     name;
 	ParsingElement* element;
@@ -167,9 +176,9 @@ typedef struct ParsingOffset {
  * The grammar has one parsing element as the axiom.
 */
 typedef struct {
-	ParsingElement* axiom;       // The axiom
-	ParsingElement* skip;        // The skipped element
-	ParsingElement* elements[];  // The elements, accessible by ID
+	ParsingElement*  axiom;       // The axiom
+	ParsingElement*  skip;        // The skipped element
+	ParsingElement** elements;  // The elements, accessible by ID
 } Grammar;
 
 typedef struct {
@@ -180,7 +189,13 @@ typedef struct {
 
 Match  FAILURE;
 Result NOTHING;
-char   EOL='\n';
+char         EOL              = '\n';
+const char   ParsingElement_T = 'P';
+const char   Reference_T      = 'R';
+const char*  ANONYMOUS        = "_";
+
+#define ParsingElement_is(v) v->type == ParsingElement_T
+#define Reference_is(v)      v->type == Reference_T
 
 #endif
 // EOF

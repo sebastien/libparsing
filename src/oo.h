@@ -87,6 +87,7 @@
 #define WARNING_STREAM stdout
 #define ERROR_STREAM   stdout
 
+#define PUBLIC /* */
 #define DEBUG(msg,...)   fprintf(DEBUG_STREAM,   "DEV ");fprintf(DEBUG_STREAM,   msg, __VA_ARGS__);fprintf(DEBUG_STREAM,   "\n");
 #define WARNING(msg,...) fprintf(WARNING_STREAM, "WRN ");fprintf(WARNING_STREAM, msg, __VA_ARGS__);fprintf(WARNING_STREAM, "\n");
 #define ERROR(msg,...)   fprintf(WARNING_STREAM, "ERR ");fprintf(ERROR_STREAM,   msg, __VA_ARGS__);fprintf(ERROR_STREAM,   "\n");

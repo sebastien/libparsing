@@ -35,6 +35,115 @@ void Parser_parse(Parser* this, Iterator* iterator) {
 
 // ----------------------------------------------------------------------------
 //
+// REFERENCE
+//
+// ----------------------------------------------------------------------------
+
+Reference* Reference_new() {
+	__ALLOC(Reference, this);
+	this->type        = Reference_T;
+	this->cardinality = ZERO_OR_MORE;
+	this->name        = ANONYMOUS;
+	this->element     = NULL;
+	this->next        = NULL;
+	return this;
+}
+
+// ----------------------------------------------------------------------------
+//
+// PARSING ELEMENT
+//
+// ----------------------------------------------------------------------------
+
+ParsingElement* ParsingElement_new() {
+	__ALLOC(ParsingElement, this);
+	this->id       = 0;
+	this->name     = ANONYMOUS;
+	this->config   = NULL;
+	this->children = NULL;
+	this->match    = NULL;
+	this->process  = NULL;
+}
+
+Reference* ParsingElement_asReference(ParsingElement *this) {
+	NEW(Reference, ref);
+	ref->element = this;
+	return ref;
+}
+
+ParsingElement* ParsingElement_add(ParsingElement *this, Reference *child) {
+	if (ParsingElement_is(child)) {child = ParsingElement_asReference((ParsingElement*)child);}
+	assert(child->next == NULL);
+	if (this->children) {
+		// If there are children, we skip until the end and add it
+		Reference* ref = this->children;
+		while (ref->next != NULL) {ref = ref->next;}
+		ref->next = child;
+	} else {
+		// If there are no children, we set it as the first
+		this->children = child;
+	}
+	return this;
+}
+
+void ParsingElement_destroy(ParsingElement* this) {
+	__DEALLOC(this);
+}
+
+// ----------------------------------------------------------------------------
+//
+// TOKEN
+//
+// ----------------------------------------------------------------------------
+
+ParsingElement* Token_new(const char* expr) {
+	__ALLOC(TokenConfig, config);
+	ParsingElement* this = ParsingElement_new();
+	if ( regcomp( &(config->regex), expr, REG_EXTENDED) == 0) {
+		this->config = config;
+		return this;
+	} else {
+		ERROR("Cannot compile POSIX regex: %s", expr);
+		__DEALLOC(config);
+		ParsingElement_destroy(this);
+		return NULL;
+	}
+}
+
+// ----------------------------------------------------------------------------
+//
+// GROUP
+//
+// ----------------------------------------------------------------------------
+
+ParsingElement* Group_new(Reference* children[]) {
+	ParsingElement* this = ParsingElement_new();
+	// FIXME: Make sure how memory is managed here
+	Reference* r = *children;
+	while ( r != NULL ) {
+		if (ParsingElement_is(r)) {r = ParsingElement_asReference((ParsingElement*)r);}
+		ParsingElement_add(this, r);
+		r = *(++children);
+	}
+	return this;
+}
+
+// ----------------------------------------------------------------------------
+//
+// GRAMMAR
+//
+// ----------------------------------------------------------------------------
+
+Grammar* Grammar_new() {
+	__ALLOC(Grammar, this);
+	this->axiom     = NULL;
+	this->skip      = NULL;
+	this->elements  = NULL;
+	return this;
+}
+
+// ----------------------------------------------------------------------------
+//
 // CONTEXT
 //
 // ----------------------------------------------------------------------------
@@ -55,7 +164,10 @@ Context* Context_new() {
 //
 // ----------------------------------------------------------------------------
 
-FileInput* FileInput_new(const char* path, unsigned int bufferSize ) {
+/**
+ * Creates a new file input with the given path and buffer size
+*/
+PUBLIC FileInput* FileInput_new(const char* path, unsigned int bufferSize ) {
 	__ALLOC(FileInput, this);
 	assert(this != NULL);
 	// We open the file
@@ -87,7 +199,8 @@ Context* FileInput_next( Iterator* this ) {
 	char*        head          = (char*)     this->context.head;
 	size_t  bytes_left_to_read = input->readableSize - (this->context.head - input->buffer);
 	assert (bytes_left_to_read >= 0);
-	DEBUG("Bytes left to read %zd", bytes_left_to_read)
+	// We check wether we have bytes left to read in the buffer. If not, we
+	// need to refill it.
 	if ( bytes_left_to_read == 0 ) {
 		// We've reached the end of the buffer, so we need to re-create a new
 		// buffer.
@@ -97,9 +210,7 @@ Context* FileInput_next( Iterator* this ) {
 		assert(input->readableSize % sizeof(iterated_t) == 0);
 		// We we've read the size of the buffer, we'll need to refesh it
 		this->context.head         = (iterated_t*) input->buffer;
-		if (read > 0) {
-			DEBUG("Parsed %d parsing units", (int)read);
-		} else {
+		if (read == 0) {
 			DEBUG("End of file reached at offset %d", this->context.offset);
 			this->context.status = STATUS_ENDED;
 			return &this->context;
@@ -144,11 +255,31 @@ void Iterator_destroy( Iterator* this ) {
 	__DEALLOC(this);
 }
 
+// ----------------------------------------------------------------------------
+//
+// MAIN
+//
+// ----------------------------------------------------------------------------
+
 int main (int argc, char* argv[]) {
 	NEW(Iterator, i);
 	Iterator_open(i, "expression.txt");
 	Context* context = NULL;
 	assert(i != NULL);
+	DEBUG("REf: %zd PAR:%zd", sizeof(Reference*), sizeof(ParsingElement*));
+
+	Grammar* g                 = Grammar_new();
+
+	ParsingElement* s_NUMBER   = Token_new("[0-9]+(\\.[0-9]+)?");
+	ParsingElement* s_VARIABLE = Token_new("[A-Z]+");
+	ParsingElement* s_OP       = Token_new("\\-|\\+|\\*");
+	ParsingElement* s_Value    = Group_new( (Reference*[]) {s_NUMBER, s_VARIABLE, NULL});
+
+	/*
+	ParsingElement* s_Suffix   = Rule_new ( s_OP,     s_Value);
+	ParsingElement* s_Expr     = Rule_new ( s_Value,  Reference_Many(s_Suffix) );
+	*/
+
 	while (context == NULL || context->status != STATUS_ENDED) {
 		context = i->next(i);
 		assert(context != NULL);
