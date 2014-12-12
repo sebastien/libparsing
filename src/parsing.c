@@ -1,6 +1,36 @@
 #include "parsing.h"
 #include "oo.h"
 
+Match Word_match(ParsingElement* this, Context* context) {
+	return FAILURE;
+}
+
+Match Token_match(ParsingElement* this, Context* context) {
+	// NOTE: We'll use POSIX's regexp for now
+	return FAILURE;
+}
+
+Match Procedure_match(ParsingElement* this, Context* context) {
+	return FAILURE;
+}
+
+/**
+ * Returns the next step for this parsing element, based on the given step.
+ * The returned step could be the same, updated step, or a new step.
+*/
+ParsingStep* ParsingElement_next(ParsingElement* this, ParsingStep* step) {
+
+}
+
+// Match* ParsingElement_match(ParsingElement* this, Context* step) {
+// }
+//
+// Match* ParsingElement_process(ParsingElement* this, Context* step) {
+// }
+
+void Parser_parse(Parser* this, Iterator* iterator) {
+}
+
 Iterator* Iterator_new( void ) {
 	__ALLOC(Iterator, this);
 	return this;

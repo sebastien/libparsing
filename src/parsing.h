@@ -46,6 +46,7 @@ typedef Match Result;
 typedef struct {
 	char           status;
 	unsigned int   offset;
+	unsigned int   lines;    // Counter for lines that have been encountered
 	// FIXME: Current should a pointer within the head
 	iterated_t     current;
 	// FIXME: The head should be freed when the offsets have been parsed,
@@ -76,25 +77,26 @@ typedef struct Reference Reference;
  * A parsing element has an `id` that corresponds to its bread-first distance
  * to the axiom. It can try to `match` an input and then `process` the resulting
 */
-typedef struct {
+typedef struct ParsingElement {
 	unsigned short id;         // The ID, assigned by the grammar, as the relative distance to the axiom
 	const char    *name;       // The parsing element's name, for debugging
+	void          *args;       // The configuration of the parsing element
 	// FIXME: These should be references
 	Reference* children;
-	Match            (*match)     (Context*);
-	Result           (*process)   (Context*, Match*);
+	Match            (*match)     (struct ParsingElement*, Context*);
+	Result           (*process)   (struct ParsingElement*, Context*, Match*);
 } ParsingElement;
 
 /**
- * A reference references a parsing element, allowing to name it and
- * create a chain.
+ * A reference references a parsing element, allowing to name it, give
+ * it a cardinality and create a chain.
 */
 typedef struct Reference {
 	char            cardinality;
 	const char*     name;
 	ParsingElement* element;
 	Reference*      next;
-} Reference ;
+} Reference;
 
 /**
  * The parsing step allows to memoize the state of a parsing element at a given
@@ -102,30 +104,49 @@ typedef struct Reference {
  * the most during the parsing process.
 */
 typedef struct ParsingStep {
-	unsigned short pid;         // ParsingElement.id, which represents the distance to the axio
-	char           step;        // We don't expect more than 256 step / parsing element
-	unsigned int   iteration;   // The current iteration (on the step)
-	char           status;      // PARSING_STATUS
-	Result*        result;      // The current result, if any
-	struct ParsingStep* next;        // The next parsing step
+	// FIXME: Might just refernce the ParsingElement instead, this would save
+	// querying the grammar
+	unsigned short pid;           // ParsingElement.id, which represents the distance to the axio
+	char           step;          // We don't expect more than 256 step / parsing element
+	unsigned int   iteration;     // The current iteration (on the step)
+	char           status;        // PARSING_STATUS
+	Result*        result;        // The current result, if any
+	struct ParsingStep* previous; // The previous parsing step
 } ParsingStep;
 
 /**
  * The parsing offset is a stack of parsing steps, where the tail is the most
- * specific parsing step.
+ * specific parsing step. By following the tail's previous parsing step,
+ * you can unwind the stack.
+ *
+ * The parsing steps each have an offset within the iterated stream. Offsets
+ * where data has been fully extracted (ie, a leaf parsing element has matched
+ * and processing returned a NOTHING) can be freed as they are not necessary
+ * any more.
 */
-typedef struct {
-	unsigned long offset;
-	ParsingStep*  tail;
+typedef struct ParsingOffset {
+	unsigned long         offset;
+	ParsingStep*          tail;
+	struct ParsingOffset* next;
 } ParsingOffset;
 
 /*
  * The grammar has one parsing element as the axiom.
 */
 typedef struct {
-	ParsingElement* axiom;
-	ParsingElement* skip;
+	ParsingElement* axiom;       // The axiom
+	ParsingElement* skip;        // The skipped element
+	ParsingElement* elements[];  // The elements, accessible by ID
 } Grammar;
+
+typedef struct {
+	Grammar       *grammar;      // The grammar
+	ParsingOffset *head;         // The smallest offset that has yet to be processed
+	ParsingOffset *current;      // The current offset to be processed
+} Parser;
+
+Match  FAILURE;
+Result NOTHING;
 
 #endif
 // EOF
