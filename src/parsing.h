@@ -99,8 +99,8 @@ typedef struct Iterator {
 typedef struct {
 	FILE*        file;
 	// FIXME: Refactor to size_t?
-	unsigned int bufferSize;
-	unsigned int readableSize;
+	size_t       bufferSize;
+	size_t       readableSize;
 	char*        buffer;
 } FileInput;
 

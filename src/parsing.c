@@ -67,9 +67,10 @@ FileInput* FileInput_new(const char* path, unsigned int bufferSize ) {
 	} else {
 		// And allocate the buffer. We make sure that the buffer size is a multiple
 		// of the iterated_t.
-		bufferSize       = (bufferSize/sizeof(iterated_t)) * sizeof(iterated_t);
-		this->bufferSize = bufferSize;
-		this->buffer     = malloc(bufferSize);
+		bufferSize         = (bufferSize/sizeof(iterated_t)) * sizeof(iterated_t);
+		this->bufferSize   = bufferSize;
+		this->readableSize = 0;
+		this->buffer       = malloc(bufferSize);
 		return this;
 	}
 }
@@ -84,9 +85,10 @@ Context* FileInput_next( Iterator* this ) {
 	// in the file input.
 	FileInput*   input         = (FileInput*)this->input;
 	char*        head          = (char*)     this->context.head;
-	unsigned int bytes_left_to_read = (head - input->buffer);
+	size_t  bytes_left_to_read = input->readableSize - (this->context.head - input->buffer);
 	assert (bytes_left_to_read >= 0);
-	if ( bytes_left_to_read >= input->bufferSize ) {
+	DEBUG("Bytes left to read %zd", bytes_left_to_read)
+	if ( bytes_left_to_read == 0 ) {
 		// We've reached the end of the buffer, so we need to re-create a new
 		// buffer.
 		size_t to_read        = input->bufferSize/sizeof(iterated_t);
@@ -95,7 +97,7 @@ Context* FileInput_next( Iterator* this ) {
 		assert(input->readableSize % sizeof(iterated_t) == 0);
 		// We we've read the size of the buffer, we'll need to refesh it
 		this->context.head         = (iterated_t*) input->buffer;
-		if (read >= 0) {
+		if (read > 0) {
 			DEBUG("Parsed %d parsing units", (int)read);
 		} else {
 			DEBUG("End of file reached at offset %d", this->context.offset);
@@ -128,6 +130,7 @@ bool Iterator_open( Iterator* this, const char *path ) {
 		this->input          = (void*)input;
 		this->context.status = STATUS_PROCESSING;
 		this->context.offset = 0;
+		this->context.head   = input->buffer;
 		this->next           = FileInput_next;
 		ENSURE(input->file) {};
 		return TRUE;
