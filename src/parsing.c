@@ -57,8 +57,9 @@ bool Iterator_open( Iterator* this, const char *path ) {
 		// so that we ensure that the current position always has ITERATOR_BUFFER_AHEAD
 		// bytes ahead (if the input source has the data)
 		assert(this->buffer == NULL);
-		this->length = sizeof(iterated_t) * ITERATOR_BUFFER_AHEAD * 2;
-		this->buffer = malloc(this->length + 1);
+		this->length  = sizeof(iterated_t) * ITERATOR_BUFFER_AHEAD * 2;
+		this->buffer  = malloc(this->length + 1);
+		this->current = (iterated_t*)this->buffer;
 		// We make sure we have a trailing \0 sign to stop any string parsing
 		// function to go any further.
 		((char*)this->buffer)[this->length] = '\0';
@@ -105,6 +106,7 @@ bool FileInput_next( Iterator* this ) {
 	FileInput*   input         = (FileInput*)this->input;
 	size_t       read          = this->current   - this->buffer;
 	size_t       left          = this->available - read;
+	DEBUG("FileInput_next: %zd read, %zd available / %zd length [%c]", read, this->available, this->length, this->status);
 	assert (read >= 0);
 	assert (left >= 0);
 	assert (left  < this->length);
@@ -119,15 +121,14 @@ bool FileInput_next( Iterator* this ) {
 		left                  = this->available;
 		if (read == 0) {
 			DEBUG("End of file reached at offset %zd", this->offset);
-			if (left == 0) {
-				this->status = STATUS_INPUT_ENDED;
-			}
+			this->status = STATUS_INPUT_ENDED;
 		}
 	}
 	if (left > 0) {
 		// We have enough space left in the buffer to read at least one character.
 		// We increase the head, copy
 		this->current++;
+		this->offset++;
 		if (*(this->current) == this->separator) {this->lines++;}
 		return TRUE;
 	} else {
@@ -378,16 +379,19 @@ int main (int argc, char* argv[]) {
 	// g->skip  = s_SPACES;
 
 	Iterator* i = Iterator_new();
-	const char* path = "expression.txt";
+	const char* path = "expression-long.txt";
 
 	if (!Iterator_open(i, path)) {
 		ERROR("Cannot open file: %s", path);
 	} else {
 		DEBUG("Opening file: %s", path)
 		// Below is a simple test on how to iterate on the file
+		int count = 0;
 		while (FileInput_next(i)) {
-			printf("Read %c at %zd/%zd\n", *i->current, i->offset, i->available);
+			DEBUG("Read %c at %zd/%zd\n", *i->current, i->offset, i->available);
+			count += 1;
 		}
+		printf("Read %d bytes\n", count);
 	}
 }
 

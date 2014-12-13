@@ -86,11 +86,21 @@ typedef char  bool;
 #define DEBUG_STREAM   stdout
 #define WARNING_STREAM stdout
 #define ERROR_STREAM   stdout
+#define LOG_STREAM     stdout
 
 #define PUBLIC /* */
+
+#ifdef DEBUG_ENABLED
 #define DEBUG(msg,...)   fprintf(DEBUG_STREAM,   "DEV ");fprintf(DEBUG_STREAM,   msg, __VA_ARGS__);fprintf(DEBUG_STREAM,   "\n");
+#else
+#define DEBUG(msg,...)   ;
+#endif
+
 #define WARNING(msg,...) fprintf(WARNING_STREAM, "WRN ");fprintf(WARNING_STREAM, msg, __VA_ARGS__);fprintf(WARNING_STREAM, "\n");
 #define ERROR(msg,...)   fprintf(WARNING_STREAM, "ERR ");fprintf(ERROR_STREAM,   msg, __VA_ARGS__);fprintf(ERROR_STREAM,   "\n");
+#define LOG(msg,...)     fprintf(LOG_STREAM,     "--- ");fprintf(LOG_STREAM,     msg, __VA_ARGS__);fprintf(LOG_STREAM,     "\n");
+
+#define ASSERT(v,msg,..) if(!v){DEBUG(msg, __VA_ARGS__);}
 
 // todo: ERROR, WARNING, INFO, DEBUG
 // todo: COUNTER(name, delta)
