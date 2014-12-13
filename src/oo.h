@@ -91,7 +91,7 @@ typedef char  bool;
 #define PUBLIC /* @public */
 
 #ifdef DEBUG_ENABLED
-#define DEBUG(msg,...)   fprintf(DEBUG_STREAM,   "DEV ");fprintf(DEBUG_STREAM,   msg, __VA_ARGS__);fprintf(DEBUG_STREAM,   "\n");
+#define DEBUG(msg,...)   fprintf(DEBUG_STREAM,   "--- ");fprintf(DEBUG_STREAM,   msg, __VA_ARGS__);fprintf(DEBUG_STREAM,   "\n");
 #else
 #define DEBUG(msg,...)   ;
 #endif

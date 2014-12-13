@@ -116,6 +116,10 @@ void      Iterator_destroy(Iterator* this);
 // as an input source.
 bool Iterator_open( Iterator* this, const char *path );
 
+// @method
+// Tells if the iterator has more available data
+inline bool Iterator_hasMore( Iterator* this );
+
 #ifndef ITERATOR_BUFFER_AHEAD
 // @define
 // The number of `iterated_t` that should be loaded after the iterator's
@@ -231,6 +235,9 @@ Match* Match_new();
 
 // @destructor
 void Match_destroy(Match* this);
+
+// @method
+inline bool Match_isSuccess(Match* this);
 
 // @type ParsingElement
 typedef struct ParsingElement {

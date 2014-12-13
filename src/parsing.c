@@ -76,6 +76,10 @@ bool Iterator_open( Iterator* this, const char *path ) {
 	}
 }
 
+bool Iterator_hasMore( Iterator* this ) {
+	return this->status != STATUS_ENDED;
+}
+
 void Iterator_destroy( Iterator* this ) {
 	// TODO: Take care of input
 	__DEALLOC(this);
@@ -111,7 +115,7 @@ size_t FileInput_preload( Iterator* this ) {
 	FileInput*   input         = (FileInput*)this->input;
 	size_t       read          = this->current   - this->buffer;
 	size_t       left          = this->available - read;
-	DEBUG("FileInput_next: %zd read, %zd available / %zd length [%c]", read, this->available, this->length, this->status);
+	//DEBUG("FileInput_preload: %zd read, %zd available / %zd length [%c]", read, this->available, this->length, this->status);
 	assert (read >= 0);
 	assert (left >= 0);
 	assert (left  < this->length);
@@ -127,7 +131,7 @@ size_t FileInput_preload( Iterator* this ) {
 		this->current         = this->buffer;
 		left                  = this->available;
 		if (read == 0) {
-			DEBUG("End of file reached at offset %zd", this->offset);
+			DEBUG("FileInput_preload: End of file reached with %zd bytes available", this->available);
 			this->status = STATUS_INPUT_ENDED;
 		}
 	}
@@ -140,17 +144,25 @@ bool FileInput_move   ( Iterator* this, size_t n ) {
 	// in the file input.
 	size_t left = FileInput_preload(this);
 	if (left > 0) {
-		if (n>left) {n=left;}
+		size_t c = n > left ? left : n;
 		// We have enough space left in the buffer to read at least one character.
 		// We increase the head, copy
-		while (n > 0) {
+		while (c > 0) {
 			this->current++;
 			this->offset++;
 			if (*(this->current) == this->separator) {this->lines++;}
-			n--;
+			c--;
 		}
-		return TRUE;
+		DEBUG("FileInput_move: +%zd/%zd left, current offset %zd", n, left, this->offset);
+		if (n>left) {
+			this->status == STATUS_INPUT_ENDED;
+			return FALSE;
+		} else {
+			return TRUE;
+		}
 	} else {
+		DEBUG("FileInput_move: EOF reached at offset %zd", this->offset);
+		assert (this->status == STATUS_INPUT_ENDED);
 		return FALSE;
 	}
 }
@@ -203,6 +215,10 @@ Match* Match_new() {
 
 void Match_destroy(Match* this) {
 	__DEALLOC(this);
+}
+
+bool Match_isSuccess(Match* this) {
+	return (this != FAILURE && this->status == STATUS_MATCHED);
 }
 
 // ----------------------------------------------------------------------------
@@ -318,49 +334,54 @@ Reference* Reference_cardinality(Reference* this, char cardinality) {
 
 Match* Reference_recognize(Reference* this, ParsingContext* context) {
 	assert(this->element != NULL);
-	Match* result;
+	Match* result = FAILURE;
+	Match* head;
 	Match* match;
-	int    count = 0;
-	do {
+	int    count    = 0;
+	bool   has_more = Iterator_hasMore(context->iterator);
+	while (has_more) {
 		ASSERT(this->element->recognize, "Reference_recognize: Element %s has no recognize callback", this->element->name);
-		assert(this->element->recognize != NULL);
+		// We ask the element to recognize the current iterator's position
 		match = this->element->recognize(this->element, context);
-		if (match != FAILURE && match->status == STATUS_MATCHED) {
-			context->iterator->move(context->iterator, match->length);
-		}
-		switch (this->cardinality) {
-			case CARDINALITY_SINGLE:
-				// For single, we return the match as-is
-				return match;
-			case CARDINALITY_OPTIONAL:
-				// For optional, we return the an empty match if
-				// the match fails.
-				return match == FAILURE ? Match_Empty() : match;
-			case CARDINALITY_MANY:
-				if (result != FAILURE) {
-					result->next = match;
-					match        = result;
-					count       += 1;
-				} else {
-					return count > 0 ? result : FAILURE;
+		if (Match_isSuccess(match)) {
+			// If there was a match, we move the iterator by the matched amount
+			has_more = context->iterator->move(context->iterator, match->length);
+			if (count == 0) {
+				// If it's the first match and we're in a SINGLE reference
+				// we force has_more to FALSE and exit the loop.
+				result = match;
+				head   = result;
+				if (this->cardinality == CARDINALITY_SINGLE ) {
+					has_more = FALSE;
 				}
-			case CARDINALITY_MANY_OPTIONAL:
-				if (result != FAILURE) {
-					result->next = match;
-					match        = result;
-					count       += 1;
-				} else {
-					return count > 0 ? result : Match_Empty();
-				}
-			default:
-				// Unsuported cardinality
-				DEBUG("Unsupported cardinality %c", this->cardinality);
-				return FAILURE;
+			} else {
+				// If we're already had a match we append the head and update
+				// the head to be the current match
+				head = head->next = match;
+			}
+			count++;
+		} else {
+			break;
 		}
-	} while (result != NULL);
-	// NOTE: We should never get there.
-	assert(-1);
-	return FAILURE;
+	}
+	// Depending on the cardinality, we might return FAILURE, or not
+	switch (this->cardinality) {
+		case CARDINALITY_SINGLE:
+			// For single, we return the match as-is
+			return result;
+		case CARDINALITY_OPTIONAL:
+			// For optional, we return the an empty match if
+			// the match fails.
+			return result == FAILURE ? Match_Empty() : result;
+		case CARDINALITY_MANY:
+			return count > 0 ? result : FAILURE;
+		case CARDINALITY_MANY_OPTIONAL:
+			return count > 0 ? result : Match_Empty();
+		default:
+			// Unsuported cardinality
+			DEBUG("Unsupported cardinality %c", this->cardinality);
+			return FAILURE;
+	}
 }
 
 // ----------------------------------------------------------------------------
@@ -385,7 +406,7 @@ ParsingElement* Word_new(const char* word) {
 
 Match* Word_recognize(ParsingElement* this, ParsingContext* context) {
 	Word* config = ((Word*)this->config);
-	DEBUG("Word_recognize: looking for %s in %s, length %d", config->word, context->iterator->buffer, config->length);
+	DEBUG("Word_recognize: looking for %s in string of length %d", config->word, context->iterator->buffer, config->length);
 	if (strncmp(config->word, context->iterator->buffer, config->length) == 0) {
 		DEBUG("Word_recognize: Matched %s", config->word);
 		return Match_Success(config->length);
@@ -561,9 +582,9 @@ Match* Grammar_parseFromIterator( Grammar* this, Iterator* iterator ) {
 	assert(this->axiom != NULL);
 	Match* match = this->axiom->recognize(this->axiom, &context);
 	if (match != FAILURE) {
-		LOG("Succeeded, parsed %zd", context.iterator->offset)
+		LOG("Succeeded, parsed %zd bytes", context.iterator->offset)
 	} else {
-		LOG("Failed, parsed %zd", context.iterator->offset)
+		LOG("Failed, parsed %zd bytes", context.iterator->offset)
 	}
 	return match;
 }
@@ -608,7 +629,7 @@ int main (int argc, char* argv[]) {
 		// ParsingElement_add( s_Expr, ONE (s_Value)  );
 		// ParsingElement_add( s_Expr, MANY(s_Suffix) );
 
-	g->axiom = s_Expr;
+	g->axiom = s_NUMBER;
 	g->skip  = s_SPACES;
 
 	Iterator* iterator = Iterator_new();
