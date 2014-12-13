@@ -85,6 +85,7 @@ typedef struct Iterator {
 	// no need to keep in memory stuff we won't need.
 	void*          input;
 	bool          (*next) (struct Iterator*);
+	bool          (*move) (struct Iterator*, size_t n);
 } Iterator;
 
 // @type FileInput

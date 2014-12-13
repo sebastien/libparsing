@@ -43,6 +43,7 @@ Iterator* Iterator_new( void ) {
 	this->length        = 0;
 	this->input         = NULL;
 	this->next          = NULL;
+	this->move          = NULL;
 	return this;
 }
 
@@ -67,6 +68,7 @@ bool Iterator_open( Iterator* this, const char *path ) {
 		FileInput_preload(this);
 		DEBUG("Iterator_open: strlen(buffer)=%zd/%zd", strlen((char*)this->buffer), this->length);
 		this->next   = FileInput_next;
+		this->move   = FileInput_move;
 		ENSURE(input->file) {};
 		return TRUE;
 	} else {
@@ -323,6 +325,9 @@ Match* Reference_recognize(Reference* this, ParsingContext* context) {
 		ASSERT(this->element->recognize, "Reference_recognize: Element %s has no recognize callback", this->element->name);
 		assert(this->element->recognize != NULL);
 		match = this->element->recognize(this->element, context);
+		if (match != FAILURE && match->status == STATUS_MATCHED) {
+			context->iterator->move(context->iterator, match->length);
+		}
 		switch (this->cardinality) {
 			case CARDINALITY_SINGLE:
 				// For single, we return the match as-is
