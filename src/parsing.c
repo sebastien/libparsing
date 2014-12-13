@@ -1,249 +1,71 @@
+// ----------------------------------------------------------------------------
+// Project           : Parsing
+// ----------------------------------------------------------------------------
+// Author            : Sebastien Pierre              <www.github.com/sebastien>
+// License           : BSD License
+// ----------------------------------------------------------------------------
+// Creation date     : 12-Dec-2014
+// Last modification : 12-Dec-2014
+// ----------------------------------------------------------------------------
+
 #include "parsing.h"
 #include "oo.h"
 
+// SEE: https://en.wikipedia.org/wiki/C_data_types
 // SEE: http://stackoverflow.com/questions/18329532/pcre-is-not-matching-utf8-characters
 // HASH: search.h, hcreate, hsearch, etc
 
-Match Word_match(ParsingElement* this, Context* context) {
-	return FAILURE;
-}
-
-Match Token_match(ParsingElement* this, Context* context) {
-	// NOTE: We'll use POSIX's regexp for now
-	return FAILURE;
-}
-
-Match Procedure_match(ParsingElement* this, Context* context) {
-	return FAILURE;
-}
-
-/**
- * Returns the next step for this parsing element, based on the given step.
- * The returned step could be the same, updated step, or a new step.
-*/
-ParsingStep* ParsingElement_next(ParsingElement* this, ParsingStep* step) {
-
-}
-
-// Match* ParsingElement_match(ParsingElement* this, Context* step) {
-// }
-// Match* ParsingElement_process(ParsingElement* this, Context* step) {
-// }
-
-void Parser_parse(Parser* this, Iterator* iterator) {
-}
+const Match FAILURE = (Match){.status=STATUS_FAILED,  .length=0, .data=NULL, .next=NULL};
 
 // ----------------------------------------------------------------------------
 //
-// REFERENCE
+// ITERATOR
 //
 // ----------------------------------------------------------------------------
 
-Reference* Reference_new() {
-	__ALLOC(Reference, this);
-	this->type        = Reference_T;
-	this->cardinality = CARD_ZERO_OR_MORE;
-	this->name        = ANONYMOUS;
-	this->element     = NULL;
-	this->next        = NULL;
-	return this;
-}
-
-Reference* Reference_ensure(Reference* r) {
-	assert(r!=NULL);
-	if (ParsingElement_is(r)) {r = ParsingElement_asReference((ParsingElement*)r);}
-	return r;
-}
-
-Reference* Reference_cardinality(Reference* r, char cardinality) {
-	assert(r!=NULL);
-	r->cardinality = cardinality;
-	return r;
-}
-
-// ----------------------------------------------------------------------------
-//
-// PARSING ELEMENT
-//
-// ----------------------------------------------------------------------------
-
-Reference* ParsingElement_asReference(ParsingElement *this) {
-	NEW(Reference, ref);
-	ref->element = this;
-	return ref;
-}
-
-ParsingElement* ParsingElement_new(Reference* children[]) {
-	__ALLOC(ParsingElement, this);
-	this->id       = 0;
-	this->name     = ANONYMOUS;
-	this->config   = NULL;
-	this->children = NULL;
-	this->match    = NULL;
-	this->process  = NULL;
-	if (children != NULL ) {
-		Reference* r = *children;
-		while ( r != NULL ) {
-			// FIXME: Make sure how memory is managed here
-			if (ParsingElement_is(r)) {r = ParsingElement_asReference((ParsingElement*)r);}
-			ParsingElement_add(this, r);
-			r = *(++children);
-		}
-	}
-	return this;
-}
-
-void ParsingElement_destroy(ParsingElement* this) {
-	__DEALLOC(this);
-}
-
-ParsingElement* ParsingElement_add(ParsingElement *this, Reference *child) {
-	child = Reference_ensure(child);
-	assert(child->next == NULL);
-	if (this->children) {
-		// If there are children, we skip until the end and add it
-		Reference* ref = this->children;
-		while (ref->next != NULL) {ref = ref->next;}
-		ref->next = child;
+Iterator* Iterator_Open(const char* path) {
+	NEW(Iterator,result);
+	if (Iterator_open(result, path)) {
+		return result;
 	} else {
-		// If there are no children, we set it as the first
-		this->children = child;
-	}
-	return this;
-}
-
-Match ParsingElement_match( ParsingElement* this, Iterator* iterator ) {
-	if (this->match) {
-		return this->match(this, iterator);
-	} else {
-		return FAILURE;
-	}
-}
-
-// ----------------------------------------------------------------------------
-//
-// TOKEN
-//
-// ----------------------------------------------------------------------------
-
-ParsingElement* Token_new(const char* expr) {
-	__ALLOC(TokenConfig, config);
-	ParsingElement* this = ParsingElement_new(NULL);
-	this->match = Token_match;
-	if ( regcomp( &(config->regex), expr, REG_EXTENDED) == 0) {
-		this->config = config;
-		return this;
-	} else {
-		ERROR("Cannot compile POSIX regex: %s", expr);
-		__DEALLOC(config);
-		ParsingElement_destroy(this);
+		Iterator_destroy(result);
 		return NULL;
 	}
 }
 
-// TODO: Implement Token_destroy and regfree
-
-Match Token_match(ParsingElement* this, Iterator* iterator) {
-	// We get the current parsing context and make sure we have
-	// at least TOKEN_MATCH_RANGE characters available (or the EOF). The
-	// limitation here is that we don't necessarily want ot load the whole
-	// file in memory, but could do it 1MB/time for instance.
-
-	// NOTE: This means we need to pass the context
-	//
-	// Context_preload(context, TOKEN_MATCH_RANGE);
-	//
-	// regmatch_t matches[2];
-	// regexec(
-	//      ((TokenConfig*)this->config)->regex,
-	//      context->rest,
-	//      1,
-	//      matches,
-	//      0)
-}
-
-
-// ----------------------------------------------------------------------------
-//
-// GROUP
-//
-// ----------------------------------------------------------------------------
-
-ParsingElement* Group_new(Reference* children[]) {
-	ParsingElement* this = ParsingElement_new(children);
-	this->match = Group_match;
+Iterator* Iterator_new( void ) {
+	__ALLOC(Iterator, this);
+	this->status        = STATUS_INIT;
+	this->separator     = EOL;
+	this->buffer        = NULL;
+	this->current       = NULL;
+	this->offset        = 0;
+	this->lines         = 0;
+	this->available     = 0;
+	this->length        = 0;
+	this->input         = NULL;
+	this->next          = NULL;
 	return this;
 }
 
-Match Group_match(ParsingElement* this, Iterator* iterator){
-	Reference* child = this->children;
-	Match      result;
-	while (child != NULL ) {
-		// FIXME: We should do a Reference_match instead
-		result = ParsingElement_match(child->element, iterator);
-		if (result.status == STATUS_MATCHED) {return result;}
-		else                                 {child++;}
+bool Iterator_open( Iterator* this, const char *path ) {
+	NEW(FileInput,input, path,65000);
+	if (input!=NULL) {
+		this->input          = (void*)input;
+		this->context.status = STATUS_PROCESSING;
+		this->context.offset = 0;
+		this->context.head   = input->buffer;
+		this->next           = FileInput_next;
+		ENSURE(input->file) {};
+		return TRUE;
+	} else {
+		return FALSE;
 	}
-	return FAILURE;
 }
 
-// ----------------------------------------------------------------------------
-//
-// RULE
-//
-// ----------------------------------------------------------------------------
-
-ParsingElement* Rule_new(Reference* children[]) {
-	ParsingElement* this = ParsingElement_new(children);
-	this->match = Rule_match;
-	return this;
-}
-
-Match Rule_match(ParsingElement* this, Iterator* iterator){
-	Reference* child = this->children;
-	Match      result;
-	while (child != NULL ) {
-		// FIXME: We should do a Reference_match instead
-		result = ParsingElement_match(child->element, iterator);
-		if (result.status != STATUS_MATCHED) {
-			switch (child->cardinality) {
-				case CARD_SINGLE:
-					return FAILURE;
-				case CARD_ONE_OR_MORE:
-					return FAILURE;
-			}
-		}
-	}
-	return result;
-}
-// ----------------------------------------------------------------------------
-//
-// GRAMMAR
-//
-// ----------------------------------------------------------------------------
-
-Grammar* Grammar_new() {
-	__ALLOC(Grammar, this);
-	this->axiom     = NULL;
-	this->skip      = NULL;
-	this->elements  = NULL;
-	return this;
-}
-
-// ----------------------------------------------------------------------------
-//
-// CONTEXT
-//
-// ----------------------------------------------------------------------------
-
-Context* Context_new() {
-	__ALLOC(Context, this);
-	this->status    = STATUS_INIT;
-	this->separator = EOL;
-	this->offset    = 0;
-	this->lines     = 0;
-	this->head      = NULL;
-	return this;
+void Iterator_destroy( Iterator* this ) {
+	// TODO: Take care of input
+	__DEALLOC(this);
 }
 
 // ----------------------------------------------------------------------------
@@ -252,10 +74,7 @@ Context* Context_new() {
 //
 // ----------------------------------------------------------------------------
 
-/**
- * Creates a new file input with the given path and buffer size
-*/
-PUBLIC FileInput* FileInput_new(const char* path, unsigned int bufferSize ) {
+FileInput* FileInput_new(const char* path ) {
 	__ALLOC(FileInput, this);
 	assert(this != NULL);
 	// We open the file
@@ -314,43 +133,209 @@ Context* FileInput_next( Iterator* this ) {
 
 // ----------------------------------------------------------------------------
 //
-// ITERATOR
+// GRAMMAR
 //
 // ----------------------------------------------------------------------------
 
-Iterator* Iterator_new( void ) {
-	__ALLOC(Iterator, this);
+Grammar* Grammar_new() {
+	__ALLOC(Grammar, this);
+	this->axiom     = NULL;
+	this->skip      = NULL;
 	return this;
 }
 
-bool Iterator_open( Iterator* this, const char *path ) {
-	NEW(FileInput,input, path,65000);
-	if (input!=NULL) {
-		this->input          = (void*)input;
-		this->context.status = STATUS_PROCESSING;
-		this->context.offset = 0;
-		this->context.head   = input->buffer;
-		this->next           = FileInput_next;
-		ENSURE(input->file) {};
-		return TRUE;
-	} else {
-		return FALSE;
-	}
+// ----------------------------------------------------------------------------
+//
+// PARSING ELEMENT
+//
+// ----------------------------------------------------------------------------
+
+bool ParsingElement_Is(void *this) {
+	return this!=NULL && ((ParsingElement*)this)->type == ParsingElement_T
 }
 
+ParsingElement* ParsingElement_new(Reference* children[]) {
+	__ALLOC(ParsingElement, this);
+	this->type      = ParsingElement_T;
+	this->id        = 0;
+	this->name      = "_";
+	this->config    = NULL;
+	this->children  = NULL;
+	this->recognize = NULL;
+	this->process   = NULL;
+	// if (children != NULL ) {
+	// 	Reference* r = *children;
+	// 	while ( r != NULL ) {
+	// 		// FIXME: Make sure how memory is managed here
+	// 		if (ParsingElement_is(r)) {r = ParsingElement_asReference((ParsingElement*)r);}
+	// 		ParsingElement_add(this, r);
+	// 		r = *(++children);
+	// 	}
+	// }
+	return this;
+}
 
-void Iterator_destroy( Iterator* this ) {
+void ParsingElement_destroy(ParsingElement* this) {
+	while (children != NULL) {
+		Reference* next = children->next;
+		__DEALLOC(children);
+		children = next;
+	}
 	__DEALLOC(this);
 }
 
-Match Grammar_match( Grammar* this, Iterator* iterator ) {
-	return ParsingElement_match(this->axiom, iterator);
+ParsingElement* ParsingElement_add(ParsingElement *this, Reference *child) {
+	assert(child->next == NULL);
+	if (this->children) {
+		// If there are children, we skip until the end and add it
+		Reference* ref = this->children;
+		while (ref->next != NULL) {ref = ref->next;}
+		ref->next = child;
+	} else {
+		// If there are no children, we set it as the first
+		this->children = child;
+	}
+	return this;
 }
 
-void Grammar_parseWithIterator( Grammar* this, Iterator* iterator ) {
-	while (iterator->context.status != STATUS_ENDED) {
-		Grammar_match(this, iterator);
+Match* ParsingElement_match( ParsingElement* this, Iterator* iterator ) {
+	if (this->match) {
+		return this->match(this, iterator);
+	} else {
+		return &FAILURE;
 	}
+}
+
+Match* ParsingElement_process( ParsingElement* this, Match* match ) {
+	return match;
+}
+
+// ----------------------------------------------------------------------------
+//
+// REFERENCE
+//
+// ----------------------------------------------------------------------------
+
+bool Reference_Is(void *this) {
+	return this!=NULL && ((Reference*)this)->type == Reference_T;
+}
+
+Reference* Reference_new() {
+	__ALLOC(Reference, this);
+	this->type        = Reference_T;
+	this->cardinality = CARD_SINGLE;
+	this->name        = "_";
+	this->element     = NULL;
+	this->next        = NULL;
+	return this;
+}
+
+Reference* Reference_cardinality(Reference* this, char cardinality) {
+	assert(this!=NULL);
+	this->cardinality = cardinality;
+	return this;
+}
+
+Match* Reference_match(Reference* this, Iterator* iterator) {
+	// TODO
+	return &FAILURE;
+}
+
+// ----------------------------------------------------------------------------
+//
+// TOKEN
+//
+// ----------------------------------------------------------------------------
+
+ParsingElement* Token_new(const char* expr) {
+	__ALLOC(Token, config);
+	ParsingElement* this = ParsingElement_new(NULL);
+	this->match = Token_match;
+	if ( regcomp( &(config->regex), expr, REG_EXTENDED) == 0) {
+		this->config = config;
+		return this;
+	} else {
+		ERROR("Cannot compile POSIX regex: %s", expr);
+		__DEALLOC(config);
+		ParsingElement_destroy(this);
+		return NULL;
+	}
+}
+
+// TODO: Implement Token_destroy and regfree
+
+Match* Token_match(ParsingElement* this, Iterator* iterator) {
+	// We get the current parsing context and make sure we have
+	// at least TOKEN_MATCH_RANGE characters available (or the EOF). The
+	// limitation here is that we don't necessarily want ot load the whole
+	// file in memory, but could do it 1MB/time for instance.
+
+	// NOTE: This means we need to pass the context
+	//
+	// Context_preload(context, TOKEN_MATCH_RANGE);
+	//
+	// regmatch_t matches[2];
+	// regexec(
+	//      ((TokenConfig*)this->config)->regex,
+	//      context->rest,
+	//      1,
+	//      matches,
+	//      0)
+}
+
+
+// ----------------------------------------------------------------------------
+//
+// GROUP
+//
+// ----------------------------------------------------------------------------
+
+ParsingElement* Group_new(Reference* children[]) {
+	ParsingElement* this = ParsingElement_new(children);
+	this->match = Group_match;
+	return this;
+}
+
+Match* Group_match(ParsingElement* this, Iterator* iterator){
+	Reference* child = this->children;
+	Match*     result;
+	while (child != NULL ) {
+		// FIXME: We should do a Reference_match instead
+		result = ParsingElement_match(child->element, iterator);
+		if (result.status == STATUS_MATCHED) {return result;}
+		else                                 {child++;}
+	}
+	return &FAILURE;
+}
+
+// ----------------------------------------------------------------------------
+//
+// RULE
+//
+// ----------------------------------------------------------------------------
+
+ParsingElement* Rule_new(Reference* children[]) {
+	ParsingElement* this = ParsingElement_new(children);
+	this->match = Rule_match;
+	return this;
+}
+
+Match* Rule_match (ParsingElement* this, Iterator* iterator){
+	Reference* child  = this->children;
+	Match*     result = NULL;
+	Match*     last   = NULL;
+	while (child != NULL ) {
+		Match* current = ParsingElement_match(child->element, iterator);
+		if (current != STATUS_MATCHED) {return &FAILURE;}
+		if (last == NULL) {
+			result = current;
+			last   = current;
+		} else {
+			last->next = current;
+			last       = current
+		}
+	}
+	return result;
 }
 
 // ----------------------------------------------------------------------------
@@ -376,20 +361,20 @@ int main (int argc, char* argv[]) {
 	//
 	// Alternative:
 	// GROUP(s_Value) ONE(s_NUMBER) MANY(s_VARIABLE) END_GROUP
-	ParsingElement* s_Value    = Group_new(NULL);
-		ParsingElement_add( s_Value, ONE(s_NUMBER)   );
-		ParsingElement_add( s_Value, ONE(s_VARIABLE) );
+	// ParsingElement* s_Value    = Group_new(NULL);
+	// 	ParsingElement_add( s_Value, ONE(s_NUMBER)   );
+	// 	ParsingElement_add( s_Value, ONE(s_VARIABLE) );
 
-	ParsingElement* s_Suffix   = Rule_new (NULL);
-		ParsingElement_add( s_Suffix, ONE(s_OP)   );
-		ParsingElement_add( s_Suffix, ONE(s_Value) );
+	// ParsingElement* s_Suffix   = Rule_new (NULL);
+	// 	ParsingElement_add( s_Suffix, ONE(s_OP)   );
+	// 	ParsingElement_add( s_Suffix, ONE(s_Value) );
 
-	ParsingElement* s_Expr    = Rule_new (NULL);
-		ParsingElement_add( s_Expr, ONE (s_Value)  );
-		ParsingElement_add( s_Expr, MANY(s_Suffix) );
+	// ParsingElement* s_Expr    = Rule_new (NULL);
+	// 	ParsingElement_add( s_Expr, ONE (s_Value)  );
+	// 	ParsingElement_add( s_Expr, MANY(s_Suffix) );
 
-	g->axiom = s_Expr;
-	g->skip  = s_SPACES;
+	// g->axiom = s_Expr;
+	// g->skip  = s_SPACES;
 
 	Iterator* i = Iterator_new();
 	const char* path = "expression.txt";
@@ -397,7 +382,8 @@ int main (int argc, char* argv[]) {
 	if (!Iterator_open(i, path)) {
 		ERROR("Cannot open file: %s", path);
 	} else {
-		Grammar_parseWithIterator( g, i );
+		DEBUG("Opening file: %s", path)
+		// Grammar_parseWithIterator( g, i );
 	}
 }
 
