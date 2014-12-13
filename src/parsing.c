@@ -99,7 +99,7 @@ void FileInput_destroy(FileInput* this) {
 	if (this->file != NULL) { fclose(this->file);   }
 }
 
-void FileInput_next( Iterator* this ) {
+bool FileInput_next( Iterator* this ) {
 	// We want to know if there is at one more element
 	// in the file input.
 	FileInput*   input         = (FileInput*)this->input;
@@ -129,6 +129,9 @@ void FileInput_next( Iterator* this ) {
 		// We increase the head, copy
 		this->current++;
 		if (*(this->current) == this->separator) {this->lines++;}
+		return TRUE;
+	} else {
+		return FALSE;
 	}
 }
 
@@ -381,7 +384,10 @@ int main (int argc, char* argv[]) {
 		ERROR("Cannot open file: %s", path);
 	} else {
 		DEBUG("Opening file: %s", path)
-		// Grammar_parseWithIterator( g, i );
+		// Below is a simple test on how to iterate on the file
+		while (FileInput_next(i)) {
+			printf("Read %c at %zd/%zd\n", *i->current, i->offset, i->available);
+		}
 	}
 }
 

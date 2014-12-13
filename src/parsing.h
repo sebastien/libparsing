@@ -84,7 +84,7 @@ typedef struct Iterator {
 	// FIXME: The head should be freed when the offsets have been parsed,
 	// no need to keep in memory stuff we won't need.
 	void          *input;
-	void          (*next) (struct Iterator*);
+	bool          (*next) (struct Iterator*);
 } Iterator;
 
 // @type FileInput
@@ -133,7 +133,7 @@ void       FileInput_destroy(FileInput* this);
 // Advances the given iterator, loading new data from the file input
 // whenever there is not `ITERATOR_BUFFER_AHEAD` data elements
 // ahead of the iterator's current position.
-void       FileInput_next(Iterator* this);
+bool       FileInput_next(Iterator* this);
 
 /**
  * Grammar
