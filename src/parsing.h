@@ -83,7 +83,7 @@ typedef struct Iterator {
 	size_t         available; // Available data in buffer (in bytes)
 	// FIXME: The head should be freed when the offsets have been parsed,
 	// no need to keep in memory stuff we won't need.
-	void          *input;
+	void*          input;
 	bool          (*next) (struct Iterator*);
 } Iterator;
 
@@ -300,6 +300,9 @@ typedef struct Reference {
 bool         Reference_Is(void *);
 const char   Reference_T = 'R';
 
+// @classmethod
+Reference* Reference_New(ParsingElement *);
+
 // @constructor
 // References are typically owned by their single parent composite element.
 Reference* Reference_new();
@@ -413,10 +416,10 @@ typedef struct ParsingStep {
  * The parsing library provides a set of macros that make defining grammars
  * a much easier task.
 */
-#define ONE(v)            Reference_cardinality(ParsingElement_asReference(v), CARD_SINGLE)
-#define OPTIONAL(v)       Reference_cardinality(ParsingElement_asReference(v), CARD_OPTIONAL)
-#define MANY(v)           Reference_cardinality(ParsingElement_asReference(v), CARD_ONE_OR_MORE)
-#define MANY_OPTIONAL(v)  Reference_cardinality(ParsingElement_asReference(v), CARD_ZERO_OR_MORE)
+#define ONE(v)            Reference_cardinality(Reference_New(v), CARDINALITY_SINGLE)
+#define OPTIONAL(v)       Reference_cardinality(Reference_New(v), CARDINALITY_OPTIONAL)
+#define MANY(v)           Reference_cardinality(Reference_New(v), CARDINALITY_MANY)
+#define MANY_OPTIONAL(v)  Reference_cardinality(Reference_New(v), CARDINALITY_MANY_OPTIONAL)
 
 #endif
 // EOF

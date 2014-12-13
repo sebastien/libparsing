@@ -218,8 +218,15 @@ Match* ParsingElement_process( ParsingElement* this, Match* match ) {
 //
 // ----------------------------------------------------------------------------
 
+
 bool Reference_Is(void *this) {
 	return this!=NULL && ((Reference*)this)->type == Reference_T;
+}
+
+Reference* Reference_New(ParsingElement* element){
+	NEW(Reference, this);
+	this->element = element;
+	return this;
 }
 
 Reference* Reference_new() {
@@ -363,20 +370,22 @@ int main (int argc, char* argv[]) {
 	//
 	// Alternative:
 	// GROUP(s_Value) ONE(s_NUMBER) MANY(s_VARIABLE) END_GROUP
-	// ParsingElement* s_Value    = Group_new(NULL);
-	// 	ParsingElement_add( s_Value, ONE(s_NUMBER)   );
-	// 	ParsingElement_add( s_Value, ONE(s_VARIABLE) );
+	//
 
-	// ParsingElement* s_Suffix   = Rule_new (NULL);
-	// 	ParsingElement_add( s_Suffix, ONE(s_OP)   );
-	// 	ParsingElement_add( s_Suffix, ONE(s_Value) );
+	ParsingElement* s_Value    = Group_new(NULL);
+		ParsingElement_add( s_Value, ONE(s_NUMBER)   );
+		ParsingElement_add( s_Value, ONE(s_VARIABLE) );
 
-	// ParsingElement* s_Expr    = Rule_new (NULL);
-	// 	ParsingElement_add( s_Expr, ONE (s_Value)  );
-	// 	ParsingElement_add( s_Expr, MANY(s_Suffix) );
+	ParsingElement* s_Suffix   = Rule_new (NULL);
+		ParsingElement_add( s_Suffix, ONE(s_OP)   );
+		ParsingElement_add( s_Suffix, ONE(s_Value) );
 
-	// g->axiom = s_Expr;
-	// g->skip  = s_SPACES;
+	ParsingElement* s_Expr    = Rule_new (NULL);
+		ParsingElement_add( s_Expr, ONE (s_Value)  );
+		ParsingElement_add( s_Expr, MANY(s_Suffix) );
+
+	g->axiom = s_Expr;
+	g->skip  = s_SPACES;
 
 	Iterator* i = Iterator_new();
 	const char* path = "expression-long.txt";

@@ -100,7 +100,7 @@ typedef char  bool;
 #define ERROR(msg,...)   fprintf(WARNING_STREAM, "ERR ");fprintf(ERROR_STREAM,   msg, __VA_ARGS__);fprintf(ERROR_STREAM,   "\n");
 #define LOG(msg,...)     fprintf(LOG_STREAM,     "--- ");fprintf(LOG_STREAM,     msg, __VA_ARGS__);fprintf(LOG_STREAM,     "\n");
 
-#define ASSERT(v,msg,..) if(!v){DEBUG(msg, __VA_ARGS__);}
+#define ASSERT(v,msg,...) if(!v){DEBUG(msg, __VA_ARGS__);}
 
 // todo: ERROR, WARNING, INFO, DEBUG
 // todo: COUNTER(name, delta)
