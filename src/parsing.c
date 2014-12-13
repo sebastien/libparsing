@@ -80,6 +80,10 @@ bool Iterator_hasMore( Iterator* this ) {
 	return this->status != STATUS_ENDED;
 }
 
+inline size_t Iterator_remaining( Iterator* this ) {
+	return this->available - (this->current - this->buffer);
+}
+
 void Iterator_destroy( Iterator* this ) {
 	// TODO: Take care of input
 	__DEALLOC(this);
@@ -595,12 +599,12 @@ Match* Grammar_parseFromIterator( Grammar* this, Iterator* iterator ) {
 	Match* match = this->axiom->recognize(this->axiom, &context);
 	if (match != FAILURE) {
 		if (Iterator_hasMore(context.iterator)) {
-			LOG("Partial success, parsed %zd bytes, %zd remaining", context.iterator->offset, context.iterator->available - (context.iterator->current - context.iterator->buffer));
+			LOG("Partial success, parsed %zd bytes, %zd remaining", context.iterator->offset, Iterator_remaining(context.iterator));
 		} else {
 			LOG("Succeeded, parsed %zd bytes", context.iterator->offset);
 		}
 	} else {
-		LOG("Failed, parsed %zd bytes", context.iterator->offset)
+		LOG("Failed, parsed %zd bytes, %zd remaining", context.iterator->offset, Iterator_remaining(context.iterator))
 	}
 	return match;
 }

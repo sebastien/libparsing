@@ -120,6 +120,12 @@ bool Iterator_open( Iterator* this, const char *path );
 // Tells if the iterator has more available data
 inline bool Iterator_hasMore( Iterator* this );
 
+// @method
+// Returns the number of bytes available from the current iterator's position.
+// This should be at least `ITERATOR_BUFFER_AHEAD` until end of input stream
+// is reached.
+size_t Iterator_remaining( Iterator* this );
+
 #ifndef ITERATOR_BUFFER_AHEAD
 // @define
 // The number of `iterated_t` that should be loaded after the iterator's
