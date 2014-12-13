@@ -130,6 +130,15 @@ FileInput* FileInput_new(const char* path );
 void       FileInput_destroy(FileInput* this);
 
 // @method
+// Preloads data from the input source so that the buffer
+// has ITERATOR_BUFFER_AHEAD characters ahead.
+inline size_t FileInput_preload( Iterator* this );
+
+// @method
+// Iterates `n` time on the file input.
+inline bool FileInput_move   ( Iterator* this, size_t n );
+
+// @method
 // Advances the given iterator, loading new data from the file input
 // whenever there is not `ITERATOR_BUFFER_AHEAD` data elements
 // ahead of the iterator's current position.

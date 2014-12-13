@@ -58,11 +58,14 @@ bool Iterator_open( Iterator* this, const char *path ) {
 		// bytes ahead (if the input source has the data)
 		assert(this->buffer == NULL);
 		this->length  = sizeof(iterated_t) * ITERATOR_BUFFER_AHEAD * 2;
-		this->buffer  = malloc(this->length + 1);
+		this->buffer  = calloc(this->length + 1, 1);
 		this->current = (iterated_t*)this->buffer;
 		// We make sure we have a trailing \0 sign to stop any string parsing
 		// function to go any further.
 		((char*)this->buffer)[this->length] = '\0';
+		assert(strlen(((char*)this->buffer)) == 0);
+		FileInput_preload(this);
+		DEBUG("Iterator_open: strlen(buffer)=%zd/%zd", strlen((char*)this->buffer), this->length);
 		this->next   = FileInput_next;
 		ENSURE(input->file) {};
 		return TRUE;
@@ -100,7 +103,7 @@ void FileInput_destroy(FileInput* this) {
 	if (this->file != NULL) { fclose(this->file);   }
 }
 
-bool FileInput_next( Iterator* this ) {
+size_t FileInput_preload( Iterator* this ) {
 	// We want to know if there is at one more element
 	// in the file input.
 	FileInput*   input         = (FileInput*)this->input;
@@ -113,8 +116,10 @@ bool FileInput_next( Iterator* this ) {
 	// Do we have less left than the buffer ahead
 	if ( left < ITERATOR_BUFFER_AHEAD && this->status != STATUS_INPUT_ENDED) {
 		// We move buffer[current:] to the begining of the buffer
+		// FIXME: We should make sure we don't call preload each time
 		memmove((void*)this->buffer, (void*)this->current, left);
 		size_t to_read        = this->length - left;
+		DEBUG("FileInput_preload: trying to get %zd bytes from input", to_read);
 		size_t read           = fread((void*)this->buffer + left, sizeof(char), to_read, input->file);
 		this->available       = left + read;
 		this->current         = this->buffer;
@@ -124,16 +129,32 @@ bool FileInput_next( Iterator* this ) {
 			this->status = STATUS_INPUT_ENDED;
 		}
 	}
+	return left;
+}
+
+bool FileInput_move   ( Iterator* this, size_t n ) {
+	assert (n>0);
+	// We want to know if there is at one more element
+	// in the file input.
+	size_t left = FileInput_preload(this);
 	if (left > 0) {
+		if (n>left) {n=left;}
 		// We have enough space left in the buffer to read at least one character.
 		// We increase the head, copy
-		this->current++;
-		this->offset++;
-		if (*(this->current) == this->separator) {this->lines++;}
+		while (n > 0) {
+			this->current++;
+			this->offset++;
+			if (*(this->current) == this->separator) {this->lines++;}
+			n--;
+		}
 		return TRUE;
 	} else {
 		return FALSE;
 	}
+}
+
+bool FileInput_next   ( Iterator* this ) {
+	return FileInput_move(this, 1);
 }
 
 // ----------------------------------------------------------------------------
@@ -361,14 +382,19 @@ Match* Token_recognize(ParsingElement* this, ParsingContext* context) {
 	// NOTE: This means we need to pass the context
 	//
 	// Context_preload(context, TOKEN_MATCH_RANGE);
-	//
-	// regmatch_t matches[2];
-	// regexec(
-	//      ((TokenConfig*)this->config)->regex,
-	//      context->rest,
-	//      1,
-	//      matches,
-	//      0)
+
+	// We need at least one more match than what we're requesting
+	regmatch_t matches[2];
+	const regex_t* regex  = & (((Token*)this->config)->regex);
+	regexec(regex, context->iterator->buffer, 1, matches, 0);
+	DEBUG("Buffer length: %zd: %s", strlen(context->iterator->buffer), context->iterator->buffer);
+	if (matches[0].rm_so != -1) {
+		DEBUG("Matched %s %d-%d", this->name, matches[0].rm_so, matches[1].rm_eo);
+		return Match_Empty();
+	} else {
+		DEBUG("Failed %s", this->name);
+		return FAILURE;
+	}
 }
 
 
@@ -509,10 +535,10 @@ int main (int argc, char* argv[]) {
 	// We defined the grammar
 	Grammar* g                 = Grammar_new();
 
-	ParsingElement* s_NUMBER   = NAME("NUMBER",   Token_new("[0-9]+(\\.[0-9]+)?"));
-	ParsingElement* s_VARIABLE = NAME("VARIABLE", Token_new("[A-Z]+"));
-	ParsingElement* s_OP       = NAME("OP",       Token_new("\\-|\\+|\\*"));
-	ParsingElement* s_SPACES   = NAME("SPACES",   Token_new("[ ]+"));
+	ParsingElement* s_NUMBER   = NAME("NUMBER",   Token_new("^[0-9]+(\\.[0-9]+)?"));
+	ParsingElement* s_VARIABLE = NAME("VARIABLE", Token_new("^[A-Z]+"));
+	ParsingElement* s_OP       = NAME("OP",       Token_new("^\\-|\\+|\\*"));
+	ParsingElement* s_SPACES   = NAME("SPACES",   Token_new("^[ ]+"));
 
 	// FIXME: This is not very elegant, but I did not really find a better
 	// way. I tried passing the elements as an array, but it doesn't really
