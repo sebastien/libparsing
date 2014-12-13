@@ -74,13 +74,13 @@ typedef ITERATION_UNIT iterated_t;
 // @type Iterator
 typedef struct Iterator {
 	char           status;
-	iterated_t     separator;
-	iterated_t*    buffer;
+	char*          buffer;
 	iterated_t*    current;
-	size_t         offset;
-	size_t         lines;    // Counter for lines that have been encountered
-	size_t         length;
-	size_t         available;
+	iterated_t     separator;
+	size_t         offset;    // Offset (in bytes)
+	size_t         lines;     // Counter for lines that have been encountered
+	size_t         length;    // Length (in bytes)
+	size_t         available; // Available data in buffer (in bytes)
 	// FIXME: The head should be freed when the offsets have been parsed,
 	// no need to keep in memory stuff we won't need.
 	void          *input;
@@ -107,7 +107,7 @@ Iterator* Iterator_Open(const char* path);
 Iterator* Iterator_new(void);
 
 // @destructor
-Iterator* Iterator_destroy(Iterator* this);
+void      Iterator_destroy(Iterator* this);
 
 // @method
 // Makes the given iterator open the file at the given path.
@@ -120,7 +120,7 @@ bool Iterator_open( Iterator* this, const char *path );
 // The number of `iterated_t` that should be loaded after the iterator's
 // current position. This limits the numbers of `iterated_t` that a `Token`
 // could match.
-#define ITERATOR_BUFFER_AHEAD = 64000
+#define ITERATOR_BUFFER_AHEAD 64000
 #endif
 
 // @constructor
@@ -184,16 +184,16 @@ typedef struct Match {
 
 // @define
 // The different values for a match (or iterator)'s status
-#define STATUS_INIT       '-'
-#define STATUS_PROCESSING '~'
-#define STATUS_MATCHED    'Y'
-#define STATUS_FAILED     'X'
-#define STATUS_ENDED      'E'
+#define STATUS_INIT        '-'
+#define STATUS_PROCESSING  '~'
+#define STATUS_MATCHED     'Y'
+#define STATUS_FAILED      'X'
+#define STATUS_INPUT_ENDED '.'
+#define STATUS_ENDED       'E'
 
 // @singleton FAILURE
 // A specific match that indicates a failure
-// FIXME: Should that be static?
-extern Match FAILURE;
+#define FAILURE (Match*)NULL;
 
 // @type ParsingElement
 typedef struct ParsingElement {
@@ -228,7 +228,7 @@ ParsingElement* ParsingElement_add(ParsingElement *this, Reference *child);
 
 // @method
 // Returns the match for this parsing element for the given iterator's state.
-Match* ParsingElement_match( ParsingElement* this, Iterator* iterator );
+Match* ParsingElement_recognize( ParsingElement* this, Iterator* iterator );
 
 // @method
 // Processes the given match once the parsing element has fully succeeded. This
@@ -261,7 +261,7 @@ ParsingElement* Token_new(const char* expr);
 
 // @method
 // The specialized match function for token parsing elements.
-Match*          Token_match(ParsingElement* this, Iterator* iterator);
+Match*          Token_recognize(ParsingElement* this, Iterator* iterator);
 
 /**
  * References
@@ -313,7 +313,7 @@ Reference* Reference_cardinality(Reference* this, char cardinality);
 // `OPTIONAL` references might return `EMPTY`, `SINGLE` references will return
 // a match with a `next=NULL` while `MANY` may return a match with a `next`
 // pointing to the next match.
-Match* Reference_match(Reference* this, Iterator* iterator);
+Match* Reference_recognize(Reference* this, Iterator* iterator);
 
 /**
  * Groups
@@ -327,7 +327,7 @@ Match* Reference_match(Reference* this, Iterator* iterator);
 ParsingElement* Group_new(Reference* children[]);
 
 // @method
-Match*          Group_match(ParsingElement* this, Iterator* iterator);
+Match*          Group_recognize(ParsingElement* this, Iterator* iterator);
 
 /**
  * Rules
@@ -341,7 +341,7 @@ Match*          Group_match(ParsingElement* this, Iterator* iterator);
 ParsingElement* Rule_new(Reference* children[]);
 
 // @method
-Match*          Rule_match(ParsingElement* this, Iterator* iterator);
+Match*          Rule_recognize(ParsingElement* this, Iterator* iterator);
 
 /**
  * The parsing process
@@ -367,7 +367,7 @@ typedef struct ParsingContext {
 } ParsingContext;
 
 /*
- * The result of _matching_ parsing elements at given offsets within the
+ * The result of _recognizeing_ parsing elements at given offsets within the
  * input stream is stored in `ParsingOffset`. Each parsing offset is a stack
  * of `ParsingStep`, corresponding to successive attempts at matching
  * parsing elements at the current position.

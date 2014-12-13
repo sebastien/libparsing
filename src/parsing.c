@@ -15,8 +15,6 @@
 // SEE: http://stackoverflow.com/questions/18329532/pcre-is-not-matching-utf8-characters
 // HASH: search.h, hcreate, hsearch, etc
 
-const Match FAILURE = (Match){.status=STATUS_FAILED,  .length=0, .data=NULL, .next=NULL};
-
 // ----------------------------------------------------------------------------
 //
 // ITERATOR
@@ -49,13 +47,22 @@ Iterator* Iterator_new( void ) {
 }
 
 bool Iterator_open( Iterator* this, const char *path ) {
-	NEW(FileInput,input, path,65000);
+	NEW(FileInput,input, path);
+	assert(this->status == STATUS_INIT);
 	if (input!=NULL) {
-		this->input          = (void*)input;
-		this->context.status = STATUS_PROCESSING;
-		this->context.offset = 0;
-		this->context.head   = input->buffer;
-		this->next           = FileInput_next;
+		this->input  = (void*)input;
+		this->status = STATUS_PROCESSING;
+		this->offset = 0;
+		// We allocate a buffer that's twice the size of ITERATOR_BUFFER_AHEAD
+		// so that we ensure that the current position always has ITERATOR_BUFFER_AHEAD
+		// bytes ahead (if the input source has the data)
+		assert(this->buffer == NULL);
+		this->length = sizeof(iterated_t) * ITERATOR_BUFFER_AHEAD * 2;
+		this->buffer = malloc(this->length + 1);
+		// We make sure we have a trailing \0 sign to stop any string parsing
+		// function to go any further.
+		((char*)this->buffer)[this->length] = '\0';
+		this->next   = FileInput_next;
 		ENSURE(input->file) {};
 		return TRUE;
 	} else {
@@ -84,51 +91,45 @@ FileInput* FileInput_new(const char* path ) {
 		__DEALLOC(this);
 		return NULL;
 	} else {
-		// And allocate the buffer. We make sure that the buffer size is a multiple
-		// of the iterated_t.
-		bufferSize         = (bufferSize/sizeof(iterated_t)) * sizeof(iterated_t);
-		this->bufferSize   = bufferSize;
-		this->readableSize = 0;
-		this->buffer       = malloc(bufferSize);
 		return this;
 	}
 }
 
 void FileInput_destroy(FileInput* this) {
 	if (this->file != NULL) { fclose(this->file);   }
-	__DEALLOC(this->buffer);
 }
 
-Context* FileInput_next( Iterator* this ) {
+void FileInput_next( Iterator* this ) {
 	// We want to know if there is at one more element
 	// in the file input.
 	FileInput*   input         = (FileInput*)this->input;
-	char*        head          = (char*)     this->context.head;
-	size_t  bytes_left_to_read = input->readableSize - (this->context.head - input->buffer);
-	assert (bytes_left_to_read >= 0);
-	// We check wether we have bytes left to read in the buffer. If not, we
-	// need to refill it.
-	if ( bytes_left_to_read == 0 ) {
-		// We've reached the end of the buffer, so we need to re-create a new
-		// buffer.
-		size_t to_read        = input->bufferSize/sizeof(iterated_t);
-		size_t read           = fread(input->buffer, sizeof(iterated_t), to_read, input->file);
-		input->readableSize = read * sizeof(iterated_t);
-		assert(input->readableSize % sizeof(iterated_t) == 0);
-		// We we've read the size of the buffer, we'll need to refesh it
-		this->context.head         = (iterated_t*) input->buffer;
+	size_t       read          = this->current   - this->buffer;
+	size_t       left          = this->available - read;
+	assert (read >= 0);
+	assert (left >= 0);
+	assert (left  < this->length);
+	// Do we have less left than the buffer ahead
+	if ( left < ITERATOR_BUFFER_AHEAD && this->status != STATUS_INPUT_ENDED) {
+		// We move buffer[current:] to the begining of the buffer
+		memmove((void*)this->buffer, (void*)this->current, left);
+		size_t to_read        = this->length - left;
+		size_t read           = fread((void*)this->buffer + left, sizeof(char), to_read, input->file);
+		this->available       = left + read;
+		this->current         = this->buffer;
+		left                  = this->available;
 		if (read == 0) {
-			DEBUG("End of file reached at offset %d", this->context.offset);
-			this->context.status = STATUS_ENDED;
-			return &this->context;
+			DEBUG("End of file reached at offset %zd", this->offset);
+			if (left == 0) {
+				this->status = STATUS_INPUT_ENDED;
+			}
 		}
 	}
-	// We have enough space left in the buffer to read at least one character.
-	// We increase the head, copy
-	this->context.head++;
-	this->context.offset++;
-	if (*(this->context.head) == this->context.separator) {this->context.lines++;}
-	return &this->context;
+	if (left > 0) {
+		// We have enough space left in the buffer to read at least one character.
+		// We increase the head, copy
+		this->current++;
+		if (*(this->current) == this->separator) {this->lines++;}
+	}
 }
 
 // ----------------------------------------------------------------------------
@@ -151,7 +152,7 @@ Grammar* Grammar_new() {
 // ----------------------------------------------------------------------------
 
 bool ParsingElement_Is(void *this) {
-	return this!=NULL && ((ParsingElement*)this)->type == ParsingElement_T
+	return this!=NULL && ((ParsingElement*)this)->type == ParsingElement_T;
 }
 
 ParsingElement* ParsingElement_new(Reference* children[]) {
@@ -176,10 +177,11 @@ ParsingElement* ParsingElement_new(Reference* children[]) {
 }
 
 void ParsingElement_destroy(ParsingElement* this) {
-	while (children != NULL) {
-		Reference* next = children->next;
-		__DEALLOC(children);
-		children = next;
+	Reference* child = this->children;
+	while (child != NULL) {
+		Reference* next = child->next;
+		__DEALLOC(child);
+		child = next;
 	}
 	__DEALLOC(this);
 }
@@ -198,12 +200,8 @@ ParsingElement* ParsingElement_add(ParsingElement *this, Reference *child) {
 	return this;
 }
 
-Match* ParsingElement_match( ParsingElement* this, Iterator* iterator ) {
-	if (this->match) {
-		return this->match(this, iterator);
-	} else {
-		return &FAILURE;
-	}
+Match* ParsingElement_recognize( ParsingElement* this, Iterator* iterator ) {
+	return FAILURE;
 }
 
 Match* ParsingElement_process( ParsingElement* this, Match* match ) {
@@ -223,7 +221,7 @@ bool Reference_Is(void *this) {
 Reference* Reference_new() {
 	__ALLOC(Reference, this);
 	this->type        = Reference_T;
-	this->cardinality = CARD_SINGLE;
+	this->cardinality = CARDINALITY_SINGLE;
 	this->name        = "_";
 	this->element     = NULL;
 	this->next        = NULL;
@@ -236,9 +234,9 @@ Reference* Reference_cardinality(Reference* this, char cardinality) {
 	return this;
 }
 
-Match* Reference_match(Reference* this, Iterator* iterator) {
+Match* Reference_recognize(Reference* this, Iterator* iterator) {
 	// TODO
-	return &FAILURE;
+	return FAILURE;
 }
 
 // ----------------------------------------------------------------------------
@@ -250,7 +248,7 @@ Match* Reference_match(Reference* this, Iterator* iterator) {
 ParsingElement* Token_new(const char* expr) {
 	__ALLOC(Token, config);
 	ParsingElement* this = ParsingElement_new(NULL);
-	this->match = Token_match;
+	this->recognize      = Token_recognize;
 	if ( regcomp( &(config->regex), expr, REG_EXTENDED) == 0) {
 		this->config = config;
 		return this;
@@ -264,7 +262,7 @@ ParsingElement* Token_new(const char* expr) {
 
 // TODO: Implement Token_destroy and regfree
 
-Match* Token_match(ParsingElement* this, Iterator* iterator) {
+Match* Token_recognize(ParsingElement* this, Iterator* iterator) {
 	// We get the current parsing context and make sure we have
 	// at least TOKEN_MATCH_RANGE characters available (or the EOF). The
 	// limitation here is that we don't necessarily want ot load the whole
@@ -292,20 +290,20 @@ Match* Token_match(ParsingElement* this, Iterator* iterator) {
 
 ParsingElement* Group_new(Reference* children[]) {
 	ParsingElement* this = ParsingElement_new(children);
-	this->match = Group_match;
+	this->recognize = Group_recognize;
 	return this;
 }
 
-Match* Group_match(ParsingElement* this, Iterator* iterator){
+Match* Group_recognize(ParsingElement* this, Iterator* iterator){
 	Reference* child = this->children;
-	Match*     result;
+	Match*     match;
 	while (child != NULL ) {
-		// FIXME: We should do a Reference_match instead
-		result = ParsingElement_match(child->element, iterator);
-		if (result.status == STATUS_MATCHED) {return result;}
+		// FIXME: We should do a Reference_recognize instead
+		match = ParsingElement_recognize(child->element, iterator);
+		if (match->status == STATUS_MATCHED)  {return match;}
 		else                                 {child++;}
 	}
-	return &FAILURE;
+	return FAILURE;
 }
 
 // ----------------------------------------------------------------------------
@@ -316,23 +314,23 @@ Match* Group_match(ParsingElement* this, Iterator* iterator){
 
 ParsingElement* Rule_new(Reference* children[]) {
 	ParsingElement* this = ParsingElement_new(children);
-	this->match = Rule_match;
+	this->recognize      = Rule_recognize;
 	return this;
 }
 
-Match* Rule_match (ParsingElement* this, Iterator* iterator){
+Match* Rule_recognize (ParsingElement* this, Iterator* iterator){
 	Reference* child  = this->children;
 	Match*     result = NULL;
 	Match*     last   = NULL;
 	while (child != NULL ) {
-		Match* current = ParsingElement_match(child->element, iterator);
-		if (current != STATUS_MATCHED) {return &FAILURE;}
+		Match* current = ParsingElement_recognize(child->element, iterator);
+		if (current->status != STATUS_MATCHED) {return FAILURE;}
 		if (last == NULL) {
 			result = current;
 			last   = current;
 		} else {
 			last->next = current;
-			last       = current
+			last       = current;
 		}
 	}
 	return result;

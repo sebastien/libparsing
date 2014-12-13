@@ -31,7 +31,7 @@
  * __ALLOC(Array_Int,a) ; a->push(1);
  * ```
 */
-#define bool  char
+typedef char  bool;
 #define TRUE  1
 #define FALSE 0
 #define __ALLOC(T,v) T* v = (T*) malloc(sizeof(T)) ; assert (v!=NULL);
