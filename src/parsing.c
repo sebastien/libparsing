@@ -182,6 +182,14 @@ Match* Match_Empty() {
 	return this;
 }
 
+
+Match* Match_Success(size_t length) {
+	NEW(Match,this);
+	this->status = STATUS_MATCHED;
+	this->length = length;
+	return this;
+}
+
 Match* Match_new() {
 	__ALLOC(Match,this);
 	this->status    = STATUS_INIT;
@@ -348,6 +356,38 @@ Match* Reference_recognize(Reference* this, ParsingContext* context) {
 	// NOTE: We should never get there.
 	assert(-1);
 	return FAILURE;
+}
+
+// ----------------------------------------------------------------------------
+//
+// WORD
+//
+// ----------------------------------------------------------------------------
+
+ParsingElement* Word_new(const char* word) {
+	__ALLOC(Word, config);
+	ParsingElement* this = ParsingElement_new(NULL);
+	this->recognize      = Word_recognize;
+	assert(word != NULL);
+	config->word         = word;
+	config->length       = strlen(word);
+	assert(config->length>0);
+	this->config         = config;
+	return this;
+}
+
+// TODO: Implement Word_destroy and regfree
+
+Match* Word_recognize(ParsingElement* this, ParsingContext* context) {
+	Word* config = ((Word*)this->config);
+	DEBUG("Word_recognize: looking for %s in %s, length %d", config->word, context->iterator->buffer, config->length);
+	if (strncmp(config->word, context->iterator->buffer, config->length) == 0) {
+		DEBUG("Word_recognize: Matched %s", config->word);
+		return Match_Success(config->length);
+	} else {
+		DEBUG("Word_recognize: Failed %s", config->word);
+		return FAILURE;
+	}
 }
 
 // ----------------------------------------------------------------------------
@@ -535,10 +575,12 @@ int main (int argc, char* argv[]) {
 	// We defined the grammar
 	Grammar* g                 = Grammar_new();
 
-	ParsingElement* s_NUMBER   = NAME("NUMBER",   Token_new("^[0-9]+(\\.[0-9]+)?"));
-	ParsingElement* s_VARIABLE = NAME("VARIABLE", Token_new("^[A-Z]+"));
+	// ParsingElement* s_NUMBER   = NAME("NUMBER",   Token_new("^([0-9]+)"));
+	// ParsingElement* s_VARIABLE = NAME("VARIABLE", Token_new("^([A-Z]+)"));
+	ParsingElement* s_NUMBER   = NAME("NUMBER",   Word_new("10"));
+	ParsingElement* s_VARIABLE = NAME("VARIABLE", Word_new("VAR"));
 	ParsingElement* s_OP       = NAME("OP",       Token_new("^\\-|\\+|\\*"));
-	ParsingElement* s_SPACES   = NAME("SPACES",   Token_new("^[ ]+"));
+	ParsingElement* s_SPACES   = NAME("SPACES",   Token_new("^([ ]+)"));
 
 	// FIXME: This is not very elegant, but I did not really find a better
 	// way. I tried passing the elements as an array, but it doesn't really

@@ -221,6 +221,10 @@ static Match* FAILURE = &FAILURE_S;
 // Creates new empty (successful) match
 Match* Match_Empty();
 
+// @operation
+// Creates a new successful match of the given length
+Match* Match_Success(size_t length);
+
 // @constructor
 Match* Match_new();
 
@@ -273,7 +277,28 @@ inline Match* ParsingElement_process( ParsingElement* this, Match* match );
 // Transparently sets the name of the element
 inline ParsingElement* ParsingElement_name( ParsingElement* this, const char* name );
 
-// TODO: Word
+/**
+ * Word
+ * ------
+ *
+ * Words recognize a static string at the current iterator location.
+ *
+*/
+
+// @type Word
+// The parsing element configuration information that is used by the
+// `Token` methods.
+typedef struct {
+	const char* word;
+	size_t      length;
+} Word;
+
+// @constructor
+ParsingElement* Word_new(const char* word);
+
+// @method
+// The specialized match function for token parsing elements.
+Match*          Word_recognize(ParsingElement* this, ParsingContext* context);
 
 /**
  * Tokens
