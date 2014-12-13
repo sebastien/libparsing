@@ -146,14 +146,18 @@ bool       FileInput_next(Iterator* this);
  * The `axiom` and `skip` properties are both references to _parsing elements_.
 */
 
+typedef struct ParsingContext ParsingContext;
 typedef struct ParsingElement ParsingElement;
 typedef struct Reference      Reference;
+typedef struct Match          Match;
 
 // @type Grammar
 typedef struct {
 	ParsingElement*  axiom;       // The axiom
 	ParsingElement*  skip;        // The skipped element
 } Grammar;
+
+Match* Grammar_parseFromIterator( Grammar* this, Iterator* iterator );
 
 /**
  * Parsing Elements
@@ -193,7 +197,7 @@ typedef struct Match {
 
 // @singleton FAILURE
 // A specific match that indicates a failure
-#define FAILURE (Match*)NULL;
+#define FAILURE (Match*)NULL
 
 // @type ParsingElement
 typedef struct ParsingElement {
@@ -202,8 +206,8 @@ typedef struct ParsingElement {
 	const char*    name;       // The parsing element's name, for debugging
 	void*          config;     // The configuration of the parsing element
 	Reference*     children;   // The parsing element's children, if any
-	Match*         (*recognize) (struct ParsingElement*, Iterator*);
-	Match*         (*process)   (struct ParsingElement*, Iterator*, Match*);
+	Match*         (*recognize) (struct ParsingElement*, ParsingContext*);
+	Match*         (*process)   (struct ParsingElement*, ParsingContext*, Match*);
 } ParsingElement;
 
 
@@ -228,7 +232,7 @@ ParsingElement* ParsingElement_add(ParsingElement *this, Reference *child);
 
 // @method
 // Returns the match for this parsing element for the given iterator's state.
-Match* ParsingElement_recognize( ParsingElement* this, Iterator* iterator );
+Match* ParsingElement_recognize( ParsingElement* this, ParsingContext* context );
 
 // @method
 // Processes the given match once the parsing element has fully succeeded. This
@@ -261,7 +265,7 @@ ParsingElement* Token_new(const char* expr);
 
 // @method
 // The specialized match function for token parsing elements.
-Match*          Token_recognize(ParsingElement* this, Iterator* iterator);
+Match*          Token_recognize(ParsingElement* this, ParsingContext* context);
 
 /**
  * References
@@ -316,7 +320,7 @@ Reference* Reference_cardinality(Reference* this, char cardinality);
 // `OPTIONAL` references might return `EMPTY`, `SINGLE` references will return
 // a match with a `next=NULL` while `MANY` may return a match with a `next`
 // pointing to the next match.
-Match* Reference_recognize(Reference* this, Iterator* iterator);
+Match* Reference_recognize(Reference* this, ParsingContext* context);
 
 /**
  * Groups
@@ -330,7 +334,7 @@ Match* Reference_recognize(Reference* this, Iterator* iterator);
 ParsingElement* Group_new(Reference* children[]);
 
 // @method
-Match*          Group_recognize(ParsingElement* this, Iterator* iterator);
+Match*          Group_recognize(ParsingElement* this, ParsingContext* context);
 
 /**
  * Rules
@@ -344,7 +348,7 @@ Match*          Group_recognize(ParsingElement* this, Iterator* iterator);
 ParsingElement* Rule_new(Reference* children[]);
 
 // @method
-Match*          Rule_recognize(ParsingElement* this, Iterator* iterator);
+Match*          Rule_recognize(ParsingElement* this, ParsingContext* context);
 
 /**
  * The parsing process
@@ -370,7 +374,7 @@ typedef struct ParsingContext {
 } ParsingContext;
 
 /*
- * The result of _recognizeing_ parsing elements at given offsets within the
+ * The result of _recognizing_ parsing elements at given offsets within the
  * input stream is stored in `ParsingOffset`. Each parsing offset is a stack
  * of `ParsingStep`, corresponding to successive attempts at matching
  * parsing elements at the current position.
@@ -394,6 +398,12 @@ typedef struct ParsingOffset {
 	struct ParsingOffset* next;   // The link to the next offset (if any)
 } ParsingOffset;
 
+// @constructor
+ParsingOffset* ParsingOffset_new( size_t offset );
+
+// @destructor
+void ParsingOffset_destroy( ParsingOffset* this );
+
 /**
  * The parsing step allows to memoize the state of a parsing element at a given
  * offset. This is the data structure that will be manipulated and created/destroyed
@@ -408,6 +418,11 @@ typedef struct ParsingStep {
 	struct ParsingStep* previous;      // The previous parsing step on the parsing offset's stack
 } ParsingStep;
 
+// @constructor
+ParsingStep* ParsingStep_new( ParsingElement* element );
+
+// @destructor
+void ParsingStep_destroy( ParsingStep* this );
 
 /**
  * Syntax Sugar

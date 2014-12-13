@@ -204,7 +204,7 @@ ParsingElement* ParsingElement_add(ParsingElement *this, Reference *child) {
 	return this;
 }
 
-Match* ParsingElement_recognize( ParsingElement* this, Iterator* iterator ) {
+Match* ParsingElement_recognize( ParsingElement* this, ParsingContext* context ) {
 	return FAILURE;
 }
 
@@ -245,7 +245,7 @@ Reference* Reference_cardinality(Reference* this, char cardinality) {
 	return this;
 }
 
-Match* Reference_recognize(Reference* this, Iterator* iterator) {
+Match* Reference_recognize(Reference* this, ParsingContext* context) {
 	// TODO
 	return FAILURE;
 }
@@ -273,7 +273,7 @@ ParsingElement* Token_new(const char* expr) {
 
 // TODO: Implement Token_destroy and regfree
 
-Match* Token_recognize(ParsingElement* this, Iterator* iterator) {
+Match* Token_recognize(ParsingElement* this, ParsingContext* context) {
 	// We get the current parsing context and make sure we have
 	// at least TOKEN_MATCH_RANGE characters available (or the EOF). The
 	// limitation here is that we don't necessarily want ot load the whole
@@ -305,12 +305,12 @@ ParsingElement* Group_new(Reference* children[]) {
 	return this;
 }
 
-Match* Group_recognize(ParsingElement* this, Iterator* iterator){
+Match* Group_recognize(ParsingElement* this, ParsingContext* context){
 	Reference* child = this->children;
 	Match*     match;
 	while (child != NULL ) {
 		// FIXME: We should do a Reference_recognize instead
-		match = ParsingElement_recognize(child->element, iterator);
+		match = ParsingElement_recognize(child->element, context);
 		if (match->status == STATUS_MATCHED)  {return match;}
 		else                                 {child++;}
 	}
@@ -329,12 +329,12 @@ ParsingElement* Rule_new(Reference* children[]) {
 	return this;
 }
 
-Match* Rule_recognize (ParsingElement* this, Iterator* iterator){
+Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 	Reference* child  = this->children;
 	Match*     result = NULL;
 	Match*     last   = NULL;
 	while (child != NULL ) {
-		Match* current = ParsingElement_recognize(child->element, iterator);
+		Match* current = ParsingElement_recognize(child->element, context);
 		if (current->status != STATUS_MATCHED) {return FAILURE;}
 		if (last == NULL) {
 			result = current;
@@ -347,6 +347,78 @@ Match* Rule_recognize (ParsingElement* this, Iterator* iterator){
 	return result;
 }
 
+// ----------------------------------------------------------------------------
+//
+// PARSING STEP
+//
+// ----------------------------------------------------------------------------
+
+ParsingStep* ParsingStep_new( ParsingElement* element ) {
+	__ALLOC(ParsingStep, this);
+	this->element   = element;
+	this->step      = 0;
+	this->iteration = 0;
+	this->status    = STATUS_INIT;
+	this->match     = (Match*)NULL;
+	this->previous  = NULL;
+	return this;
+}
+
+void ParsingStep_destroy( ParsingStep* this ) {
+	__DEALLOC(this);
+}
+
+// ----------------------------------------------------------------------------
+//
+// PARSING OFFSET
+//
+// ----------------------------------------------------------------------------
+
+
+ParsingOffset* ParsingOffset_new( size_t offset ) {
+	__ALLOC(ParsingOffset, this);
+	this->offset = offset;
+	this->last   = (ParsingStep*)NULL;
+	this->next   = (ParsingOffset*)NULL;
+	return this;
+}
+
+void ParsingOffset_destroy( ParsingOffset* this ) {
+	ParsingStep* step     = this->last;
+	ParsingStep* previous = NULL;
+	while (step != NULL) {
+		previous   = step->previous;
+		ParsingStep_destroy(step);
+		step       = previous;
+	}
+	__DEALLOC(this);
+}
+
+// ----------------------------------------------------------------------------
+//
+// GRAMMAR
+//
+// ----------------------------------------------------------------------------
+
+Match* Grammar_parseFromIterator( Grammar* this, Iterator* iterator ) {
+	ParsingOffset* offset  = ParsingOffset_new(iterator->offset);
+	ParsingContext context = (ParsingContext){
+		.grammar  = this,
+		.iterator = iterator,
+		.offsets  = offset,
+		.offsets  = offset,
+	};
+	assert(this->axiom != NULL);
+	Match* match = this->axiom->recognize(this->axiom, &context);
+	if (match != FAILURE) {
+		LOG("Succeeded, parsed %zd", context.iterator->offset)
+	} else {
+		LOG("Failed, parsed %zd", context.iterator->offset)
+	}
+	return match;
+}
+
+//
 // ----------------------------------------------------------------------------
 //
 // MAIN
@@ -387,20 +459,21 @@ int main (int argc, char* argv[]) {
 	g->axiom = s_Expr;
 	g->skip  = s_SPACES;
 
-	Iterator* i = Iterator_new();
-	const char* path = "expression-long.txt";
+	Iterator* iterator = Iterator_new();
+	const char* path = "data/expression-long.txt";
 
-	if (!Iterator_open(i, path)) {
+	if (!Iterator_open(iterator, path)) {
 		ERROR("Cannot open file: %s", path);
 	} else {
 		DEBUG("Opening file: %s", path)
+		Grammar_parseFromIterator(g, iterator);
 		// Below is a simple test on how to iterate on the file
-		int count = 0;
-		while (FileInput_next(i)) {
-			DEBUG("Read %c at %zd/%zd\n", *i->current, i->offset, i->available);
-			count += 1;
-		}
-		printf("Read %d bytes\n", count);
+		// int count = 0;
+		// while (FileInput_next(i)) {
+		// 	DEBUG("Read %c at %zd/%zd\n", *i->current, i->offset, i->available);
+		// 	count += 1;
+		// }
+		// printf("Read %d bytes\n", count);
 	}
 }
 
