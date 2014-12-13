@@ -212,6 +212,11 @@ Match* ParsingElement_process( ParsingElement* this, Match* match ) {
 	return match;
 }
 
+ParsingElement* ParsingElement_name( ParsingElement* this, const char* name ){
+	this->name = name;
+	return this;
+}
+
 // ----------------------------------------------------------------------------
 //
 // REFERENCE
@@ -427,14 +432,13 @@ Match* Grammar_parseFromIterator( Grammar* this, Iterator* iterator ) {
 
 int main (int argc, char* argv[]) {
 
-
 	// We defined the grammar
 	Grammar* g                 = Grammar_new();
 
-	ParsingElement* s_NUMBER   = Token_new("[0-9]+(\\.[0-9]+)?");
-	ParsingElement* s_VARIABLE = Token_new("[A-Z]+");
-	ParsingElement* s_OP       = Token_new("\\-|\\+|\\*");
-	ParsingElement* s_SPACES   = Token_new("[ ]+");
+	ParsingElement* s_NUMBER   = NAME("NUMBER",   Token_new("[0-9]+(\\.[0-9]+)?"));
+	ParsingElement* s_VARIABLE = NAME("VARIABLE", Token_new("[A-Z]+"));
+	ParsingElement* s_OP       = NAME("OP",       Token_new("\\-|\\+|\\*"));
+	ParsingElement* s_SPACES   = NAME("SPACES",   Token_new("[ ]+"));
 
 	// FIXME: This is not very elegant, but I did not really find a better
 	// way. I tried passing the elements as an array, but it doesn't really
@@ -444,15 +448,15 @@ int main (int argc, char* argv[]) {
 	// GROUP(s_Value) ONE(s_NUMBER) MANY(s_VARIABLE) END_GROUP
 	//
 
-	ParsingElement* s_Value    = Group_new(NULL);
+	ParsingElement* s_Value    = NAME("Value", Group_new(NULL));
 		ParsingElement_add( s_Value, ONE(s_NUMBER)   );
 		ParsingElement_add( s_Value, ONE(s_VARIABLE) );
 
-	ParsingElement* s_Suffix   = Rule_new (NULL);
+	ParsingElement* s_Suffix   = NAME("Suffix", Rule_new (NULL));
 		ParsingElement_add( s_Suffix, ONE(s_OP)   );
 		ParsingElement_add( s_Suffix, ONE(s_Value) );
 
-	ParsingElement* s_Expr    = Rule_new (NULL);
+	ParsingElement* s_Expr    = NAME("Expr", Rule_new (NULL));
 		ParsingElement_add( s_Expr, ONE (s_Value)  );
 		ParsingElement_add( s_Expr, MANY(s_Suffix) );
 

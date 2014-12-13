@@ -240,6 +240,11 @@ Match* ParsingElement_recognize( ParsingElement* this, ParsingContext* context )
 // to do things such as construct an AST.
 Match* ParsingElement_process( ParsingElement* this, Match* match );
 
+// FIXME: Maybe should inline
+// @method
+// Transparently sets the name of the element
+inline ParsingElement* ParsingElement_name( ParsingElement* this, const char* name );
+
 // TODO: Word
 
 /**
@@ -313,7 +318,7 @@ Reference* Reference_new();
 
 // @method
 // Sets the cardinality of this reference, returning it transprently.
-Reference* Reference_cardinality(Reference* this, char cardinality);
+inline Reference* Reference_cardinality(Reference* this, char cardinality);
 
 // @method
 // Returns the matched value corresponding to the first match of this reference.
@@ -435,6 +440,7 @@ void ParsingStep_destroy( ParsingStep* this );
 #define OPTIONAL(v)       Reference_cardinality(Reference_New(v), CARDINALITY_OPTIONAL)
 #define MANY(v)           Reference_cardinality(Reference_New(v), CARDINALITY_MANY)
 #define MANY_OPTIONAL(v)  Reference_cardinality(Reference_New(v), CARDINALITY_MANY_OPTIONAL)
+#define NAME(n,e)         ParsingElement_name(e,n)
 
 #endif
 // EOF
