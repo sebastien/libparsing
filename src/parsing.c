@@ -151,6 +151,31 @@ Grammar* Grammar_new() {
 
 // ----------------------------------------------------------------------------
 //
+// MATCH
+//
+// ----------------------------------------------------------------------------
+
+Match* Match_Empty() {
+	NEW(Match,this);
+	this->status = STATUS_MATCHED;
+	return this;
+}
+
+Match* Match_new() {
+	__ALLOC(Match,this);
+	this->status    = STATUS_INIT;
+	this->length    = 0;
+	this->data      = NULL;
+	this->next      = NULL;
+	return this;
+}
+
+void Match_destroy(Match* this) {
+	__DEALLOC(this);
+}
+
+// ----------------------------------------------------------------------------
+//
 // PARSING ELEMENT
 //
 // ----------------------------------------------------------------------------
@@ -192,6 +217,8 @@ void ParsingElement_destroy(ParsingElement* this) {
 
 ParsingElement* ParsingElement_add(ParsingElement *this, Reference *child) {
 	assert(child->next == NULL);
+	DEBUG("ParsingElement_add(%s, %s)", this->name, child->element->name);
+	assert(child->element->recognize!=NULL);
 	if (this->children) {
 		// If there are children, we skip until the end and add it
 		Reference* ref = this->children;
@@ -205,7 +232,12 @@ ParsingElement* ParsingElement_add(ParsingElement *this, Reference *child) {
 }
 
 Match* ParsingElement_recognize( ParsingElement* this, ParsingContext* context ) {
-	return FAILURE;
+	printf("Recognize: %s at %zd", this->name, context->iterator->offset);
+	if (this->recognize != NULL) {
+		return this->recognize(this, context);
+	} else {
+		return FAILURE;
+	}
 }
 
 Match* ParsingElement_process( ParsingElement* this, Match* match ) {
@@ -230,7 +262,10 @@ bool Reference_Is(void *this) {
 
 Reference* Reference_New(ParsingElement* element){
 	NEW(Reference, this);
+	assert(element!=NULL);
 	this->element = element;
+	DEBUG("Reference_New: %s", element->name);
+	ASSERT(element->recognize, "Reference_New: Element %s has no recognize callback", element->name);
 	return this;
 }
 
@@ -251,7 +286,46 @@ Reference* Reference_cardinality(Reference* this, char cardinality) {
 }
 
 Match* Reference_recognize(Reference* this, ParsingContext* context) {
-	// TODO
+	assert(this->element != NULL);
+	Match* result;
+	Match* match;
+	int    count = 0;
+	do {
+		ASSERT(this->element->recognize, "Reference_recognize: Element %s has no recognize callback", this->element->name);
+		assert(this->element->recognize != NULL);
+		match = this->element->recognize(this->element, context);
+		switch (this->cardinality) {
+			case CARDINALITY_SINGLE:
+				// For single, we return the match as-is
+				return match;
+			case CARDINALITY_OPTIONAL:
+				// For optional, we return the an empty match if
+				// the match fails.
+				return match == FAILURE ? Match_Empty() : match;
+			case CARDINALITY_MANY:
+				if (result != FAILURE) {
+					result->next = match;
+					match        = result;
+					count       += 1;
+				} else {
+					return count > 0 ? result : FAILURE;
+				}
+			case CARDINALITY_MANY_OPTIONAL:
+				if (result != FAILURE) {
+					result->next = match;
+					match        = result;
+					count       += 1;
+				} else {
+					return count > 0 ? result : Match_Empty();
+				}
+			default:
+				// Unsuported cardinality
+				DEBUG("Unsupported cardinality %c", this->cardinality);
+				return FAILURE;
+		}
+	} while (result != NULL);
+	// NOTE: We should never get there.
+	assert(-1);
 	return FAILURE;
 }
 
@@ -315,7 +389,7 @@ Match* Group_recognize(ParsingElement* this, ParsingContext* context){
 	Match*     match;
 	while (child != NULL ) {
 		// FIXME: We should do a Reference_recognize instead
-		match = ParsingElement_recognize(child->element, context);
+		match = Reference_recognize(child, context);
 		if (match->status == STATUS_MATCHED)  {return match;}
 		else                                 {child++;}
 	}
@@ -339,7 +413,7 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 	Match*     result = NULL;
 	Match*     last   = NULL;
 	while (child != NULL ) {
-		Match* current = ParsingElement_recognize(child->element, context);
+		Match* current = Reference_recognize(child, context);
 		if (current->status != STATUS_MATCHED) {return FAILURE;}
 		if (last == NULL) {
 			result = current;
@@ -457,14 +531,15 @@ int main (int argc, char* argv[]) {
 		ParsingElement_add( s_Suffix, ONE(s_Value) );
 
 	ParsingElement* s_Expr    = NAME("Expr", Rule_new (NULL));
-		ParsingElement_add( s_Expr, ONE (s_Value)  );
-		ParsingElement_add( s_Expr, MANY(s_Suffix) );
+		 ParsingElement_add( s_Expr, ONE (s_NUMBER)  );
+		// ParsingElement_add( s_Expr, ONE (s_Value)  );
+		// ParsingElement_add( s_Expr, MANY(s_Suffix) );
 
 	g->axiom = s_Expr;
 	g->skip  = s_SPACES;
 
 	Iterator* iterator = Iterator_new();
-	const char* path = "data/expression-long.txt";
+	const char* path = "test.txt";
 
 	if (!Iterator_open(iterator, path)) {
 		ERROR("Cannot open file: %s", path);

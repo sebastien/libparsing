@@ -186,6 +186,7 @@ typedef struct Match {
 	struct Match    *next;      // A pointer to the next match (see `References`)
 } Match;
 
+
 // @define
 // The different values for a match (or iterator)'s status
 #define STATUS_INIT        '-'
@@ -195,9 +196,27 @@ typedef struct Match {
 #define STATUS_INPUT_ENDED '.'
 #define STATUS_ENDED       'E'
 
-// @singleton FAILURE
+// @singleton FAILURE_S
 // A specific match that indicates a failure
-#define FAILURE (Match*)NULL
+static Match FAILURE_S = {
+	.status = STATUS_FAILED,
+	.length = 0,
+	.data   = NULL,
+	.next   = NULL    // NOTE: next should *always* be NULL for FAILURE
+};
+
+// @shared FAILURE
+static Match* FAILURE = &FAILURE_S;
+
+// @operation
+// Creates new empty (successful) match
+Match* Match_Empty();
+
+// @constructor
+Match* Match_new();
+
+// @destructor
+void Match_destroy(Match* this);
 
 // @type ParsingElement
 typedef struct ParsingElement {
@@ -232,13 +251,13 @@ ParsingElement* ParsingElement_add(ParsingElement *this, Reference *child);
 
 // @method
 // Returns the match for this parsing element for the given iterator's state.
-Match* ParsingElement_recognize( ParsingElement* this, ParsingContext* context );
+inline Match* ParsingElement_recognize( ParsingElement* this, ParsingContext* context );
 
 // @method
 // Processes the given match once the parsing element has fully succeeded. This
 // is where user-bound actions will be applied, and where you're most likely
 // to do things such as construct an AST.
-Match* ParsingElement_process( ParsingElement* this, Match* match );
+inline Match* ParsingElement_process( ParsingElement* this, Match* match );
 
 // FIXME: Maybe should inline
 // @method
@@ -325,7 +344,7 @@ inline Reference* Reference_cardinality(Reference* this, char cardinality);
 // `OPTIONAL` references might return `EMPTY`, `SINGLE` references will return
 // a match with a `next=NULL` while `MANY` may return a match with a `next`
 // pointing to the next match.
-Match* Reference_recognize(Reference* this, ParsingContext* context);
+inline Match* Reference_recognize(Reference* this, ParsingContext* context);
 
 /**
  * Groups
