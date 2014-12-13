@@ -125,8 +125,8 @@ size_t FileInput_preload( Iterator* this ) {
 		// FIXME: We should make sure we don't call preload each time
 		memmove((void*)this->buffer, (void*)this->current, left);
 		size_t to_read        = this->length - left;
-		DEBUG("FileInput_preload: trying to get %zd bytes from input", to_read);
 		size_t read           = fread((void*)this->buffer + left, sizeof(char), to_read, input->file);
+		DEBUG("FileInput_preload: trying to get %zd bytes from input, got %zd", to_read, read);
 		this->available       = left + read;
 		this->current         = this->buffer;
 		left                  = this->available;
@@ -161,8 +161,9 @@ bool FileInput_move   ( Iterator* this, size_t n ) {
 			return TRUE;
 		}
 	} else {
-		DEBUG("FileInput_move: EOF reached at offset %zd", this->offset);
-		assert (this->status == STATUS_INPUT_ENDED);
+		DEBUG("FileInput_move: end of input stream reach at %zd", this->offset);
+		assert (this->status == STATUS_INPUT_ENDED || this->status == STATUS_ENDED);
+		this->status = STATUS_ENDED;
 		return FALSE;
 	}
 }
@@ -332,6 +333,9 @@ Reference* Reference_cardinality(Reference* this, char cardinality) {
 	return this;
 }
 
+// NOTE: Only references will actually move the parsing context iterator.
+// Parsing elements themselves will just "match" and tell you if they
+// recognized something at the iterator's location.
 Match* Reference_recognize(Reference* this, ParsingContext* context) {
 	assert(this->element != NULL);
 	Match* result = FAILURE;
@@ -339,12 +343,15 @@ Match* Reference_recognize(Reference* this, ParsingContext* context) {
 	Match* match;
 	int    count    = 0;
 	bool   has_more = Iterator_hasMore(context->iterator);
+	DEBUG("Reference_recognize: %s:%zd more:%d [%c]", this->element->name, context->iterator->offset, has_more, context->iterator->status);
 	while (has_more) {
 		ASSERT(this->element->recognize, "Reference_recognize: Element %s has no recognize callback", this->element->name);
 		// We ask the element to recognize the current iterator's position
 		match = this->element->recognize(this->element, context);
 		if (Match_isSuccess(match)) {
 			// If there was a match, we move the iterator by the matched amount
+			// NOTE: What is happening here is important,this is where we
+			// actually move the iterator (not in ParsingElement's recognize).
 			has_more = context->iterator->move(context->iterator, match->length);
 			if (count == 0) {
 				// If it's the first match and we're in a SINGLE reference
@@ -406,12 +413,12 @@ ParsingElement* Word_new(const char* word) {
 
 Match* Word_recognize(ParsingElement* this, ParsingContext* context) {
 	Word* config = ((Word*)this->config);
-	DEBUG("Word_recognize: looking for %s in string of length %d", config->word, context->iterator->buffer, config->length);
-	if (strncmp(config->word, context->iterator->buffer, config->length) == 0) {
-		DEBUG("Word_recognize: Matched %s", config->word);
+	DEBUG("Word_recognize: looking for %s in string of length %zd", config->word, strlen(context->iterator->current));
+	if (strncmp(config->word, context->iterator->current, config->length) == 0) {
+		DEBUG("Word_recognize: Matched %s at %zd", config->word, context->iterator->offset);
 		return Match_Success(config->length);
 	} else {
-		DEBUG("Word_recognize: Failed %s", config->word);
+		DEBUG("Word_recognize: Failed %s at %zd", config->word, context->iterator->offset);
 		return FAILURE;
 	}
 }
@@ -480,11 +487,16 @@ Match* Group_recognize(ParsingElement* this, ParsingContext* context){
 	Reference* child = this->children;
 	Match*     match;
 	while (child != NULL ) {
-		// FIXME: We should do a Reference_recognize instead
 		match = Reference_recognize(child, context);
-		if (match->status == STATUS_MATCHED)  {return match;}
-		else                                 {child++;}
+		if (Match_isSuccess(match)) {
+			// The first succeding child wins
+			return match;
+		} else {
+			// Otherwise we skip to the next child
+			child = child->next;
+		}
 	}
+	// If no child has succeeded, the whole group fails
 	return FAILURE;
 }
 
@@ -501,18 +513,18 @@ ParsingElement* Rule_new(Reference* children[]) {
 }
 
 Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
-	Reference* child  = this->children;
-	Match*     result = NULL;
-	Match*     last   = NULL;
-	while (child != NULL ) {
-		Match* current = Reference_recognize(child, context);
-		if (current->status != STATUS_MATCHED) {return FAILURE;}
+	Reference* child    = this->children;
+	Match*     result   = NULL;
+	Match*     last     = NULL;
+	// We don't need to care wether the parsing context has more
+	// data, the Reference_recognize will take care of it.
+	while (child != NULL) {
+		Match* match = Reference_recognize(child, context);
+		if (!Match_isSuccess(match)) {return FAILURE;}
 		if (last == NULL) {
-			result = current;
-			last   = current;
+			last = result = match;
 		} else {
-			last->next = current;
-			last       = current;
+			last = last->next = match;
 		}
 	}
 	return result;
@@ -582,7 +594,11 @@ Match* Grammar_parseFromIterator( Grammar* this, Iterator* iterator ) {
 	assert(this->axiom != NULL);
 	Match* match = this->axiom->recognize(this->axiom, &context);
 	if (match != FAILURE) {
-		LOG("Succeeded, parsed %zd bytes", context.iterator->offset)
+		if (Iterator_hasMore(context.iterator)) {
+			LOG("Partial success, parsed %zd bytes, %zd remaining", context.iterator->offset, context.iterator->available - (context.iterator->current - context.iterator->buffer));
+		} else {
+			LOG("Succeeded, parsed %zd bytes", context.iterator->offset);
+		}
 	} else {
 		LOG("Failed, parsed %zd bytes", context.iterator->offset)
 	}
@@ -603,10 +619,12 @@ int main (int argc, char* argv[]) {
 
 	// ParsingElement* s_NUMBER   = NAME("NUMBER",   Token_new("^([0-9]+)"));
 	// ParsingElement* s_VARIABLE = NAME("VARIABLE", Token_new("^([A-Z]+)"));
-	ParsingElement* s_NUMBER   = NAME("NUMBER",   Word_new("10"));
+	// ParsingElement* s_OP       = NAME("OP",       Token_new("^\\-|\\+|\\*"));
+	// ParsingElement* s_SPACES   = NAME("SPACES",   Token_new("^([ ]+)"));
+	ParsingElement* s_NUMBER   = NAME("NUMBER",   Word_new("NUM"));
 	ParsingElement* s_VARIABLE = NAME("VARIABLE", Word_new("VAR"));
-	ParsingElement* s_OP       = NAME("OP",       Token_new("^\\-|\\+|\\*"));
-	ParsingElement* s_SPACES   = NAME("SPACES",   Token_new("^([ ]+)"));
+	ParsingElement* s_OP       = NAME("OP",       Word_new("OP"));
+	ParsingElement* s_SPACES   = NAME("SPACES",   Word_new(" "));
 
 	// FIXME: This is not very elegant, but I did not really find a better
 	// way. I tried passing the elements as an array, but it doesn't really
@@ -629,16 +647,16 @@ int main (int argc, char* argv[]) {
 		// ParsingElement_add( s_Expr, ONE (s_Value)  );
 		// ParsingElement_add( s_Expr, MANY(s_Suffix) );
 
-	g->axiom = s_NUMBER;
+	g->axiom = s_Expr;
 	g->skip  = s_SPACES;
 
 	Iterator* iterator = Iterator_new();
 	const char* path = "test.txt";
 
+	DEBUG("Opening file: %s", path)
 	if (!Iterator_open(iterator, path)) {
 		ERROR("Cannot open file: %s", path);
 	} else {
-		DEBUG("Opening file: %s", path)
 		Grammar_parseFromIterator(g, iterator);
 		// Below is a simple test on how to iterate on the file
 		// int count = 0;
