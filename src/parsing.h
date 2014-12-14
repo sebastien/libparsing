@@ -278,7 +278,7 @@ ParsingElement* ParsingElement_add(ParsingElement *this, Reference *child);
 
 // @method
 // Returns the match for this parsing element for the given iterator's state.
-inline Match* ParsingElement_recognize( ParsingElement* this, ParsingContext* context );
+// inline Match* ParsingElement_recognize( ParsingElement* this, ParsingContext* context );
 
 // @method
 // Processes the given match once the parsing element has fully succeeded. This

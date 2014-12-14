@@ -269,7 +269,6 @@ void ParsingElement_destroy(ParsingElement* this) {
 
 ParsingElement* ParsingElement_add(ParsingElement *this, Reference *child) {
 	assert(child->next == NULL);
-	DEBUG("ParsingElement_add(%s, %s)", this->name, child->element->name);
 	assert(child->element->recognize!=NULL);
 	if (this->children) {
 		// If there are children, we skip until the end and add it
@@ -281,15 +280,6 @@ ParsingElement* ParsingElement_add(ParsingElement *this, Reference *child) {
 		this->children = child;
 	}
 	return this;
-}
-
-Match* ParsingElement_recognize( ParsingElement* this, ParsingContext* context ) {
-	printf("Recognize: %s at %zd", this->name, context->iterator->offset);
-	if (this->recognize != NULL) {
-		return this->recognize(this, context);
-	} else {
-		return FAILURE;
-	}
 }
 
 Match* ParsingElement_process( ParsingElement* this, Match* match ) {
@@ -316,7 +306,6 @@ Reference* Reference_New(ParsingElement* element){
 	NEW(Reference, this);
 	assert(element!=NULL);
 	this->element = element;
-	DEBUG("Reference_New: %s", element->name);
 	ASSERT(element->recognize, "Reference_New: Element %s has no recognize callback", element->name);
 	return this;
 }
@@ -337,33 +326,25 @@ Reference* Reference_cardinality(Reference* this, char cardinality) {
 	return this;
 }
 
-// NOTE: Only references will actually move the parsing context iterator.
-// Parsing elements themselves will just "match" and tell you if they
-// recognized something at the iterator's location.
 Match* Reference_recognize(Reference* this, ParsingContext* context) {
 	assert(this->element != NULL);
 	Match* result = FAILURE;
 	Match* head;
 	Match* match;
 	int    count    = 0;
-	bool   has_more = Iterator_hasMore(context->iterator);
-	DEBUG("Reference_recognize: %s:%zd more:%d [%c]", this->element->name, context->iterator->offset, has_more, context->iterator->status);
-	while (has_more) {
+	while (Iterator_hasMore(context->iterator)) {
 		ASSERT(this->element->recognize, "Reference_recognize: Element %s has no recognize callback", this->element->name);
 		// We ask the element to recognize the current iterator's position
 		match = this->element->recognize(this->element, context);
 		if (Match_isSuccess(match)) {
-			// If there was a match, we move the iterator by the matched amount
-			// NOTE: What is happening here is important,this is where we
-			// actually move the iterator (not in ParsingElement's recognize).
-			has_more = context->iterator->move(context->iterator, match->length);
+			DEBUG("Reference_recognize: Matched %s at %zd", this->element->name, context->iterator->offset);
 			if (count == 0) {
 				// If it's the first match and we're in a SINGLE reference
 				// we force has_more to FALSE and exit the loop.
 				result = match;
 				head   = result;
 				if (this->cardinality == CARDINALITY_SINGLE ) {
-					has_more = FALSE;
+					break;
 				}
 			} else {
 				// If we're already had a match we append the head and update
@@ -390,7 +371,7 @@ Match* Reference_recognize(Reference* this, ParsingContext* context) {
 			return count > 0 ? result : Match_Empty();
 		default:
 			// Unsuported cardinality
-			DEBUG("Unsupported cardinality %c", this->cardinality);
+			ERROR("Unsupported cardinality %c", this->cardinality);
 			return FAILURE;
 	}
 }
@@ -417,12 +398,10 @@ ParsingElement* Word_new(const char* word) {
 
 Match* Word_recognize(ParsingElement* this, ParsingContext* context) {
 	Word* config = ((Word*)this->config);
-	DEBUG("Word_recognize: looking for %s in string of length %zd", config->word, strlen(context->iterator->current));
 	if (strncmp(config->word, context->iterator->current, config->length) == 0) {
-		DEBUG("Word_recognize: Matched %s at %zd", config->word, context->iterator->offset);
+		context->iterator->move(context->iterator, config->length);
 		return Match_Success(config->length);
 	} else {
-		DEBUG("Word_recognize: Failed %s at %zd", config->word, context->iterator->offset);
 		return FAILURE;
 	}
 }
@@ -520,16 +499,20 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 	Reference* child    = this->children;
 	Match*     result   = NULL;
 	Match*     last     = NULL;
+	int        step     = 0;
 	// We don't need to care wether the parsing context has more
 	// data, the Reference_recognize will take care of it.
 	while (child != NULL) {
 		Match* match = Reference_recognize(child, context);
+		DEBUG("Rule:%s step:%d %s matched:%d", this->name, step, child->element->name, Match_isSuccess(match));
 		if (!Match_isSuccess(match)) {return FAILURE;}
 		if (last == NULL) {
 			last = result = match;
 		} else {
 			last = last->next = match;
 		}
+		child = child->next;
+		step++;
 	}
 	return result;
 }
@@ -647,9 +630,9 @@ int main (int argc, char* argv[]) {
 		ParsingElement_add( s_Suffix, ONE(s_Value) );
 
 	ParsingElement* s_Expr    = NAME("Expr", Rule_new (NULL));
-		 ParsingElement_add( s_Expr, ONE (s_NUMBER)  );
-		// ParsingElement_add( s_Expr, ONE (s_Value)  );
-		// ParsingElement_add( s_Expr, MANY(s_Suffix) );
+		ParsingElement_add( s_Expr, ONE  (s_Value)  );
+		ParsingElement_add( s_Expr, ONE  (s_Suffix)  );
+		//ParsingElement_add( s_Expr, MANY(s_Suffix) );
 
 	g->axiom = s_Expr;
 	g->skip  = s_SPACES;
