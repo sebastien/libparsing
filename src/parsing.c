@@ -5,7 +5,7 @@
 // License           : BSD License
 // ----------------------------------------------------------------------------
 // Creation date     : 12-Dec-2014
-// Last modification : 12-Dec-2014
+// Last modification : 13-Dec-2014
 // ----------------------------------------------------------------------------
 
 #include "parsing.h"
@@ -399,6 +399,8 @@ ParsingElement* Word_new(const char* word) {
 Match* Word_recognize(ParsingElement* this, ParsingContext* context) {
 	Word* config = ((Word*)this->config);
 	if (strncmp(config->word, context->iterator->current, config->length) == 0) {
+		// NOTE: You can see here that the word actually consumes input
+		// and moves the iterator.
 		context->iterator->move(context->iterator, config->length);
 		return Match_Success(config->length);
 	} else {

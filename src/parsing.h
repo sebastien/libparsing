@@ -5,7 +5,7 @@
 // License           : BSD License
 // ----------------------------------------------------------------------------
 // Creation date     : 12-Dec-2014
-// Last modification : 12-Dec-2014
+// Last modification : 13-Dec-2014
 // ----------------------------------------------------------------------------
 
 #include <stdlib.h>
@@ -28,19 +28,27 @@
  * -- URL: http://github.com/sebastien/parsing
  *
  * `parsing.h` is a library to create grammars based on parsing elements.
- * As opposed to most "classic" parsing libraries, parsing elements don't do
- * tokenizaiton. Instead, an input stream is consumed and parsing elements
- * are run on the input stream. Once parsing elements match, the resulting
- * matched input is processed and an action is triggered.
+ * As opposed to more traditional parsing techniques, the grammar is not compiled
+ * but constructed using an API that allows dynamic update of the grammar.
+ *
+ * Instead, an input stream is consumed and parsing elements are dynamically
+ * run on the input stream. Once parsing elements match, the resulting matched
+ * input is processed and an action is triggered.
+ *
+ * This process allows for fine-grain control over the parsing process, as
+ * parsing elements can execute arbitrary code. One notable difference with
+ * traditional techniques is that there is no preliminary tokenization phase.
  *
  * Parsing elements support backtracking, cherry-picking (skipping unrecognized
  * input), context-based rules (a rule that will match or not depending on the
  * current parsing state) and dynamic grammar update (you can change the grammar
  * on the fly).
  *
- * Parsing elements are usually slower than FSM-based parsers as they trade
- * performance for flexibility.
- *
+ * Parsing elements are usually slower than compiled or FSM-based parsers as
+ * they trade performance for flexibility. It's probably not a great idea to
+ * use them if parsing has to happen in as fast as possible (ie. a protocol),
+ * but it is a great use for programming languages, as it opens up the door
+ * to dynamic syntax plug-ins and multiple language embedding.
 */
 
 
@@ -293,7 +301,7 @@ inline ParsingElement* ParsingElement_name( ParsingElement* this, const char* na
 
 /**
  * Word
- * ------
+ * ----
  *
  * Words recognize a static string at the current iterator location.
  *
