@@ -504,8 +504,17 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 	// data, the Reference_recognize will take care of it.
 	while (child != NULL) {
 		Match* match = Reference_recognize(child, context);
-		DEBUG("Rule:%s step:%d %s matched:%d", this->name, step, child->element->name, Match_isSuccess(match));
-		if (!Match_isSuccess(match)) {return FAILURE;}
+		DEBUG("Rule_recognize:%s[%d]=%s matched:%d at %zd", this->name, step, child->element->name, Match_isSuccess(match), context->iterator->offset);
+		if (!Match_isSuccess(match)) {
+			ParsingElement* skip = context->grammar->skip;
+			Match* skip_match    = skip->recognize(skip, context);
+			while (Match_isSuccess(skip_match)){skip_match = skip->recognize(skip, context);}
+			match = Reference_recognize(child, context);
+			if (!Match_isSuccess(match)) {
+				// TODO: Should move the iterator back to before the skip
+				return FAILURE;
+			}
+		}
 		if (last == NULL) {
 			last = result = match;
 		} else {
@@ -631,8 +640,7 @@ int main (int argc, char* argv[]) {
 
 	ParsingElement* s_Expr    = NAME("Expr", Rule_new (NULL));
 		ParsingElement_add( s_Expr, ONE  (s_Value)  );
-		ParsingElement_add( s_Expr, ONE  (s_Suffix)  );
-		//ParsingElement_add( s_Expr, MANY(s_Suffix) );
+		ParsingElement_add( s_Expr, MANY (s_Suffix) );
 
 	g->axiom = s_Expr;
 	g->skip  = s_SPACES;
