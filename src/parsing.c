@@ -5,7 +5,7 @@
 // License           : BSD License
 // ----------------------------------------------------------------------------
 // Creation date     : 12-Dec-2014
-// Last modification : 13-Dec-2014
+// Last modification : 14-Dec-2014
 // ----------------------------------------------------------------------------
 
 #include "parsing.h"
@@ -42,7 +42,6 @@ Iterator* Iterator_new( void ) {
 	this->available     = 0;
 	this->length        = 0;
 	this->input         = NULL;
-	this->next          = NULL;
 	this->move          = NULL;
 	return this;
 }
@@ -67,7 +66,6 @@ bool Iterator_open( Iterator* this, const char *path ) {
 		assert(strlen(((char*)this->buffer)) == 0);
 		FileInput_preload(this);
 		DEBUG("Iterator_open: strlen(buffer)=%zd/%zd", strlen((char*)this->buffer), this->length);
-		this->next   = FileInput_next;
 		this->move   = FileInput_move;
 		ENSURE(input->file) {};
 		return TRUE;
@@ -123,17 +121,22 @@ size_t FileInput_preload( Iterator* this ) {
 	assert (read >= 0);
 	assert (left >= 0);
 	assert (left  < this->length);
-	// Do we have less left than the buffer ahead
+	// Do we have less left than the buffer ahead?
 	if ( left < ITERATOR_BUFFER_AHEAD && this->status != STATUS_INPUT_ENDED) {
 		// We move buffer[current:] to the begining of the buffer
 		// FIXME: We should make sure we don't call preload each time
-		memmove((void*)this->buffer, (void*)this->current, left);
+		// memmove((void*)this->buffer, (void*)this->current, left);
+		// We realloc the memory to make sure we
+		size_t delta  = this->current - this->buffer;
+		this->length += this->length;
+		this->buffer  = realloc((void*)this->buffer, this->length + 1);
+		this->current = this->buffer + delta;
+		this->buffer[this->length] = '\0';
+		// We want to read as much as possible so that we fill the buffer
 		size_t to_read        = this->length - left;
 		size_t read           = fread((void*)this->buffer + left, sizeof(char), to_read, input->file);
 		DEBUG("FileInput_preload: trying to get %zd bytes from input, got %zd", to_read, read);
-		this->available       = left + read;
-		this->current         = this->buffer;
-		left                  = this->available;
+		left = this->available= left + read;
 		if (read == 0) {
 			DEBUG("FileInput_preload: End of file reached with %zd bytes available", this->available);
 			this->status = STATUS_INPUT_ENDED;
@@ -144,36 +147,48 @@ size_t FileInput_preload( Iterator* this ) {
 
 bool FileInput_move   ( Iterator* this, size_t n ) {
 	assert (n>0);
-	// We want to know if there is at one more element
-	// in the file input.
-	size_t left = FileInput_preload(this);
-	if (left > 0) {
-		size_t c = n > left ? left : n;
-		// We have enough space left in the buffer to read at least one character.
-		// We increase the head, copy
-		while (c > 0) {
-			this->current++;
-			this->offset++;
-			if (*(this->current) == this->separator) {this->lines++;}
-			c--;
-		}
-		DEBUG("FileInput_move: +%zd/%zd left, current offset %zd", n, left, this->offset);
-		if (n>left) {
-			this->status == STATUS_INPUT_ENDED;
-			return FALSE;
+	if ( n == 0) {
+		// We're not moving position
+		return TRUE;
+	} else if ( n >= 0 ) {
+		// We're moving forward, so we want to know if there is at one more element
+		// in the file input.
+		size_t left = FileInput_preload(this);
+		if (left > 0) {
+			size_t c = n > left ? left : n;
+			// We have enough space left in the buffer to read at least one character.
+			// We increase the head, copy
+			while (c > 0) {
+				this->current++;
+				this->offset++;
+				if (*(this->current) == this->separator) {this->lines++;}
+				c--;
+			}
+			DEBUG("FileInput_move: +%zd/%zd left, current offset %zd", n, left, this->offset);
+			if (n>left) {
+				this->status == STATUS_INPUT_ENDED;
+				return FALSE;
+			} else {
+				return TRUE;
+			}
 		} else {
-			return TRUE;
+			DEBUG("FileInput_move: end of input stream reach at %zd", this->offset);
+			assert (this->status == STATUS_INPUT_ENDED || this->status == STATUS_ENDED);
+			this->status = STATUS_ENDED;
+			return FALSE;
 		}
 	} else {
-		DEBUG("FileInput_move: end of input stream reach at %zd", this->offset);
-		assert (this->status == STATUS_INPUT_ENDED || this->status == STATUS_ENDED);
-		this->status = STATUS_ENDED;
-		return FALSE;
+		// The assert below is temporary, once we figure out when to free the input data
+		// that we don't need anymore this would work.
+		ASSERT(this->length > this->offset, "FileInput_move: offset is greater than length (%zd > %zd)", this->offset, this->length);
+		// We make sure that `n` is not bigger than the length of the available buffer
+		n = this->length + n < 0 ? 0 - this->length : n;
+		this->current = (((char*)this->current) + n);
+		this->offset += n;
+		this->status  = STATUS_PROCESSING;
+		return TRUE;
 	}
-}
 
-bool FileInput_next   ( Iterator* this ) {
-	return FileInput_move(this, 1);
 }
 
 // ----------------------------------------------------------------------------
@@ -632,6 +647,11 @@ int main (int argc, char* argv[]) {
 	// Alternative:
 	// GROUP(s_Value) ONE(s_NUMBER) MANY(s_VARIABLE) END_GROUP
 	//
+	//
+	// What we should aim:
+	//
+	// SYMBOL(Value, GROUP( s_NUMBER,      s_VARIABLE ));
+	// SYMBOL(Value, RULE ( s_NUMBER, MANY(s_VARIABLE) ));
 
 	ParsingElement* s_Value    = NAME("Value", Group_new((Reference*[3]){
 		ONE(s_NUMBER),

@@ -59,6 +59,9 @@
  * The parsing library is configured at compile-time to iterate on
  * specific elements of input, typically `char`. You can redefine
  * the macro `ITERATION_UNIT` to the type you'd like to iterate on.
+ *
+ * By default, the `ITERATION_UNIT` is a `char`, which is enough for
+ * UTF8.
 */
 
 #ifndef ITERATION_UNIT
@@ -68,32 +71,32 @@
 typedef ITERATION_UNIT iterated_t;
 
 /**
- * Input data is aquired through _iterators_. Iterators wrap an input source
- * (the default input is a `FileInput`) and a `next` callback that updates the
- * iterator's state. The iterator will build a buffer of the acquired input
+ * Input data is acquired through _iterators_. Iterators wrap an input source
+ * (the default input is a `FileInput`) and a `move` callback that updates the
+ * iterator's offset. The iterator will build a buffer of the acquired input
  * and maintain a pointer for the current offset within the data acquired from
  * the input stream.
  *
  * You can get an iterator on a file by doing:
  *
  * >	Iterator* iterator = Iterator_Open("example.txt");
+ *
 */
 
 // @type Iterator
 typedef struct Iterator {
-	char           status;
-	char*          buffer;
-	iterated_t*    current;
-	iterated_t     separator;
-	size_t         offset;    // Offset (in bytes)
+	char           status;    // The status of the iterator, one of STATUS_{INIT|PROCESSING|INPUT_ENDED|ENDED}
+	char*          buffer;    // The buffer to the read data, note how it is a (void*) and not an `iterated_t`
+	iterated_t*    current;   // The for the current offset within the buffer
+	iterated_t     separator; // The character for line separator, `\n` by default.
+	size_t         offset;    // Offset in input (in bytes), might be different from `current - buffer` if some input was freed.
 	size_t         lines;     // Counter for lines that have been encountered
-	size_t         length;    // Length (in bytes)
-	size_t         available; // Available data in buffer (in bytes)
+	size_t         length;    // Buffer length (in bytes), might be bigger than the data acquired from the input
+	size_t         available; // Available data in buffer (in bytes), always `<= length`
 	// FIXME: The head should be freed when the offsets have been parsed,
 	// no need to keep in memory stuff we won't need.
-	void*          input;
-	bool          (*next) (struct Iterator*);
-	bool          (*move) (struct Iterator*, size_t n);
+	void*          input;     // Pointer to the input source
+	bool          (*move) (struct Iterator*, size_t n); // Plug-in function to move to the previous/next positions
 } Iterator;
 
 // @type FileInput
@@ -154,14 +157,10 @@ void       FileInput_destroy(FileInput* this);
 inline size_t FileInput_preload( Iterator* this );
 
 // @method
-// Iterates `n` time on the file input.
-inline bool FileInput_move   ( Iterator* this, size_t n );
-
-// @method
-// Advances the given iterator, loading new data from the file input
+// Advances/rewinds the given iterator, loading new data from the file input
 // whenever there is not `ITERATOR_BUFFER_AHEAD` data elements
 // ahead of the iterator's current position.
-bool       FileInput_next(Iterator* this);
+inline bool FileInput_move   ( Iterator* this, size_t n );
 
 /**
  * Grammar
