@@ -264,7 +264,7 @@ ParsingElement* ParsingElement_new(Reference* children[]) {
 	this->recognize = NULL;
 	this->process   = NULL;
 	if (children != NULL ) {
-		Reference* r = *children;
+		Reference* r = Reference_Ensure(*children);
 		DEBUG("Array length: %zd", sizeof(children))
 		while ( r != NULL ) {
 			DEBUG("Adding child: %s", r->element->name)
@@ -319,6 +319,13 @@ ParsingElement* ParsingElement_name( ParsingElement* this, const char* name ){
 
 bool Reference_Is(void *this) {
 	return this!=NULL && ((Reference*)this)->type == Reference_T;
+}
+
+Reference* Reference_Ensure(void* elementOrReference) {
+	void * element = elementOrReference;
+	assert(element!=NULL);
+	assert(Reference_Is(element) || ParsingElement_Is(element));
+	return ParsingElement_Is(element) ? Reference_New(element) : element;
 }
 
 Reference* Reference_New(ParsingElement* element){

@@ -5,7 +5,7 @@
 // License           : BSD License
 // ----------------------------------------------------------------------------
 // Creation date     : 12-Dec-2014
-// Last modification : 13-Dec-2014
+// Last modification : 15-Dec-2014
 // ----------------------------------------------------------------------------
 
 #include <stdlib.h>
@@ -18,9 +18,9 @@
 #include <regex.h>
 #include "oo.h"
 
-#ifndef __PARSING__
-#define __PARSING__
-#define __PARSING_VERSION__ "0.0.1"
+#ifndef __PARSING_H__
+#define __PARSING_H__
+#define __PARSING_VERSION__ "0.0.2"
 
 /**
  * == parsing.h
@@ -60,8 +60,9 @@
  * specific elements of input, typically `char`. You can redefine
  * the macro `ITERATION_UNIT` to the type you'd like to iterate on.
  *
- * By default, the `ITERATION_UNIT` is a `char`, which is enough for
- * UTF8.
+ * By default, the `ITERATION_UNIT` is a `char`, which works both
+ * for ASCII and UTF8. On the topic of Unicode/UTF8, the parsing
+ * library only uses functions that are UTF8-savvy.
 */
 
 #ifndef ITERATION_UNIT
@@ -388,6 +389,11 @@ bool         Reference_Is(void *);
 const char   Reference_T = 'R';
 
 // @classmethod
+// Ensures that the given element (or reference) is a reference.
+Reference* Reference_Ensure(void* elementOrReference);
+
+// @classmethod
+// Returns a new reference wrapping the given parsing element
 Reference* Reference_New(ParsingElement *);
 
 // @constructor
@@ -512,13 +518,150 @@ void ParsingStep_destroy( ParsingStep* this );
  * ============
  *
  * The parsing library provides a set of macros that make defining grammars
- * a much easier task.
+ * a much easier task. A grammar is usually defined in the following way:
+ *
+ * - leaf symbols (words & tokens) are defined ;
+ * - compound symbolds (rules & groups) are defined.
+ *
+ * Let's take as simple grammar and define it with the straight API:
+ *
+ * ```
+ * // Leaf symbols
+ * ParsingElement* s_NUMBER   = Token_new("\\d+");
+ * ParsingElement* s_VARIABLE = Token_new("\\w+");
+ * ParsingElement* s_OPERATOR = Token_new("[\\+\\-\\*\\/]");
+ *
+ * // We also attach names to the symbols so that debugging will be easier
+ * ParsingElement_name(s_NUMBER,   "NUMBER");
+ * ParsingElement_name(s_VARIABLE, "VARIABLE");
+ * ParsingElement_name(s_OPERATOR, "OPERATOR");
+ *
+ * // Now we defined the compound symbols
+ * ParsingElement* s_Value    = Group_new((Reference*[3]),{
+ *     Reference_cardinality(Reference_Ensure(s_NUMBER),   CARDINALITY_SINGLE),
+ *     Reference_cardinality(Reference_Ensure(s_VARIABLE), CARDINALITY_SINGLE)
+ *     NULL
+ * });
+ * ParsingElement* s_Suffix    = Rule_new((Reference*[3]),{
+ *     Reference_cardinality(Reference_Ensure(s_OPERATOR),  CARDINALITY_SINGLE),
+ *     Reference_cardinality(Reference_Ensure(s_Value),     CARDINALITY_SINGLE)
+ *     NULL
+ * });
+ * * ParsingElement* s_Expr    = Rule_new((Reference*[3]),{
+ *     Reference_cardinality(Reference_Ensure(s_Value),  CARDINALITY_SINGLE),
+ *     Reference_cardinality(Reference_Ensure(s_Suffix), CARDINALITY_MANY_OPTIONAL)
+ *     NULL
+ * });
+ *
+ * // We define the names as well
+ * ParsingElement_name(s_Value,  "Value");
+ * ParsingElement_name(s_Suffix, "Suffix");
+ * ParsingElement_name(s_Expr, "Expr");
+ * ```
+ *
+ * As you can see, this is quite verbose and makes reading the grammar declaration
+ * a difficult task. Let's introduce a set of macros that will make expressing
+ * grammars much easier.
+ *
+ * Symbol declaration & creation
+ * -----------------------------
 */
-#define ONE(v)            Reference_cardinality(Reference_New(v), CARDINALITY_SINGLE)
-#define OPTIONAL(v)       Reference_cardinality(Reference_New(v), CARDINALITY_OPTIONAL)
-#define MANY(v)           Reference_cardinality(Reference_New(v), CARDINALITY_MANY)
-#define MANY_OPTIONAL(v)  Reference_cardinality(Reference_New(v), CARDINALITY_MANY_OPTIONAL)
+
+// @macro
+// Declares a symbol of name `n` as being parsing element `e`.
+#define SYMBOL(n,e)       ParsingElement* s_ ## n = ParsingElement_name(e, #n);
+
+// @macro
+// Creates a `Token` parsing element with the given regular expression
+#define TOKEN(v)          Token_new(v)
+
+// @macro
+// Creates a `Rule` parsing element with the references or parsing elements
+// as children.
+#define RULE(...)         Rule_new((Reference*[(VA_ARGS_COUNT(__VA_ARGS__)+1)]){__VA_ARGS__,NULL})
+
+// @macro
+// Creates a `Group` parsing element with the references or parsing elements
+// as children.
+#define GROUP(...)        Group_new((Reference*[(VA_ARGS_COUNT(__VA_ARGS__)+1)]){__VA_ARGS__,NULL})
+
+/*
+ * Symbol reference & cardinality
+ * ------------------------------
+*/
+
+// @macro
+// Refers to symbol `n`, wrapping it in a `CARDINALITY_SINGLE` reference
+#define _S(n)             ONE(s_ ## n)
+
+// @macro
+// Refers to symbol `n`, wrapping it in a `CARDINALITY_OPTIONAL` reference
+#define _O(n)             OPTIONAL(s_ ## n)
+
+// @macro
+// Refers to symbol `n`, wrapping it in a `CARDINALITY_MANY` reference
+#define _M(n)             MANY(s_ ## n)
+
+// @macro
+// Refers to symbol `n`, wrapping it in a `CARDINALITY_MANY_OPTIONAL` reference
+#define _MO(n)            MANY_OPTIONAL(s_ ## n)
+
+/*
+ * Supporting macros
+ * -----------------
+ *
+ * The following set of macros is mostly used by the set of macros above.
+ * You probably won't need to use them directly.
+*/
+
+
+// @macro
+// Sets the name of the given parsing element `e` to be the name `n`.
 #define NAME(n,e)         ParsingElement_name(e,n)
 
+// @macro
+// Sets the given reference or parsing element's reference to CARDINALITY_SINGLE
+// If a parsing element is given, it will be automatically wrapped in a reference.
+#define ONE(v)            Reference_cardinality(Reference_Ensure(v), CARDINALITY_SINGLE)
+
+// @macro
+// Sets the given reference or parsing element's reference to CARDINALITY_OPTIONAL
+// If a parsing element is given, it will be automatically wrapped in a reference.
+#define OPTIONAL(v)       Reference_cardinality(Reference_Ensure(v), CARDINALITY_OPTIONAL)
+
+// @macro
+// Sets the given reference or parsing element's reference to CARDINALITY_MANY
+// If a parsing element is given, it will be automatically wrapped in a reference.
+#define MANY(v)           Reference_cardinality(Reference_Ensure(v), CARDINALITY_MANY)
+
+// @macro
+// Sets the given reference or parsing element's reference to CARDINALITY_MANY_OPTIONAL
+// If a parsing element is given, it will be automatically wrapped in a reference.
+#define MANY_OPTIONAL(v)  Reference_cardinality(Reference_Ensure(v), CARDINALITY_MANY_OPTIONAL)
+
+/*
+ * Grammar declaration with macros
+ * -------------------------------
+ *
+ * The same grammar that we defined previously can now be expressed in the
+ * following way:
+ *
+ * ```
+ * SYMBOL(NUMBER,   TOKEN("\\d+"))
+ * SYMBOL(VAR,      TOKEN("\\w+"))
+ * SYMBOL(OPERATOR, TOKEN("[\\+\\-\\*\\/]"))
+ *
+ * SYMBOL(Value,  GROUP( _S(NUMBER),   _S(VAR)     ))
+ * SYMBOL(Suffix, RULE(  _S(OPERATOR), _S(Value)   ))
+ * SYMBOL(Expr,   RULE(  _S(Value),    _MO(Suffix) ))
+ * ```
+ *
+ * All symbols will be define as `s_XXX`, so that you can do:
+ *
+ * ```
+ * ParsingGrammar* g = Grammar_new();
+ * g->axiom = s_Expr;
+ * ```
+*/
 #endif
 // EOF
