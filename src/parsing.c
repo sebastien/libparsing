@@ -245,15 +245,16 @@ ParsingElement* ParsingElement_new(Reference* children[]) {
 	this->children  = NULL;
 	this->recognize = NULL;
 	this->process   = NULL;
-	// if (children != NULL ) {
-	// 	Reference* r = *children;
-	// 	while ( r != NULL ) {
-	// 		// FIXME: Make sure how memory is managed here
-	// 		if (ParsingElement_is(r)) {r = ParsingElement_asReference((ParsingElement*)r);}
-	// 		ParsingElement_add(this, r);
-	// 		r = *(++children);
-	// 	}
-	// }
+	if (children != NULL ) {
+		Reference* r = *children;
+		DEBUG("Array length: %zd", sizeof(children))
+		while ( r != NULL ) {
+			DEBUG("Adding child: %s", r->element->name)
+			// FIXME: Make sure how memory is managed here
+			ParsingElement_add(this, r);
+			r = *(++children);
+		}
+	}
 	return this;
 }
 
@@ -632,13 +633,17 @@ int main (int argc, char* argv[]) {
 	// GROUP(s_Value) ONE(s_NUMBER) MANY(s_VARIABLE) END_GROUP
 	//
 
-	ParsingElement* s_Value    = NAME("Value", Group_new(NULL));
-		ParsingElement_add( s_Value, ONE(s_NUMBER)   );
-		ParsingElement_add( s_Value, ONE(s_VARIABLE) );
+	ParsingElement* s_Value    = NAME("Value", Group_new((Reference*[3]){
+		ONE(s_NUMBER),
+		ONE(s_VARIABLE),
+		NULL
+	}));
 
-	ParsingElement* s_Suffix   = NAME("Suffix", Rule_new (NULL));
-		ParsingElement_add( s_Suffix, ONE(s_OP)   );
-		ParsingElement_add( s_Suffix, ONE(s_Value) );
+	ParsingElement* s_Suffix   = NAME("Suffix", Rule_new ((Reference*[3]){
+		ONE(s_OP),
+		ONE(s_Value),
+		NULL
+	}));
 
 	ParsingElement* s_Expr    = NAME("Expr", Rule_new (NULL));
 		ParsingElement_add( s_Expr, ONE  (s_Value)  );
