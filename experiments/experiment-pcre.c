@@ -1,6 +1,8 @@
-#!/usr/bin/tcc -run -std=c11
 #include "src/parsing.h"
 
+/**
+ * Tests the PCRE library
+*/
 int main()
 {
 
@@ -38,7 +40,7 @@ int main()
 				regexp, regexp_x,       // Regex
 				line, strlen(line),     // Line
 				0,                      // Offset
-				0,                      // OPTIONS
+				PCRE_ANCHORED,          // OPTIONS -- we do not skip position
 				vector,                 // Vector of matching offsets
 				vector_length);         // Number of elements in the vector
 		if (r <= 0) {

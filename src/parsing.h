@@ -219,6 +219,7 @@ Match* Grammar_parseFromIterator( Grammar* this, Iterator* iterator );
 
 // @type Match
 typedef struct Match {
+	// TODO: We might need to put offset there
 	char            status;     // The status of the match (see STATUS_XXX)
 	size_t          length;     // The number of `iterated_t` matched
 	void            *data;      // The matched data (usually a subset of the input stream)
@@ -262,7 +263,7 @@ Match* Match_new();
 void Match_destroy(Match* this);
 
 // @method
-extern inline bool Match_isSuccess(Match* this) {
+bool Match_isSuccess(Match* this) {
 	return (this != NULL && this != FAILURE && this->status == STATUS_MATCHED);
 }
 
@@ -354,13 +355,22 @@ Match*          Word_recognize(ParsingElement* this, ParsingContext* context);
 // The parsing element configuration information that is used by the
 // `Token` methods.
 typedef struct {
-	pcre*      regex;
+	const char* expr;
+	pcre*       regexp;
 	pcre_extra* extra;
 } Token;
+
+typedef struct {
+	int  groups;
+	int* vector;
+} TokenMatch;
 
 // @method
 // Creates a new token with the given POSIX extended regular expression
 ParsingElement* Token_new(const char* expr);
+
+// @destructor
+void Token_destroy(ParsingElement*);
 
 // @method
 // The specialized match function for token parsing elements.

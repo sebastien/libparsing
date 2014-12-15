@@ -408,48 +408,94 @@ ParsingElement* Token_new(const char* expr) {
 	__ALLOC(Token, config);
 	ParsingElement* this = ParsingElement_new(NULL);
 	this->recognize      = Token_recognize;
-	/*
-	if ( regcomp( &(config->regex), expr, REG_EXTENDED) == 0) {
-		this->config = config;
-		return this;
-	} else {
-		ERROR("Cannot compile POSIX regex: %s", expr);
+	const char* pcre_error;
+	int         pcre_error_offset = -1;
+	config->expr   = expr;
+	config->regexp = pcre_compile(expr, PCRE_UTF8, &pcre_error, &pcre_error_offset, NULL);
+	if (pcre_error != NULL) {
+		ERROR("Token: cannot compile regular expression `%s` at %d: %s", expr, pcre_error_offset, pcre_error);
 		__DEALLOC(config);
-		ParsingElement_destroy(this);
+		__DEALLOC(this);
 		return NULL;
 	}
-	*/
+	config->extra = pcre_study(config->regexp, 0, &pcre_error);
+	if (pcre_error != NULL) {
+		ERROR("Token: cannot optimize regular expression `%s` at %d: %s", expr, pcre_error_offset, pcre_error);
+		__DEALLOC(config);
+		__DEALLOC(this);
+		return NULL;
+	}
+	return this;
 }
 
-// TODO: Implement Token_destroy and regfree
+void Token_destroy(ParsingElement* this) {
+	Token* config = (Token*)this->config;
+	if (config != NULL) {
+		// FIXME: Not sure how to free a regexp
+		if (config->regexp != NULL) {}
+		if (config->extra  != NULL) {pcre_free_study(config->extra);}
+		__DEALLOC(config);
+	}
+	__DEALLOC(this);
+}
 
 Match* Token_recognize(ParsingElement* this, ParsingContext* context) {
-	// We get the current parsing context and make sure we have
-	// at least TOKEN_MATCH_RANGE characters available (or the EOF). The
-	// limitation here is that we don't necessarily want ot load the whole
-	// file in memory, but could do it 1MB/time for instance.
-
-	/*
-	// NOTE: This means we need to pass the context
-	//
-	// Context_preload(context, TOKEN_MATCH_RANGE);
-
-	// We need at least one more match than what we're requesting
-	regmatch_t matches[2];
-	const regex_t* regex  = & (((Token*)this->config)->regex);
-	regexec(regex, context->iterator->buffer, 1, matches, 0);
-	DEBUG("Buffer length: %zd: %s", strlen(context->iterator->buffer), context->iterator->buffer);
-	if (matches[0].rm_so != -1) {
-		DEBUG("Matched %s %d-%d", this->name, matches[0].rm_so, matches[1].rm_eo);
-		return Match_Empty();
+	Token* config     = (Token*)this->config;
+	// NOTE: This has to be a multiple of 3, according to `man pcre_exec`
+	int vector_length = 30;
+	int vector[vector_length];
+	int r = pcre_exec(
+		config->regexp, config->extra,     // Regex
+		(char*)context->iterator->current, // Line
+		context->iterator->available,      // Available data
+		0,                                 // Offset
+		PCRE_ANCHORED,                     // OPTIONS -- we do not skip position
+		vector,                            // Vector of matching offsets
+		vector_length);                    // Number of elements in the vector
+	Match* result = NULL;
+	if (r <= 0) {
+		switch(r) {
+			case PCRE_ERROR_NOMATCH      : result = FAILURE;                                                        break;
+			case PCRE_ERROR_NULL         : ERROR("Token:%s Something was null", config->expr);                      break;
+			case PCRE_ERROR_BADOPTION    : ERROR("Token:%s A bad option was passed", config->expr);                 break;
+			case PCRE_ERROR_BADMAGIC     : ERROR("Token:%s Magic number bad (compiled re corrupt?)", config->expr); break;
+			case PCRE_ERROR_UNKNOWN_NODE : ERROR("Token:%s Something kooky in the compiled re", config->expr);      break;
+			case PCRE_ERROR_NOMEMORY     : ERROR("Token:%s Ran out of memory", config->expr);                       break;
+			default                      : ERROR("Token:%s Unknown error", config->expr);                           break;
+		};
 	} else {
-		DEBUG("Failed %s", this->name);
-		return FAILURE;
+		if(r == 0) {
+			ERROR("Token: %s many substrings matched\n", config->expr);
+			// Set rc to the max number of substring matches possible.
+			// FIMXE: Not sure why we're doing 3 here, but it's what is
+			// state in the doc
+			// `ovecsize     Number of elements in the vector (a multiple of 3)`
+			// in `man pcre_exec`.
+			r = vector_length / 3;
+		}
+		result           = Match_new();
+		result->length   = vector[1];
+
+		// TokenMatch* data = _ALLOC(TokenMatch);
+		// data->groups     = r;
+		// data->vector     = malloc(r * 3);
+		// memcpy(data->vector, &vector, r * 3);
 	}
-	*/
-	return FAILURE;
+	return result;
 }
 
+
+// FIXME: Not sure what to do exactly here, but we'd like to retrieve the group
+void* Token_Group(ParsingElement* this, Match* match) {
+	if (!Match_isSuccess(match)) {return NULL;}
+	//	// PCRE contains a handy function to do the above for you:
+	//	for( int j=0; j<r; j++ ) {
+	//		const char *match;
+	//		pcre_get_substring(line, vector, r, j, &match);
+	//		printf("Match(%2d/%2d): (%2d,%2d): '%s'\n", j, r-1, vector[j*2], vector[j*2+1], match);
+	//		pcre_free_substring(match);
+	//	}
+}
 
 // ----------------------------------------------------------------------------
 //
