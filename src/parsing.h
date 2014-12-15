@@ -137,6 +137,10 @@ inline bool Iterator_hasMore( Iterator* this );
 // is reached.
 size_t Iterator_remaining( Iterator* this );
 
+// @method
+// Moves the iterator to the given offset
+inline bool Iterator_moveTo ( Iterator* this, size_t offset );
+
 #ifndef ITERATOR_BUFFER_AHEAD
 // @define
 // The number of `iterated_t` that should be loaded after the iterator's

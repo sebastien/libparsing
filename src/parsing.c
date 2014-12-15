@@ -78,8 +78,12 @@ bool Iterator_hasMore( Iterator* this ) {
 	return this->status != STATUS_ENDED;
 }
 
-inline size_t Iterator_remaining( Iterator* this ) {
+size_t Iterator_remaining( Iterator* this ) {
 	return this->available - (this->current - this->buffer);
+}
+
+bool Iterator_moveTo ( Iterator* this, size_t offset ) {
+	return this->move(this, offset - this->offset );
 }
 
 void Iterator_destroy( Iterator* this ) {
@@ -146,7 +150,6 @@ size_t FileInput_preload( Iterator* this ) {
 }
 
 bool FileInput_move   ( Iterator* this, size_t n ) {
-	assert (n>0);
 	if ( n == 0) {
 		// We're not moving position
 		return TRUE;
@@ -188,8 +191,8 @@ bool FileInput_move   ( Iterator* this, size_t n ) {
 		this->status  = STATUS_PROCESSING;
 		return TRUE;
 	}
-
 }
+
 
 // ----------------------------------------------------------------------------
 //
@@ -238,7 +241,7 @@ void Match_destroy(Match* this) {
 }
 
 bool Match_isSuccess(Match* this) {
-	return (this != FAILURE && this->status == STATUS_MATCHED);
+	return (this != NULL && this != FAILURE && this->status == STATUS_MATCHED);
 }
 
 // ----------------------------------------------------------------------------
@@ -487,6 +490,7 @@ ParsingElement* Group_new(Reference* children[]) {
 Match* Group_recognize(ParsingElement* this, ParsingContext* context){
 	Reference* child = this->children;
 	Match*     match;
+	size_t     offset = context->iterator->offset;
 	while (child != NULL ) {
 		match = Reference_recognize(child, context);
 		if (Match_isSuccess(match)) {
@@ -498,6 +502,7 @@ Match* Group_recognize(ParsingElement* this, ParsingContext* context){
 		}
 	}
 	// If no child has succeeded, the whole group fails
+	Iterator_moveTo(context->iterator, offset);
 	return FAILURE;
 }
 
@@ -514,10 +519,11 @@ ParsingElement* Rule_new(Reference* children[]) {
 }
 
 Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
-	Reference* child    = this->children;
-	Match*     result   = NULL;
-	Match*     last     = NULL;
-	int        step     = 0;
+	Reference* child  = this->children;
+	Match*     result = NULL;
+	Match*     last   = NULL;
+	int        step   = 0;
+	size_t     offset = context->iterator->offset;
 	// We don't need to care wether the parsing context has more
 	// data, the Reference_recognize will take care of it.
 	while (child != NULL) {
@@ -529,8 +535,7 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 			while (Match_isSuccess(skip_match)){skip_match = skip->recognize(skip, context);}
 			match = Reference_recognize(child, context);
 			if (!Match_isSuccess(match)) {
-				// TODO: Should move the iterator back to before the skip
-				return FAILURE;
+				break;
 			}
 		}
 		if (last == NULL) {
@@ -540,6 +545,9 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 		}
 		child = child->next;
 		step++;
+	}
+	if (!Match_isSuccess(result)) {
+		Iterator_moveTo(context->iterator, offset);
 	}
 	return result;
 }
