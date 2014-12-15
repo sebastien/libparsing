@@ -425,6 +425,7 @@ ParsingElement* Token_new(const char* expr) {
 		__DEALLOC(this);
 		return NULL;
 	}
+	this->config = config;
 	return this;
 }
 
@@ -440,6 +441,8 @@ void Token_destroy(ParsingElement* this) {
 }
 
 Match* Token_recognize(ParsingElement* this, ParsingContext* context) {
+	assert(this->config);
+	if(this->config == NULL) {return FAILURE;}
 	Token* config     = (Token*)this->config;
 	// NOTE: This has to be a multiple of 3, according to `man pcre_exec`
 	int vector_length = 30;
@@ -454,6 +457,7 @@ Match* Token_recognize(ParsingElement* this, ParsingContext* context) {
 		vector_length);                    // Number of elements in the vector
 	Match* result = NULL;
 	if (r <= 0) {
+		// DEBUG("Token: %s FAILED on %s", config->expr, context->iterator->buffer);
 		switch(r) {
 			case PCRE_ERROR_NOMATCH      : result = FAILURE;                                                        break;
 			case PCRE_ERROR_NULL         : ERROR("Token:%s Something was null", config->expr);                      break;
@@ -464,6 +468,7 @@ Match* Token_recognize(ParsingElement* this, ParsingContext* context) {
 			default                      : ERROR("Token:%s Unknown error", config->expr);                           break;
 		};
 	} else {
+		// DEBUG("Token: %s matched %d on %s", config->expr, r, context->iterator->buffer);
 		if(r == 0) {
 			ERROR("Token: %s many substrings matched\n", config->expr);
 			// Set rc to the max number of substring matches possible.
@@ -475,6 +480,7 @@ Match* Token_recognize(ParsingElement* this, ParsingContext* context) {
 		}
 		result           = Match_new();
 		result->length   = vector[1];
+		context->iterator->move(context->iterator,result->length);
 
 		// TokenMatch* data = _ALLOC(TokenMatch);
 		// data->groups     = r;
@@ -661,14 +667,14 @@ int main (int argc, char* argv[]) {
 	// We defined the grammar
 	Grammar* g                 = Grammar_new();
 
-	// ParsingElement* s_NUMBER   = NAME("NUMBER",   Token_new("^([0-9]+)"));
-	// ParsingElement* s_VARIABLE = NAME("VARIABLE", Token_new("^([A-Z]+)"));
-	// ParsingElement* s_OP       = NAME("OP",       Token_new("^\\-|\\+|\\*"));
-	// ParsingElement* s_SPACES   = NAME("SPACES",   Token_new("^([ ]+)"));
-	ParsingElement* s_NUMBER   = NAME("NUMBER",   Word_new("NUM"));
-	ParsingElement* s_VARIABLE = NAME("VARIABLE", Word_new("VAR"));
-	ParsingElement* s_OP       = NAME("OP",       Word_new("OP"));
-	ParsingElement* s_SPACES   = NAME("SPACES",   Word_new(" "));
+	ParsingElement* s_NUMBER   = NAME("NUMBER",   Token_new("([0-9]+)"));
+	ParsingElement* s_VARIABLE = NAME("VARIABLE", Token_new("([A-Z]+)"));
+	ParsingElement* s_OP       = NAME("OP",       Token_new("\\-|\\+|\\*"));
+	ParsingElement* s_SPACES   = NAME("SPACES",   Token_new("([ ]+)"));
+	// ParsingElement* s_NUMBER   = NAME("NUMBER",   Word_new("NUM"));
+	// ParsingElement* s_VARIABLE = NAME("VARIABLE", Word_new("VAR"));
+	// ParsingElement* s_OP       = NAME("OP",       Word_new("OP"));
+	// ParsingElement* s_SPACES   = NAME("SPACES",   Word_new(" "));
 
 	// FIXME: This is not very elegant, but I did not really find a better
 	// way. I tried passing the elements as an array, but it doesn't really
