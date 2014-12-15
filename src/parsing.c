@@ -74,18 +74,6 @@ bool Iterator_open( Iterator* this, const char *path ) {
 	}
 }
 
-bool Iterator_hasMore( Iterator* this ) {
-	return this->status != STATUS_ENDED;
-}
-
-size_t Iterator_remaining( Iterator* this ) {
-	return this->available - (this->current - this->buffer);
-}
-
-bool Iterator_moveTo ( Iterator* this, size_t offset ) {
-	return this->move(this, offset - this->offset );
-}
-
 void Iterator_destroy( Iterator* this ) {
 	// TODO: Take care of input
 	__DEALLOC(this);
@@ -240,10 +228,6 @@ void Match_destroy(Match* this) {
 	__DEALLOC(this);
 }
 
-bool Match_isSuccess(Match* this) {
-	return (this != NULL && this != FAILURE && this->status == STATUS_MATCHED);
-}
-
 // ----------------------------------------------------------------------------
 //
 // PARSING ELEMENT
@@ -301,25 +285,11 @@ ParsingElement* ParsingElement_add(ParsingElement *this, Reference *child) {
 	return this;
 }
 
-Match* ParsingElement_process( ParsingElement* this, Match* match ) {
-	return match;
-}
-
-ParsingElement* ParsingElement_name( ParsingElement* this, const char* name ){
-	this->name = name;
-	return this;
-}
-
 // ----------------------------------------------------------------------------
 //
 // REFERENCE
 //
 // ----------------------------------------------------------------------------
-
-
-bool Reference_Is(void *this) {
-	return this!=NULL && ((Reference*)this)->type == Reference_T;
-}
 
 Reference* Reference_Ensure(void* elementOrReference) {
 	void * element = elementOrReference;
@@ -343,12 +313,6 @@ Reference* Reference_new() {
 	this->name        = "_";
 	this->element     = NULL;
 	this->next        = NULL;
-	return this;
-}
-
-Reference* Reference_cardinality(Reference* this, char cardinality) {
-	assert(this!=NULL);
-	this->cardinality = cardinality;
 	return this;
 }
 
@@ -444,6 +408,7 @@ ParsingElement* Token_new(const char* expr) {
 	__ALLOC(Token, config);
 	ParsingElement* this = ParsingElement_new(NULL);
 	this->recognize      = Token_recognize;
+	/*
 	if ( regcomp( &(config->regex), expr, REG_EXTENDED) == 0) {
 		this->config = config;
 		return this;
@@ -453,6 +418,7 @@ ParsingElement* Token_new(const char* expr) {
 		ParsingElement_destroy(this);
 		return NULL;
 	}
+	*/
 }
 
 // TODO: Implement Token_destroy and regfree
@@ -463,6 +429,7 @@ Match* Token_recognize(ParsingElement* this, ParsingContext* context) {
 	// limitation here is that we don't necessarily want ot load the whole
 	// file in memory, but could do it 1MB/time for instance.
 
+	/*
 	// NOTE: This means we need to pass the context
 	//
 	// Context_preload(context, TOKEN_MATCH_RANGE);
@@ -479,6 +446,8 @@ Match* Token_recognize(ParsingElement* this, ParsingContext* context) {
 		DEBUG("Failed %s", this->name);
 		return FAILURE;
 	}
+	*/
+	return FAILURE;
 }
 
 

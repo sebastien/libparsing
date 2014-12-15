@@ -15,7 +15,7 @@
 #include <string.h>
 #include <assert.h>
 #include <sys/types.h>
-#include <regex.h>
+#include <pcre.h>
 #include "oo.h"
 
 #ifndef __PARSING_H__
@@ -130,17 +130,24 @@ bool Iterator_open( Iterator* this, const char *path );
 
 // @method
 // Tells if the iterator has more available data
-inline bool Iterator_hasMore( Iterator* this );
+extern inline bool Iterator_hasMore( Iterator* this ) {
+	// NOTE: This is STATUS_ENDED;
+	return this->status != 'E';
+}
 
 // @method
 // Returns the number of bytes available from the current iterator's position.
 // This should be at least `ITERATOR_BUFFER_AHEAD` until end of input stream
 // is reached.
-size_t Iterator_remaining( Iterator* this );
+size_t Iterator_remaining( Iterator* this ) {
+	return this->available - (this->current - this->buffer);
+}
 
 // @method
 // Moves the iterator to the given offset
-inline bool Iterator_moveTo ( Iterator* this, size_t offset );
+extern inline bool Iterator_moveTo ( Iterator* this, size_t offset ) {
+	return this->move(this, offset - this->offset );
+}
 
 #ifndef ITERATOR_BUFFER_AHEAD
 // @define
@@ -159,13 +166,13 @@ void       FileInput_destroy(FileInput* this);
 // @method
 // Preloads data from the input source so that the buffer
 // has ITERATOR_BUFFER_AHEAD characters ahead.
-inline size_t FileInput_preload( Iterator* this );
+size_t FileInput_preload( Iterator* this );
 
 // @method
 // Advances/rewinds the given iterator, loading new data from the file input
 // whenever there is not `ITERATOR_BUFFER_AHEAD` data elements
 // ahead of the iterator's current position.
-inline bool FileInput_move   ( Iterator* this, size_t n );
+bool FileInput_move   ( Iterator* this, size_t n );
 
 /**
  * Grammar
@@ -255,7 +262,9 @@ Match* Match_new();
 void Match_destroy(Match* this);
 
 // @method
-inline bool Match_isSuccess(Match* this);
+extern inline bool Match_isSuccess(Match* this) {
+	return (this != NULL && this != FAILURE && this->status == STATUS_MATCHED);
+}
 
 // @type ParsingElement
 typedef struct ParsingElement {
@@ -296,12 +305,17 @@ ParsingElement* ParsingElement_add(ParsingElement *this, Reference *child);
 // Processes the given match once the parsing element has fully succeeded. This
 // is where user-bound actions will be applied, and where you're most likely
 // to do things such as construct an AST.
-inline Match* ParsingElement_process( ParsingElement* this, Match* match );
+inline Match* ParsingElement_process( ParsingElement* this, Match* match ) {
+	return match;
+}
 
 // FIXME: Maybe should inline
 // @method
 // Transparently sets the name of the element
-inline ParsingElement* ParsingElement_name( ParsingElement* this, const char* name );
+extern inline ParsingElement* ParsingElement_name( ParsingElement* this, const char* name ) {
+	this->name = name;
+	return this;
+}
 
 /**
  * Word
@@ -340,7 +354,8 @@ Match*          Word_recognize(ParsingElement* this, ParsingContext* context);
 // The parsing element configuration information that is used by the
 // `Token` methods.
 typedef struct {
-	regex_t regex;
+	pcre*      regex;
+	pcre_extra* extra;
 } Token;
 
 // @method
@@ -382,11 +397,14 @@ typedef struct Reference {
 #define CARDINALITY_MANY_OPTIONAL '*'
 #define CARDINALITY_MANY          '+'
 
+const char   Reference_T = 'R';
+
 //
 // @classmethod
 // Tells if the given pointer is a pointer to Reference
-bool         Reference_Is(void *);
-const char   Reference_T = 'R';
+extern inline bool Reference_Is(void * this) {
+	return this!=NULL && ((Reference*)this)->type == Reference_T;
+}
 
 // @classmethod
 // Ensures that the given element (or reference) is a reference.
@@ -402,14 +420,18 @@ Reference* Reference_new();
 
 // @method
 // Sets the cardinality of this reference, returning it transprently.
-inline Reference* Reference_cardinality(Reference* this, char cardinality);
+extern inline Reference* Reference_cardinality(Reference* this, char cardinality) {
+	assert(this!=NULL);
+	this->cardinality = cardinality;
+	return this;
+}
 
 // @method
 // Returns the matched value corresponding to the first match of this reference.
 // `OPTIONAL` references might return `EMPTY`, `SINGLE` references will return
 // a match with a `next=NULL` while `MANY` may return a match with a `next`
 // pointing to the next match.
-inline Match* Reference_recognize(Reference* this, ParsingContext* context);
+Match* Reference_recognize(Reference* this, ParsingContext* context);
 
 /**
  * Groups
