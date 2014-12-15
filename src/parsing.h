@@ -604,6 +604,10 @@ void ParsingStep_destroy( ParsingStep* this );
 #define SYMBOL(n,e)       ParsingElement* s_ ## n = ParsingElement_name(e, #n);
 
 // @macro
+// Creates a `Word` parsing element with the given regular expression
+#define WORD(v)           Word_new(v)
+
+// @macro
 // Creates a `Token` parsing element with the given regular expression
 #define TOKEN(v)          Token_new(v)
 

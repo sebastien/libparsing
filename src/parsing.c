@@ -667,6 +667,7 @@ int main (int argc, char* argv[]) {
 	// We defined the grammar
 	Grammar* g                 = Grammar_new();
 
+	/*
 	ParsingElement* s_NUMBER   = NAME("NUMBER",   Token_new("([0-9]+)"));
 	ParsingElement* s_VARIABLE = NAME("VARIABLE", Token_new("([A-Z]+)"));
 	ParsingElement* s_OP       = NAME("OP",       Token_new("\\-|\\+|\\*"));
@@ -704,8 +705,61 @@ int main (int argc, char* argv[]) {
 	ParsingElement* s_Expr    = NAME("Expr", Rule_new (NULL));
 		ParsingElement_add( s_Expr, ONE  (s_Value)  );
 		ParsingElement_add( s_Expr, MANY (s_Suffix) );
+	*/
 
-	g->axiom = s_Expr;
+	// ========================================================================
+	// TOKENS
+	// ========================================================================
+
+	SYMBOL (SPACES,            TOKEN("[ ]+"))
+	SYMBOL (TABS,              TOKEN("\\t*"))
+	SYMBOL (EMPTY_LINES,       TOKEN("([ \\t]*\\n)+"))
+	SYMBOL (INDENT,            TOKEN("\\t+"))
+	SYMBOL (COMMENT,           TOKEN("[ \\t]*//[^\n]*"))
+	SYMBOL (EOL,               TOKEN("[ ]*\n(\\s*\n)*"))
+	SYMBOL (NUMBER,            TOKEN("-?(0x)?[0-9]+(\\.[0-9]+)?"))
+	SYMBOL (ATTRIBUTE,         TOKEN("[a-zA-Z\\-_][a-zA-Z0-9\\-_]*"))
+	SYMBOL (ATTRIBUTE_VALUE,   TOKEN("\"[^\"]*\"|'[^']*'|[^,\\]]+"))
+	SYMBOL (SELECTOR_SUFFIX,   TOKEN("\\:[\\-a-z][a-z0-9\\-]*(\\([0-9]+\\))?"))
+	SYMBOL (SELECTION_OPERATOR,TOKEN( "\\>|[ ]+"))
+	SYMBOL (INCLUDE,           WORD( "%include"))
+	SYMBOL (COLON,             WORD(":"))
+	SYMBOL (DOT,               WORD("."))
+	SYMBOL (LP,                WORD("("))
+	SYMBOL (IMPORTANT,         WORD("!important"))
+	SYMBOL (RP,                WORD(")"))
+	SYMBOL (SELF,              WORD("&"))
+	SYMBOL (COMMA,             WORD(","))
+	SYMBOL (TAB,               WORD("\t"))
+	SYMBOL (EQUAL,             WORD("="))
+	SYMBOL (LSBRACKET,         WORD("["))
+	SYMBOL (RSBRACKET,         WORD("]"))
+
+	SYMBOL (PATH,              TOKEN("\"[^\"]+\"|'[^']'|[^\\s\\n]+"))
+	SYMBOL (PERCENTAGE,        TOKEN("\\d+(\\.\\d+)?%"))
+	SYMBOL (STRING_SQ,         TOKEN("'((\\\\'|[^'\\n])*)'"))
+	SYMBOL (STRING_DQ,         TOKEN("\"((\\\\\"|[^\"\\n])*)\""))
+	SYMBOL (STRING_UQ,         TOKEN("[^\\s\n\\*;]+"))
+	SYMBOL (INFIX_OPERATOR,    TOKEN("[\\-\\+\\*\\/]"))
+
+	SYMBOL (NODE,              TOKEN("\\*|([a-zA-Z][a-zA-Z0-9\\-]*)"))
+	SYMBOL (NODE_CLASS,        TOKEN("\\.[a-zA-Z][a-zA-Z0-9\\-]*"))
+	SYMBOL (NODE_ID,           TOKEN("#[a-zA-Z][a-zA-Z0-9\\-]*"))
+
+	SYMBOL (UNIT,              TOKEN("em|ex|px|cm|mm|in|pt|pc|ch|rem|vh|vmin|vmax|s|deg|rad|grad|ms|Hz|kHz|%"))
+	// FIXME: Should be the same token
+	SYMBOL (VARIABLE_NAME,     TOKEN("[\\w_][\\w\\d_]*"))
+	SYMBOL (METHOD_NAME,       TOKEN("[\\w_][\\w\\d_]*"))
+	SYMBOL (MACRO_NAME,        TOKEN("[\\w_][\\w\\d_]*"))
+	SYMBOL (REFERENCE,         TOKEN("\\$([\\w_][\\w\\d_]*)"))
+	SYMBOL (COLOR_NAME,        TOKEN("[a-z][a-z0-9\\-]*"))
+	SYMBOL (COLOR_HEX,         TOKEN("#([A-Fa-f0-9][A-Fa-f0-9]?[A-Fa-f0-9]?[A-Fa-f0-9]?[A-Fa-f0-9]?[A-Fa-f0-9]?([A-Fa-f0-9][A-Fa-f0-9])?)"))
+	SYMBOL (COLOR_RGB,         TOKEN("rgba?\\((\\s*\\d+\\s*,\\s*\\d+\\s*,\\s*\\d+\\s*(,\\s*\\d+(\\.\\d+)?\\s*)?)\\)"))
+	SYMBOL (CSS_PROPERTY,      TOKEN("[a-z][a-z0-9\\-]*"))
+	SYMBOL (SPECIAL_NAME,      TOKEN("@[A-Za-z][A-Za-z0-9_\\-]*"))
+	SYMBOL (SPECIAL_FILTER,    TOKEN("\\[[^\\]]+\\]"))
+
+	g->axiom = s_SELECTOR_SUFFIX;
 	g->skip  = s_SPACES;
 
 	Iterator* iterator = Iterator_new();
