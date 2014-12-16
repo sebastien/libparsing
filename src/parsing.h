@@ -5,7 +5,7 @@
 // License           : BSD License
 // ----------------------------------------------------------------------------
 // Creation date     : 12-Dec-2014
-// Last modification : 15-Dec-2014
+// Last modification : 16-Dec-2014
 // ----------------------------------------------------------------------------
 
 #include <stdlib.h>
@@ -20,7 +20,7 @@
 
 #ifndef __PARSING_H__
 #define __PARSING_H__
-#define __PARSING_VERSION__ "0.1.0"
+#define __PARSING_VERSION__ "0.1.1"
 
 /**
  * == parsing.h
@@ -387,14 +387,14 @@ Match*          Token_recognize(ParsingElement* this, ParsingContext* context);
  *
  * References allow to share a single parsing element between many different
  * composite parsing elements, while decorating them with additional information
- * such as their cardinality (`SINGLE`, `OPTIONAL`, `MANY` and `MANY_OPTIONAL`)
+ * such as their cardinality (`ONE`, `OPTIONAL`, `MANY` and `MANY_OPTIONAL`)
  * and a `name` that will allow `process` actions to easily access specific
  * parts of the parsing element.
 */
 // @type Reference
 typedef struct Reference {
 	char            type;            // Set to Reference_T, to disambiguate with ParsingElement
-	char            cardinality;     // Either SINGLE (default), OPTIONAL, MANY or MANY_OPTIONAL
+	char            cardinality;     // Either ONE (default), OPTIONAL, MANY or MANY_OPTIONAL
 	const char*     name;            // The name of the reference (optional)
 	ParsingElement* element;         // The reference to the parsing element
 	Reference*      next;            // The next child reference in the parsing elements
@@ -403,7 +403,7 @@ typedef struct Reference {
 // @define
 // The different values for the `Reference` cardinality.
 #define CARDINALITY_OPTIONAL      '?'
-#define CARDINALITY_SINGLE        '1'
+#define CARDINALITY_ONE           '1'
 #define CARDINALITY_MANY_OPTIONAL '*'
 #define CARDINALITY_MANY          '+'
 
@@ -436,9 +436,15 @@ extern inline Reference* Reference_cardinality(Reference* this, char cardinality
 	return this;
 }
 
+extern inline Reference* Reference_name(Reference* this, const char* name) {
+	assert(this!=NULL);
+	this->name        = name;
+	return this;
+}
+
 // @method
 // Returns the matched value corresponding to the first match of this reference.
-// `OPTIONAL` references might return `EMPTY`, `SINGLE` references will return
+// `OPTIONAL` references might return `EMPTY`, `ONE` references will return
 // a match with a `next=NULL` while `MANY` may return a match with a `next`
 // pointing to the next match.
 Match* Reference_recognize(Reference* this, ParsingContext* context);
@@ -470,6 +476,40 @@ ParsingElement* Rule_new(Reference* children[]);
 
 // @method
 Match*          Rule_recognize(ParsingElement* this, ParsingContext* context);
+
+/**
+ * Procedures
+ * ----------
+ *
+ * Procedures are parsing elements that do not consume any input, always
+ * succeed and usually have a side effect, such as setting a variable
+ * in the parsing context.
+*/
+
+// @typedef ProcedureCallback
+typedef void (*ProcedureCallback)(ParsingElement* this, ParsingContext* context);
+
+// @constructor
+ParsingElement* Procedure_new(ProcedureCallback c);
+
+// @method
+Match*          Procedure_recognize(ParsingElement* this, ParsingContext* context);
+
+/*
+ * Conditions
+ * ----------
+ *
+ * Conditions, like procedures, execute arbitrary code when executed, but
+ * they might return a FAILURE.
+*/
+
+typedef Match* (*ConditionCallback)(ParsingElement*, ParsingContext*);
+
+// @constructor
+ParsingElement* Condition_new(ConditionCallback c);
+
+// @method
+Match*          Condition_recognize(ParsingElement* this, ParsingContext* context);
 
 /**
  * The parsing process
@@ -570,17 +610,17 @@ void ParsingStep_destroy( ParsingStep* this );
  *
  * // Now we defined the compound symbols
  * ParsingElement* s_Value    = Group_new((Reference*[3]),{
- *     Reference_cardinality(Reference_Ensure(s_NUMBER),   CARDINALITY_SINGLE),
- *     Reference_cardinality(Reference_Ensure(s_VARIABLE), CARDINALITY_SINGLE)
+ *     Reference_cardinality(Reference_Ensure(s_NUMBER),   CARDINALITY_ONE),
+ *     Reference_cardinality(Reference_Ensure(s_VARIABLE), CARDINALITY_ONE)
  *     NULL
  * });
  * ParsingElement* s_Suffix    = Rule_new((Reference*[3]),{
- *     Reference_cardinality(Reference_Ensure(s_OPERATOR),  CARDINALITY_SINGLE),
- *     Reference_cardinality(Reference_Ensure(s_Value),     CARDINALITY_SINGLE)
+ *     Reference_cardinality(Reference_Ensure(s_OPERATOR),  CARDINALITY_ONE),
+ *     Reference_cardinality(Reference_Ensure(s_Value),     CARDINALITY_ONE)
  *     NULL
  * });
  * * ParsingElement* s_Expr    = Rule_new((Reference*[3]),{
- *     Reference_cardinality(Reference_Ensure(s_Value),  CARDINALITY_SINGLE),
+ *     Reference_cardinality(Reference_Ensure(s_Value),  CARDINALITY_ONE),
  *     Reference_cardinality(Reference_Ensure(s_Suffix), CARDINALITY_MANY_OPTIONAL)
  *     NULL
  * });
@@ -621,13 +661,21 @@ void ParsingStep_destroy( ParsingStep* this );
 // as children.
 #define GROUP(...)        Group_new((Reference*[(VA_ARGS_COUNT(__VA_ARGS__)+1)]){__VA_ARGS__,NULL})
 
+// @macro
+// Creates a `Procedure` parsing element
+#define PROCEDURE(f)      Procedure_new(f)
+
+// @macro
+// Creates a `Condition` parsing element
+#define CONDITION(f)      Condition_new(f)
+
 /*
  * Symbol reference & cardinality
  * ------------------------------
 */
 
 // @macro
-// Refers to symbol `n`, wrapping it in a `CARDINALITY_SINGLE` reference
+// Refers to symbol `n`, wrapping it in a `CARDINALITY_ONE` reference
 #define _S(n)             ONE(s_ ## n)
 
 // @macro
@@ -641,6 +689,10 @@ void ParsingStep_destroy( ParsingStep* this );
 // @macro
 // Refers to symbol `n`, wrapping it in a `CARDINALITY_MANY_OPTIONAL` reference
 #define _MO(n)            MANY_OPTIONAL(s_ ## n)
+
+// @macro
+// Sets the name of refernce `r` to be v
+#define _AS(r,v)          Reference_name(Reference_Ensure(r), v)
 
 /*
  * Supporting macros
@@ -656,9 +708,9 @@ void ParsingStep_destroy( ParsingStep* this );
 #define NAME(n,e)         ParsingElement_name(e,n)
 
 // @macro
-// Sets the given reference or parsing element's reference to CARDINALITY_SINGLE
+// Sets the given reference or parsing element's reference to CARDINALITY_ONE
 // If a parsing element is given, it will be automatically wrapped in a reference.
-#define ONE(v)            Reference_cardinality(Reference_Ensure(v), CARDINALITY_SINGLE)
+#define ONE(v)            Reference_cardinality(Reference_Ensure(v), CARDINALITY_ONE)
 
 // @macro
 // Sets the given reference or parsing element's reference to CARDINALITY_OPTIONAL

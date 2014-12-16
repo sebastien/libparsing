@@ -309,7 +309,7 @@ Reference* Reference_New(ParsingElement* element){
 Reference* Reference_new() {
 	__ALLOC(Reference, this);
 	this->type        = Reference_T;
-	this->cardinality = CARDINALITY_SINGLE;
+	this->cardinality = CARDINALITY_ONE;
 	this->name        = "_";
 	this->element     = NULL;
 	this->next        = NULL;
@@ -329,11 +329,11 @@ Match* Reference_recognize(Reference* this, ParsingContext* context) {
 		if (Match_isSuccess(match)) {
 			DEBUG("Reference_recognize: Matched %s at %zd", this->element->name, context->iterator->offset);
 			if (count == 0) {
-				// If it's the first match and we're in a SINGLE reference
+				// If it's the first match and we're in a ONE reference
 				// we force has_more to FALSE and exit the loop.
 				result = match;
 				head   = result;
-				if (this->cardinality == CARDINALITY_SINGLE ) {
+				if (this->cardinality == CARDINALITY_ONE ) {
 					break;
 				}
 			} else {
@@ -348,7 +348,7 @@ Match* Reference_recognize(Reference* this, ParsingContext* context) {
 	}
 	// Depending on the cardinality, we might return FAILURE, or not
 	switch (this->cardinality) {
-		case CARDINALITY_SINGLE:
+		case CARDINALITY_ONE:
 			// For single, we return the match as-is
 			return result;
 		case CARDINALITY_OPTIONAL:
@@ -582,6 +582,47 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 
 // ----------------------------------------------------------------------------
 //
+// PROCEDURE
+//
+// ----------------------------------------------------------------------------
+
+ParsingElement* Procedure_new(ProcedureCallback c) {
+	ParsingElement* this = ParsingElement_new(NULL);
+	this->config = c;
+	return this;
+}
+
+Match*  Procedure_recognize(ParsingElement* this, ParsingContext* context) {
+	if (this->config != NULL) {
+		((ProcedureCallback)(this->config))(this, context);
+	}
+	return Match_Success(0);
+}
+
+// ----------------------------------------------------------------------------
+//
+// CONDITION
+//
+// ----------------------------------------------------------------------------
+
+ParsingElement* Condition_new(ConditionCallback c) {
+	ParsingElement* this = ParsingElement_new(NULL);
+	this->config = c;
+	return this;
+}
+
+Match*  Condition_recognize(ParsingElement* this, ParsingContext* context) {
+	if (this->config != NULL) {
+		return ((ConditionCallback)this->config)(this, context);
+	} else {
+		return Match_Success(0);
+	}
+}
+
+
+
+// ----------------------------------------------------------------------------
+//
 // PARSING STEP
 //
 // ----------------------------------------------------------------------------
@@ -662,50 +703,32 @@ Match* Grammar_parseFromIterator( Grammar* this, Iterator* iterator ) {
 //
 // ----------------------------------------------------------------------------
 
+void Utilities_indent( ParsingElement* this, ParsingContext* context ) {
+	//int depth = ParsingContext_getVariable("indent", 0, sizeof(int)).asInt;
+	//ParsingContext_setVariable("indent", depth + 1,     sizeof(int));
+}
+
+void Utilities_dedent( ParsingElement* this, ParsingContext* context ) {
+	//int depth = ParsingContext_getVariable("indent", 0, sizeof(int)).asInt;
+	//ParsingContext_setVariable("indent", depth - 1,     sizeof(int));
+}
+
+Match* Utilites_checkIndent( ParsingElement *this, ParsingContext* context ) {
+	// Variable tabs = ParsingContext_getVariable("tabs", NULL, sizeof(int));
+	// // TokenMatch_group(0)
+	// int depth     = ParsingContext_getVariable("indent", 0, sizeof(int)).asInt;
+	// if (depth != tabs_count) {
+	// 	return FAILURE;
+	// } else {
+	// 	return Match_Success();
+	// }
+	return FAILURE;
+}
+
 int main (int argc, char* argv[]) {
 
-	// We defined the grammar
+	// We define the grammar
 	Grammar* g                 = Grammar_new();
-
-	/*
-	ParsingElement* s_NUMBER   = NAME("NUMBER",   Token_new("([0-9]+)"));
-	ParsingElement* s_VARIABLE = NAME("VARIABLE", Token_new("([A-Z]+)"));
-	ParsingElement* s_OP       = NAME("OP",       Token_new("\\-|\\+|\\*"));
-	ParsingElement* s_SPACES   = NAME("SPACES",   Token_new("([ ]+)"));
-	// ParsingElement* s_NUMBER   = NAME("NUMBER",   Word_new("NUM"));
-	// ParsingElement* s_VARIABLE = NAME("VARIABLE", Word_new("VAR"));
-	// ParsingElement* s_OP       = NAME("OP",       Word_new("OP"));
-	// ParsingElement* s_SPACES   = NAME("SPACES",   Word_new(" "));
-
-	// FIXME: This is not very elegant, but I did not really find a better
-	// way. I tried passing the elements as an array, but it doesn't really
-	// work.
-	//
-	// Alternative:
-	// GROUP(s_Value) ONE(s_NUMBER) MANY(s_VARIABLE) END_GROUP
-	//
-	//
-	// What we should aim:
-	//
-	// SYMBOL(Value, GROUP( s_NUMBER,      s_VARIABLE ));
-	// SYMBOL(Value, RULE ( s_NUMBER, MANY(s_VARIABLE) ));
-
-	ParsingElement* s_Value    = NAME("Value", Group_new((Reference*[3]){
-		ONE(s_NUMBER),
-		ONE(s_VARIABLE),
-		NULL
-	}));
-
-	ParsingElement* s_Suffix   = NAME("Suffix", Rule_new ((Reference*[3]){
-		ONE(s_OP),
-		ONE(s_Value),
-		NULL
-	}));
-
-	ParsingElement* s_Expr    = NAME("Expr", Rule_new (NULL));
-		ParsingElement_add( s_Expr, ONE  (s_Value)  );
-		ParsingElement_add( s_Expr, MANY (s_Suffix) );
-	*/
 
 	// ========================================================================
 	// TOKENS
@@ -759,8 +782,145 @@ int main (int argc, char* argv[]) {
 	SYMBOL (SPECIAL_NAME,      TOKEN("@[A-Za-z][A-Za-z0-9_\\-]*"))
 	SYMBOL (SPECIAL_FILTER,    TOKEN("\\[[^\\]]+\\]"))
 
-	g->axiom = s_SELECTOR_SUFFIX;
+	// ========================================================================
+	// INDENTATION
+	// ========================================================================
+
+	SYMBOL (Indent,           PROCEDURE (Utilities_indent))
+	SYMBOL (Dedent,           PROCEDURE (Utilities_dedent))
+	SYMBOL (CheckIndent,      RULE      ( _AS(_S(TABS),"tabs"), ONE(CONDITION(Utilites_checkIndent) )))
+	SYMBOL (Attribute,        RULE      (
+		_AS( _S(ATTRIBUTE), "name"), _AS( OPTIONAL( RULE( _S(EQUAL), _S(ATTRIBUTE_VALUE)) ), "value")
+	));
+
+	SYMBOL (Attributes,       RULE      (
+		_S(LSBRACKET),
+		_AS( _S(Attribute), "head"),
+		_AS( OPTIONAL(RULE( _S(COMMA), _S(Attribute))), "tail"),
+		_S(RSBRACKET)
+	));
+
+	SYMBOL (Selector,         RULE       (
+		_AS (OPTIONAL( GROUP( _S(SELF), _S(NODE) )), "scope"),
+		_AS (_O      (NODE_ID),                     "nid"),
+		_AS (_MO     (NODE_CLASS),                  "nclass"),
+		_AS (_O      (Attributes),                  "attributes"),
+		_AS (_MO     (SELECTOR_SUFFIX),             "suffix")
+	));
+
+	SYMBOL  (SelectorNarrower, RULE         (
+		_AS(_S(SELECTION_OPERATOR), "op"),
+		_AS(_S(Selector),           "sel")
+	));
+
+	SYMBOL  (Selection,        RULE       (
+		_AS( _S (Selector),         "head"),
+		_AS( _MO(SelectorNarrower), "tail")
+	));
+
+	SYMBOL (SelectionList,    RULE       (
+		_AS(_S(Selection), "head"),
+		_AS(MANY_OPTIONAL(RULE(_S(COMMA), _S(Selection))), "tail")
+	));
+
+	// ========================================================================
+	// VALUES & EXPRESSIONS
+	// ========================================================================
+
+	SYMBOL      (Suffixes, NULL)
+	SYMBOL      (Number,           RULE(
+		_AS( _S(NUMBER), "value"),
+		_AS( _O(UNIT),   "unit")
+	))
+	SYMBOL     (String,           GROUP(_S(STRING_UQ),      _S(STRING_SQ), _S(STRING_DQ)))
+	SYMBOL     (Value,            GROUP(_S(Number),         _S(COLOR_HEX), _S(COLOR_RGB), _S(REFERENCE), _S(String)))
+	SYMBOL     (Parameters,       RULE (_S(VARIABLE_NAME), MANY_OPTIONAL(RULE(_S(COMMA), _S(VARIABLE_NAME)))))
+	SYMBOL     (Arguments,        RULE (_S(Value),         MANY_OPTIONAL(RULE(_S(COMMA), _S(Value)))))
+
+	SYMBOL     (Expression, NULL)
+
+	//  NOTE: We use Prefix and Suffix to avoid recursion, which creates a lot
+	//  of problems with parsing expression grammars
+	// SYMBOL     (Prefix, _S(Expression))
+	SYMBOL     (Prefix, GROUP(
+		_S(Value),
+		ONE(RULE(_S(LP), _S(Expression), _S(RP)))
+	))
+
+	// FIXME: Add a macro to support that
+	ParsingElement_add(s_Expression, ONE(RULE( _S(Prefix), _MO(Suffixes))));
+
+	SYMBOL     (Invocation,     RULE(
+		_AS( OPTIONAL(RULE( _S(DOT), _S(METHOD_NAME))), "method"),
+		_S(LP), _AS(_O(Arguments), "arguments"), _S(RP)
+	));
+	SYMBOL     (InfixOperation, RULE(_S(INFIX_OPERATOR), _S(Expression)))
+
+	// FIXME: Add a macro to support that
+	ParsingElement_add(s_Suffixes, ONE(GROUP( _S(InfixOperation), _S(Invocation))));
+
+	// ========================================================================
+	// LINES (BODY)
+	// ========================================================================
+
+	SYMBOL     (Comment,          RULE(_M(COMMENT), _S(EOL)))
+	SYMBOL     (Include,          RULE(_S(INCLUDE), _S(PATH), _S(EOL)))
+	SYMBOL     (Declaration,      RULE(_AS(_S(VARIABLE_NAME), "name"), _S(EQUAL), _AS(_S(Expression), "value"), _S(EOL)))
+
+	// ========================================================================
+	// OPERATIONS
+	// ========================================================================
+
+	SYMBOL     (Assignment,       RULE(
+		_AS(_S(CSS_PROPERTY), "name"),
+		_S(COLON),
+		_AS(_M(Expression), "values"),
+		_AS(_O(IMPORTANT), "important")
+	))
+	SYMBOL     (MacroInvocation,  RULE(_S(MACRO_NAME),   _S(LP), _O(Arguments), _S(RP)))
+
+	// ========================================================================
+	// BLOCK STRUCTURE
+	// ========================================================================
+
+	SYMBOL  (Code, NULL)
+
+	// FIXME: Manage memoization here
+	// NOTE: If would be good to sort this out and allow memoization for some
+	// of the failures. A good idea would be to append the indentation value to
+	// the caching key.
+	// .processMemoizationKey(lambda _,c:_ + ":" + c.getVariables().get("requiredIndent", 0))
+	SYMBOL    (Statement,     RULE(
+		_S(CheckIndent), ONE(GROUP(_S(Assignment), _S(MacroInvocation), _S(COMMENT))), _S(EOL)
+	))
+
+	SYMBOL    (Block,         RULE(
+		_S(CheckIndent), _AS(GROUP(_S(PERCENTAGE), _S(SelectionList)), "selector"), _O(COLON), _S(EOL),
+		_S(Indent), _AS(_MO(Code), "code"), _S(Dedent)
+	))
+	ParsingElement_add(s_Code, ONE(GROUP(_S(Block), _S(Statement))));
+
+	SYMBOL    (SpecialDeclaration,   RULE(
+		_S(CheckIndent), _S(SPECIAL_NAME), _O(SPECIAL_FILTER), _O(Parameters), _S(COLON)
+	))
+	SYMBOL    (SpecialBlock,         RULE(
+		_S(CheckIndent), _S(SpecialDeclaration), _O(EOL), _S(Indent), _MO(Code), _S(Dedent)
+	))
+
+	// ========================================================================
+	// AXIOM
+	// ========================================================================
+
+	SYMBOL     (Source,  GROUP(
+		_S(Comment), _S(Block), _S(SpecialBlock), _S(Declaration), _S(Include)
+	))
+
+	g->axiom = s_Source;
 	g->skip  = s_SPACES;
+
+	// ========================================================================
+	// MAIN
+	// ========================================================================
 
 	Iterator* iterator = Iterator_new();
 	const char* path = "test.txt";
