@@ -10,6 +10,12 @@ parsing: build/parsing.o
 	gcc $< $(LDFLAGS) -o $@
 	chmod +x $@
 
+run: parsing
+	./parsing
+
+debug: parsing
+	gdb ./parsing
+	
 experiment/%: build/%.o build/parsing.o
 	gcc $< $(LDFLAGS) -o $@
 	chmod +x $@

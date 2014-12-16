@@ -146,7 +146,7 @@ size_t Iterator_remaining( Iterator* this ) {
 // @method
 // Moves the iterator to the given offset
 extern inline bool Iterator_moveTo ( Iterator* this, size_t offset ) {
-	return this->move(this, offset - this->offset );
+	return this->move(this, this->offset - offset);
 }
 
 #ifndef ITERATOR_BUFFER_AHEAD
@@ -314,6 +314,7 @@ inline Match* ParsingElement_process( ParsingElement* this, Match* match ) {
 // @method
 // Transparently sets the name of the element
 extern inline ParsingElement* ParsingElement_name( ParsingElement* this, const char* name ) {
+	if (this == NULL) {return this;}
 	this->name = name;
 	return this;
 }

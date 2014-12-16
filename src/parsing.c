@@ -65,7 +65,7 @@ bool Iterator_open( Iterator* this, const char *path ) {
 		((char*)this->buffer)[this->length] = '\0';
 		assert(strlen(((char*)this->buffer)) == 0);
 		FileInput_preload(this);
-		DEBUG("Iterator_open: strlen(buffer)=%zd/%zd", strlen((char*)this->buffer), this->length);
+		// DEBUG("Iterator_open: strlen(buffer)=%zd/%zd", strlen((char*)this->buffer), this->length);
 		this->move   = FileInput_move;
 		ENSURE(input->file) {};
 		return TRUE;
@@ -127,10 +127,10 @@ size_t FileInput_preload( Iterator* this ) {
 		// We want to read as much as possible so that we fill the buffer
 		size_t to_read        = this->length - left;
 		size_t read           = fread((void*)this->buffer + left, sizeof(char), to_read, input->file);
-		DEBUG("FileInput_preload: trying to get %zd bytes from input, got %zd", to_read, read);
+		// DEBUG("FileInput_preload: trying to get %zd bytes from input, got %zd", to_read, read);
 		left = this->available= left + read;
 		if (read == 0) {
-			DEBUG("FileInput_preload: End of file reached with %zd bytes available", this->available);
+			// DEBUG("FileInput_preload: End of file reached with %zd bytes available", this->available);
 			this->status = STATUS_INPUT_ENDED;
 		}
 	}
@@ -155,7 +155,7 @@ bool FileInput_move   ( Iterator* this, size_t n ) {
 				if (*(this->current) == this->separator) {this->lines++;}
 				c--;
 			}
-			DEBUG("FileInput_move: +%zd/%zd left, current offset %zd", n, left, this->offset);
+			DEBUG("[>] %zd+%zd == %zd (%zd bytes left)", this->offset - n, n, this->offset, left);
 			if (n>left) {
 				this->status == STATUS_INPUT_ENDED;
 				return FALSE;
@@ -177,6 +177,7 @@ bool FileInput_move   ( Iterator* this, size_t n ) {
 		this->current = (((char*)this->current) + n);
 		this->offset += n;
 		this->status  = STATUS_PROCESSING;
+		DEBUG("[<] %zd%zd == %zd ", this->offset - n, n, this->offset);
 		return TRUE;
 	}
 }
@@ -247,11 +248,10 @@ ParsingElement* ParsingElement_new(Reference* children[]) {
 	this->children  = NULL;
 	this->recognize = NULL;
 	this->process   = NULL;
-	if (children != NULL ) {
+	if (children != NULL && *children != NULL) {
 		Reference* r = Reference_Ensure(*children);
-		DEBUG("Array length: %zd", sizeof(children))
 		while ( r != NULL ) {
-			DEBUG("Adding child: %s", r->element->name)
+			DEBUG("ParsingElement: %s adding child: %s", this->name, r->element->name)
 			// FIXME: Make sure how memory is managed here
 			ParsingElement_add(this, r);
 			r = *(++children);
@@ -327,7 +327,7 @@ Match* Reference_recognize(Reference* this, ParsingContext* context) {
 		// We ask the element to recognize the current iterator's position
 		match = this->element->recognize(this->element, context);
 		if (Match_isSuccess(match)) {
-			DEBUG("Reference_recognize: Matched %s at %zd", this->element->name, context->iterator->offset);
+			// DEBUG("Reference_recognize: Matched %s at %zd", this->element->name, context->iterator->offset);
 			if (count == 0) {
 				// If it's the first match and we're in a ONE reference
 				// we force has_more to FALSE and exit the loop.
@@ -392,8 +392,10 @@ Match* Word_recognize(ParsingElement* this, ParsingContext* context) {
 		// NOTE: You can see here that the word actually consumes input
 		// and moves the iterator.
 		context->iterator->move(context->iterator, config->length);
+		DEBUG("[✓] %s:%s matched at %zd", this->name, ((Word*)this->config)->word, context->iterator->offset);
 		return Match_Success(config->length);
 	} else {
+		DEBUG("    %s:%s failed at %zd", this->name, ((Word*)this->config)->word, context->iterator->offset);
 		return FAILURE;
 	}
 }
@@ -467,8 +469,8 @@ Match* Token_recognize(ParsingElement* this, ParsingContext* context) {
 			case PCRE_ERROR_NOMEMORY     : ERROR("Token:%s Ran out of memory", config->expr);                       break;
 			default                      : ERROR("Token:%s Unknown error", config->expr);                           break;
 		};
+		DEBUG("    %s:%s failed at %zd", this->name, config->expr, context->iterator->offset);
 	} else {
-		// DEBUG("Token: %s matched %d on %s", config->expr, r, context->iterator->buffer);
 		if(r == 0) {
 			ERROR("Token: %s many substrings matched\n", config->expr);
 			// Set rc to the max number of substring matches possible.
@@ -478,9 +480,11 @@ Match* Token_recognize(ParsingElement* this, ParsingContext* context) {
 			// in `man pcre_exec`.
 			r = vector_length / 3;
 		}
-		result           = Match_new();
-		result->length   = vector[1];
+		// FIXME: Make sure it is the length and not the end offset
+		result           = Match_Success(vector[1]);
+		DEBUG("[✓] %s:%s matched at %zd", this->name, config->expr, context->iterator->offset);
 		context->iterator->move(context->iterator,result->length);
+		assert(Match_isSuccess(result));
 
 		// TokenMatch* data = _ALLOC(TokenMatch);
 		// data->groups     = r;
@@ -556,7 +560,7 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 	// data, the Reference_recognize will take care of it.
 	while (child != NULL) {
 		Match* match = Reference_recognize(child, context);
-		DEBUG("Rule_recognize:%s[%d]=%s matched:%d at %zd", this->name, step, child->element->name, Match_isSuccess(match), context->iterator->offset);
+		// DEBUG("Rule:%s[%d]=%s %s at %zd", this->name, step, child->element->name, (Match_isSuccess(match) ? "matched" : "failed"), context->iterator->offset);
 		if (!Match_isSuccess(match)) {
 			ParsingElement* skip = context->grammar->skip;
 			Match* skip_match    = skip->recognize(skip, context);
@@ -574,7 +578,8 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 		child = child->next;
 		step++;
 	}
-	if (!Match_isSuccess(result)) {
+	if (!Match_isSuccess(result) && offset != context->iterator->offset) {
+		// DEBUG("Rule:%s failed, moving to offset: %zd", this->name, offset);
 		Iterator_moveTo(context->iterator, offset);
 	}
 	return result;
@@ -589,6 +594,7 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 ParsingElement* Procedure_new(ProcedureCallback c) {
 	ParsingElement* this = ParsingElement_new(NULL);
 	this->config = c;
+	this->recognize = Procedure_recognize;
 	return this;
 }
 
@@ -608,6 +614,7 @@ Match*  Procedure_recognize(ParsingElement* this, ParsingContext* context) {
 ParsingElement* Condition_new(ConditionCallback c) {
 	ParsingElement* this = ParsingElement_new(NULL);
 	this->config = c;
+	this->recognize = Condition_recognize;
 	return this;
 }
 
@@ -738,8 +745,8 @@ int main (int argc, char* argv[]) {
 	SYMBOL (TABS,              TOKEN("\\t*"))
 	SYMBOL (EMPTY_LINES,       TOKEN("([ \\t]*\\n)+"))
 	SYMBOL (INDENT,            TOKEN("\\t+"))
-	SYMBOL (COMMENT,           TOKEN("[ \\t]*//[^\n]*"))
-	SYMBOL (EOL,               TOKEN("[ ]*\n(\\s*\n)*"))
+	SYMBOL (COMMENT,           TOKEN("[ \\t]*//[^\\n]*"))
+	SYMBOL (EOL,               TOKEN("[ ]*\\n(\\s*\\n)*"))
 	SYMBOL (NUMBER,            TOKEN("-?(0x)?[0-9]+(\\.[0-9]+)?"))
 	SYMBOL (ATTRIBUTE,         TOKEN("[a-zA-Z\\-_][a-zA-Z0-9\\-_]*"))
 	SYMBOL (ATTRIBUTE_VALUE,   TOKEN("\"[^\"]*\"|'[^']*'|[^,\\]]+"))
@@ -762,7 +769,7 @@ int main (int argc, char* argv[]) {
 	SYMBOL (PERCENTAGE,        TOKEN("\\d+(\\.\\d+)?%"))
 	SYMBOL (STRING_SQ,         TOKEN("'((\\\\'|[^'\\n])*)'"))
 	SYMBOL (STRING_DQ,         TOKEN("\"((\\\\\"|[^\"\\n])*)\""))
-	SYMBOL (STRING_UQ,         TOKEN("[^\\s\n\\*;]+"))
+	SYMBOL (STRING_UQ,         TOKEN("[^\\s\\n\\*;]+"))
 	SYMBOL (INFIX_OPERATOR,    TOKEN("[\\-\\+\\*\\/]"))
 
 	SYMBOL (NODE,              TOKEN("\\*|([a-zA-Z][a-zA-Z0-9\\-]*)"))
@@ -827,7 +834,7 @@ int main (int argc, char* argv[]) {
 	// VALUES & EXPRESSIONS
 	// ========================================================================
 
-	SYMBOL      (Suffixes, NULL)
+	SYMBOL      (Suffixes, GROUP(NULL))
 	SYMBOL      (Number,           RULE(
 		_AS( _S(NUMBER), "value"),
 		_AS( _O(UNIT),   "unit")
@@ -837,7 +844,7 @@ int main (int argc, char* argv[]) {
 	SYMBOL     (Parameters,       RULE (_S(VARIABLE_NAME), MANY_OPTIONAL(RULE(_S(COMMA), _S(VARIABLE_NAME)))))
 	SYMBOL     (Arguments,        RULE (_S(Value),         MANY_OPTIONAL(RULE(_S(COMMA), _S(Value)))))
 
-	SYMBOL     (Expression, NULL)
+	SYMBOL     (Expression, RULE(NULL))
 
 	//  NOTE: We use Prefix and Suffix to avoid recursion, which creates a lot
 	//  of problems with parsing expression grammars
@@ -883,7 +890,7 @@ int main (int argc, char* argv[]) {
 	// BLOCK STRUCTURE
 	// ========================================================================
 
-	SYMBOL  (Code, NULL)
+	SYMBOL  (Code, GROUP(NULL))
 
 	// FIXME: Manage memoization here
 	// NOTE: If would be good to sort this out and allow memoization for some
@@ -923,7 +930,7 @@ int main (int argc, char* argv[]) {
 	// ========================================================================
 
 	Iterator* iterator = Iterator_new();
-	const char* path = "test.txt";
+	const char* path = "texto.pcss";
 
 	DEBUG("Opening file: %s", path)
 	if (!Iterator_open(iterator, path)) {
