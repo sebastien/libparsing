@@ -7,5 +7,5 @@ cut-after <FILE>... <INDEX>
 """
 i = int(sys.argv[-1])
 for a in sys.argv[1:-1]:
-	print "%-20s:%04d:%s" % (a, i, repr(open(a).read()[i:i+100])[1:-1])
+	print "%s#%d|%s..." % (a, i, repr(open(a).read()[i:i+100])[1:-1])
 # EOF

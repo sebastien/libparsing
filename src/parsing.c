@@ -137,13 +137,15 @@ size_t FileInput_preload( Iterator* this ) {
 	return left;
 }
 
-bool FileInput_move   ( Iterator* this, size_t n ) {
+bool FileInput_move   ( Iterator* this, int n ) {
 	if ( n == 0) {
+		DEBUG("SAME", NULL)
 		// We're not moving position
 		return TRUE;
 	} else if ( n >= 0 ) {
 		// We're moving forward, so we want to know if there is at one more element
 		// in the file input.
+		DEBUG("FORWARD: %zd", n)
 		size_t left = FileInput_preload(this);
 		if (left > 0) {
 			size_t c = n > left ? left : n;
@@ -169,6 +171,7 @@ bool FileInput_move   ( Iterator* this, size_t n ) {
 			return FALSE;
 		}
 	} else {
+		DEBUG("BACKWARD", NULL)
 		// The assert below is temporary, once we figure out when to free the input data
 		// that we don't need anymore this would work.
 		ASSERT(this->length > this->offset, "FileInput_move: offset is greater than length (%zd > %zd)", this->offset, this->length);
@@ -520,6 +523,7 @@ ParsingElement* Group_new(Reference* children[]) {
 }
 
 Match* Group_recognize(ParsingElement* this, ParsingContext* context){
+	DEBUGIF(strcmp(this->name, "_") != 0,"--- Group:%s at %zd", this->name, context->iterator->offset);
 	Reference* child = this->children;
 	Match*     match;
 	size_t     offset = context->iterator->offset;
@@ -534,7 +538,11 @@ Match* Group_recognize(ParsingElement* this, ParsingContext* context){
 		}
 	}
 	// If no child has succeeded, the whole group fails
-	Iterator_moveTo(context->iterator, offset);
+	if (context->iterator->offset != offset ) {
+		DEBUGIF(strcmp(this->name, "_") != 0,"[!] %s failed backtracking to %zd", this->name, offset);
+		Iterator_moveTo(context->iterator, offset);
+		assert( context->iterator->offset == offset );
+	}
 	return FAILURE;
 }
 
@@ -551,6 +559,7 @@ ParsingElement* Rule_new(Reference* children[]) {
 }
 
 Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
+	DEBUGIF(strcmp(this->name, "_") != 0, "--- Rule:%s at %zd", this->name, context->iterator->offset);
 	Reference* child  = this->children;
 	Match*     result = NULL;
 	Match*     last   = NULL;
@@ -564,9 +573,11 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 		if (!Match_isSuccess(match)) {
 			ParsingElement* skip = context->grammar->skip;
 			Match* skip_match    = skip->recognize(skip, context);
-			while (Match_isSuccess(skip_match)){skip_match = skip->recognize(skip, context);}
-			match = Reference_recognize(child, context);
+			int    skip_count    = 0;
+			while (Match_isSuccess(skip_match)){skip_match = skip->recognize(skip, context); skip_count++; }
+			if (skip_count > 0) {match = Reference_recognize(child, context);}
 			if (!Match_isSuccess(match)) {
+				result = FAILURE;
 				break;
 			}
 		}
@@ -578,9 +589,12 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 		child = child->next;
 		step++;
 	}
+	DEBUGIF( offset != context->iterator->offset && strcmp(this->name, "_") != 0 && !Match_isSuccess(result), "[!] %s[%d] failed at %zd", this->name, step, context->iterator->offset)
+	DEBUGIF( strcmp(this->name, "_") != 0 &&  Match_isSuccess(result), "[✓] %s[%d] matched at %zd", this->name, step, context->iterator->offset)
 	if (!Match_isSuccess(result) && offset != context->iterator->offset) {
-		// DEBUG("Rule:%s failed, moving to offset: %zd", this->name, offset);
+		DEBUG( "... backtracking to %zd", offset)
 		Iterator_moveTo(context->iterator, offset);
+		assert( context->iterator->offset == offset );
 	}
 	return result;
 }
@@ -620,9 +634,15 @@ ParsingElement* Condition_new(ConditionCallback c) {
 
 Match*  Condition_recognize(ParsingElement* this, ParsingContext* context) {
 	if (this->config != NULL) {
-		return ((ConditionCallback)this->config)(this, context);
+		Match* result = ((ConditionCallback)this->config)(this, context);
+		DEBUGIF(Match_isSuccess(result),  "[✓] Condition %s matched at %zd", this->name, context->iterator->offset)
+		DEBUGIF(!Match_isSuccess(result), "[1] Condition %s failed at %zd",  this->name, context->iterator->offset)
+		return  result;
 	} else {
-		return Match_Success(0);
+		DEBUGIF("[✓] Condition %s matched by default at %zd", this->name, context->iterator->offset)
+		Match* result = Match_Success(0);
+		assert(Match_isSuccess(result));
+		return  result;
 	}
 }
 
@@ -729,7 +749,7 @@ Match* Utilites_checkIndent( ParsingElement *this, ParsingContext* context ) {
 	// } else {
 	// 	return Match_Success();
 	// }
-	return FAILURE;
+	return Match_Success(0);
 }
 
 int main (int argc, char* argv[]) {
@@ -872,7 +892,11 @@ int main (int argc, char* argv[]) {
 
 	SYMBOL     (Comment,          RULE(_M(COMMENT), _S(EOL)))
 	SYMBOL     (Include,          RULE(_S(INCLUDE), _S(PATH), _S(EOL)))
-	SYMBOL     (Declaration,      RULE(_AS(_S(VARIABLE_NAME), "name"), _S(EQUAL), _AS(_S(Expression), "value"), _S(EOL)))
+	SYMBOL     (Declaration,      RULE(
+		_AS(_S(VARIABLE_NAME), "name"),
+		_S(EQUAL),
+		_AS(_S(Expression), "value"), _S(EOL)
+	))
 
 	// ========================================================================
 	// OPERATIONS
@@ -918,9 +942,10 @@ int main (int argc, char* argv[]) {
 	// AXIOM
 	// ========================================================================
 
-	SYMBOL     (Source,  GROUP(
-		_S(Comment), _S(Block), _S(SpecialBlock), _S(Declaration), _S(Include)
-	))
+	SYMBOL     (Source,  GROUP(MANY_OPTIONAL(GROUP(
+		_S(Block)
+	//	_S(Comment), _S(Block), _S(SpecialBlock), _S(Declaration), _S(Include)
+	))))
 
 	g->axiom = s_Source;
 	g->skip  = s_SPACES;

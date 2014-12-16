@@ -97,7 +97,7 @@ typedef struct Iterator {
 	// FIXME: The head should be freed when the offsets have been parsed,
 	// no need to keep in memory stuff we won't need.
 	void*          input;     // Pointer to the input source
-	bool          (*move) (struct Iterator*, size_t n); // Plug-in function to move to the previous/next positions
+	bool          (*move) (struct Iterator*, int n); // Plug-in function to move to the previous/next positions
 } Iterator;
 
 // @type FileInput
@@ -146,7 +146,8 @@ size_t Iterator_remaining( Iterator* this ) {
 // @method
 // Moves the iterator to the given offset
 extern inline bool Iterator_moveTo ( Iterator* this, size_t offset ) {
-	return this->move(this, this->offset - offset);
+	DEBUG("Moving by %zd", offset - this->offset );
+	return this->move(this, offset - this->offset );
 }
 
 #ifndef ITERATOR_BUFFER_AHEAD
@@ -172,7 +173,7 @@ size_t FileInput_preload( Iterator* this );
 // Advances/rewinds the given iterator, loading new data from the file input
 // whenever there is not `ITERATOR_BUFFER_AHEAD` data elements
 // ahead of the iterator's current position.
-bool FileInput_move   ( Iterator* this, size_t n );
+bool FileInput_move   ( Iterator* this, int n );
 
 /**
  * Grammar
