@@ -146,7 +146,6 @@ size_t Iterator_remaining( Iterator* this ) {
 // @method
 // Moves the iterator to the given offset
 extern inline bool Iterator_moveTo ( Iterator* this, size_t offset ) {
-	DEBUG("Moving by %zd", offset - this->offset );
 	return this->move(this, offset - this->offset );
 }
 

@@ -123,12 +123,16 @@ size_t FileInput_preload( Iterator* this ) {
 		this->length += this->length;
 		this->buffer  = realloc((void*)this->buffer, this->length + 1);
 		this->current = this->buffer + delta;
+		// We make sure we add a trailing \0 to the buffer
 		this->buffer[this->length] = '\0';
 		// We want to read as much as possible so that we fill the buffer
-		size_t to_read        = this->length - left;
-		size_t read           = fread((void*)this->buffer + left, sizeof(char), to_read, input->file);
-		// DEBUG("FileInput_preload: trying to get %zd bytes from input, got %zd", to_read, read);
-		left = this->available= left + read;
+		size_t to_read         = this->length - left;
+		size_t read            = fread((void*)this->buffer + this->available, sizeof(char), to_read, input->file);
+		this->available        += read;
+		left                   += read;
+		DEBUG("<<< FileInput: read %zd bytes from input, available %zd, remaining %zd / left %zd", read, this->available, Iterator_remaining(this), left);
+		assert(Iterator_remaining(this) == left);
+		assert(Iterator_remaining(this) >= read);
 		if (read == 0) {
 			// DEBUG("FileInput_preload: End of file reached with %zd bytes available", this->available);
 			this->status = STATUS_INPUT_ENDED;
@@ -139,16 +143,14 @@ size_t FileInput_preload( Iterator* this ) {
 
 bool FileInput_move   ( Iterator* this, int n ) {
 	if ( n == 0) {
-		DEBUG("SAME", NULL)
 		// We're not moving position
 		return TRUE;
 	} else if ( n >= 0 ) {
 		// We're moving forward, so we want to know if there is at one more element
 		// in the file input.
-		DEBUG("FORWARD: %zd", n)
 		size_t left = FileInput_preload(this);
 		if (left > 0) {
-			size_t c = n > left ? left : n;
+			int c = n > left ? left : n;
 			// We have enough space left in the buffer to read at least one character.
 			// We increase the head, copy
 			while (c > 0) {
@@ -157,7 +159,7 @@ bool FileInput_move   ( Iterator* this, int n ) {
 				if (*(this->current) == this->separator) {this->lines++;}
 				c--;
 			}
-			DEBUG("[>] %zd+%zd == %zd (%zd bytes left)", this->offset - n, n, this->offset, left);
+			DEBUG("[>] %d+%d == %zd (%zd bytes left)", ((int)this->offset) - n, n, this->offset, left);
 			if (n>left) {
 				this->status == STATUS_INPUT_ENDED;
 				return FALSE;
@@ -171,7 +173,6 @@ bool FileInput_move   ( Iterator* this, int n ) {
 			return FALSE;
 		}
 	} else {
-		DEBUG("BACKWARD", NULL)
 		// The assert below is temporary, once we figure out when to free the input data
 		// that we don't need anymore this would work.
 		ASSERT(this->length > this->offset, "FileInput_move: offset is greater than length (%zd > %zd)", this->offset, this->length);
@@ -180,7 +181,8 @@ bool FileInput_move   ( Iterator* this, int n ) {
 		this->current = (((char*)this->current) + n);
 		this->offset += n;
 		this->status  = STATUS_PROCESSING;
-		DEBUG("[<] %zd%zd == %zd ", this->offset - n, n, this->offset);
+		DEBUG("[<] %d%d == %zd (%zd available, %zd length, %zd bytes left)", ((int)this->offset) - n, n, this->offset, this->available, this->length, Iterator_remaining(this));
+		assert(Iterator_remaining(this) >= 0 - n);
 		return TRUE;
 	}
 }
@@ -712,7 +714,7 @@ Match* Grammar_parseFromIterator( Grammar* this, Iterator* iterator ) {
 	assert(this->axiom != NULL);
 	Match* match = this->axiom->recognize(this->axiom, &context);
 	if (match != FAILURE) {
-		if (Iterator_hasMore(context.iterator)) {
+		if (Iterator_hasMore(context.iterator) && Iterator_remaining(context.iterator) > 0) {
 			LOG("Partial success, parsed %zd bytes, %zd remaining", context.iterator->offset, Iterator_remaining(context.iterator));
 		} else {
 			LOG("Succeeded, parsed %zd bytes", context.iterator->offset);
