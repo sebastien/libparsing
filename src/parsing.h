@@ -103,7 +103,7 @@ typedef struct Iterator {
 // @type FileInput
 // The file input wraps information about the input file, such
 // as the `FILE` object and the `path`.
-typedef struct {
+typedef struct FileInput {
 	FILE*        file;
 	const char*  path;
 } FileInput;
@@ -112,7 +112,7 @@ typedef struct {
 // The EOL character used to count lines in an iterator context.
 iterated_t         EOL              = '\n';
 
-// @classmethod
+// @operation
 // Returns a new iterator instance with the given open file as input
 Iterator* Iterator_Open(const char* path);
 
@@ -191,7 +191,7 @@ typedef struct Reference      Reference;
 typedef struct Match          Match;
 
 // @type Grammar
-typedef struct {
+typedef struct Grammar {
 	ParsingElement*  axiom;       // The axiom
 	ParsingElement*  skip;        // The skipped element
 } Grammar;
@@ -279,7 +279,7 @@ typedef struct ParsingElement {
 } ParsingElement;
 
 
-// @classmethod
+// @operation
 // Tells if the given pointer is a pointer to a ParsingElement.
 bool         ParsingElement_Is(void *);
 const char   ParsingElement_T = 'P';
@@ -330,7 +330,7 @@ extern inline ParsingElement* ParsingElement_name( ParsingElement* this, const c
 // @type Word
 // The parsing element configuration information that is used by the
 // `Token` methods.
-typedef struct {
+typedef struct Word {
 	const char* word;
 	size_t      length;
 } Word;
@@ -355,13 +355,13 @@ Match*          Word_recognize(ParsingElement* this, ParsingContext* context);
 // @type Token
 // The parsing element configuration information that is used by the
 // `Token` methods.
-typedef struct {
+typedef struct Token {
 	const char* expr;
 	pcre*       regexp;
 	pcre_extra* extra;
 } Token;
 
-typedef struct {
+typedef struct TokenMatch {
 	int  groups;
 	int* vector;
 } TokenMatch;
@@ -411,17 +411,17 @@ typedef struct Reference {
 const char   Reference_T = 'R';
 
 //
-// @classmethod
+// @operation
 // Tells if the given pointer is a pointer to Reference
 extern inline bool Reference_Is(void * this) {
 	return this!=NULL && ((Reference*)this)->type == Reference_T;
 }
 
-// @classmethod
+// @operation
 // Ensures that the given element (or reference) is a reference.
 Reference* Reference_Ensure(void* elementOrReference);
 
-// @classmethod
+// @operation
 // Returns a new reference wrapping the given parsing element
 Reference* Reference_New(ParsingElement *);
 
@@ -487,7 +487,6 @@ Match*          Rule_recognize(ParsingElement* this, ParsingContext* context);
  * in the parsing context.
 */
 
-// @typedef ProcedureCallback
 typedef void (*ProcedureCallback)(ParsingElement* this, ParsingContext* context);
 
 // @constructor
