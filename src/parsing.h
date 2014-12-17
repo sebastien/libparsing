@@ -5,7 +5,7 @@
 // License           : BSD License
 // ----------------------------------------------------------------------------
 // Creation date     : 12-Dec-2014
-// Last modification : 16-Dec-2014
+// Last modification : 17-Dec-2014
 // ----------------------------------------------------------------------------
 
 #include <stdlib.h>
@@ -20,7 +20,7 @@
 
 #ifndef __PARSING_H__
 #define __PARSING_H__
-#define __PARSING_VERSION__ "0.1.1"
+#define __PARSING_VERSION__ "0.1.2"
 
 /**
  * == parsing.h

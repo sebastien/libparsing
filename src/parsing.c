@@ -59,6 +59,7 @@ bool Iterator_open( Iterator* this, const char *path ) {
 		assert(this->buffer == NULL);
 		this->length  = sizeof(iterated_t) * ITERATOR_BUFFER_AHEAD * 2;
 		this->buffer  = calloc(this->length + 1, 1);
+		assert(this->buffer != NULL);
 		this->current = (iterated_t*)this->buffer;
 		// We make sure we have a trailing \0 sign to stop any string parsing
 		// function to go any further.
@@ -120,8 +121,11 @@ size_t FileInput_preload( Iterator* this ) {
 		// memmove((void*)this->buffer, (void*)this->current, left);
 		// We realloc the memory to make sure we
 		size_t delta  = this->current - this->buffer;
-		this->length += this->length;
+		this->length += ITERATOR_BUFFER_AHEAD;
+		assert(this->length + 1 > 0);
+		DEBUG("<<< FileInput: growing buffer to %zd", this->length + 1)
 		this->buffer  = realloc((void*)this->buffer, this->length + 1);
+		assert(this->buffer != NULL);
 		this->current = this->buffer + delta;
 		// We make sure we add a trailing \0 to the buffer
 		this->buffer[this->length] = '\0';
@@ -130,7 +134,7 @@ size_t FileInput_preload( Iterator* this ) {
 		size_t read            = fread((void*)this->buffer + this->available, sizeof(char), to_read, input->file);
 		this->available        += read;
 		left                   += read;
-		DEBUG("<<< FileInput: read %zd bytes from input, available %zd, remaining %zd / left %zd", read, this->available, Iterator_remaining(this), left);
+		DEBUG("<<< FileInput: read %zd bytes from input, available %zd, remaining %zd", read, this->available, Iterator_remaining(this));
 		assert(Iterator_remaining(this) == left);
 		assert(Iterator_remaining(this) >= read);
 		if (read == 0) {
@@ -725,7 +729,6 @@ Match* Grammar_parseFromIterator( Grammar* this, Iterator* iterator ) {
 	return match;
 }
 
-//
 // ----------------------------------------------------------------------------
 //
 // MAIN
@@ -945,8 +948,7 @@ int main (int argc, char* argv[]) {
 	// ========================================================================
 
 	SYMBOL     (Source,  GROUP(MANY_OPTIONAL(GROUP(
-		_S(Block)
-	//	_S(Comment), _S(Block), _S(SpecialBlock), _S(Declaration), _S(Include)
+		_S(Comment), _S(Block), _S(SpecialBlock), _S(Declaration), _S(Include)
 	))))
 
 	g->axiom = s_Source;
