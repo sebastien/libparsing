@@ -6,8 +6,9 @@ SOURCES  = $(wildcard src/*.c)
 OBJECTS  = $(SOURCES:src/%.c=build/%.o)
 CC       = colorgcc
 LIBS    := libpcre
-CFLAGS  += -g -std=c11 -Wall -fPIC -DDEBUG_ENABLED
-LDFLAGS := $(shell pkg-config --cflags --libs $(LIBS))
+FLAGS    = -std=c11
+CFLAGS  += -g -Wall -fPIC -DDEBUG_ENABLED
+LDFLAGS := -shared $(shell pkg-config --cflags --libs $(LIBS))
 
 all: libparsing
 
@@ -18,7 +19,8 @@ parsing: build/parsing.o
 	chmod +x $@
 
 lib$(PROJECT).so.$(VERSION): build/parsing.o
-	$(CC) -shared -Wl,-soname,lib$(PROJECT).so.$(MAJOR) -o $@ $<
+	#$(CC) -shared -lpcre -Wl,-soname,lib$(PROJECT).so.$(MAJOR) -o $@ $<
+	$(LD) -shared -lpcre $< -o $@
 
 run: parsing
 	./parsing

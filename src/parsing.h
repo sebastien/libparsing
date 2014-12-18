@@ -130,7 +130,7 @@ bool Iterator_open( Iterator* this, const char *path );
 
 // @method
 // Tells if the iterator has more available data
-extern inline bool Iterator_hasMore( Iterator* this ) {
+inline bool Iterator_hasMore( Iterator* this ) {
 	// NOTE: This is STATUS_ENDED;
 	return this->status != 'E';
 }
@@ -145,7 +145,7 @@ size_t Iterator_remaining( Iterator* this ) {
 
 // @method
 // Moves the iterator to the given offset
-extern inline bool Iterator_moveTo ( Iterator* this, size_t offset ) {
+inline bool Iterator_moveTo ( Iterator* this, size_t offset ) {
 	return this->move(this, offset - this->offset );
 }
 
@@ -313,7 +313,7 @@ inline Match* ParsingElement_process( ParsingElement* this, Match* match ) {
 // FIXME: Maybe should inline
 // @method
 // Transparently sets the name of the element
-extern inline ParsingElement* ParsingElement_name( ParsingElement* this, const char* name ) {
+inline ParsingElement* ParsingElement_name( ParsingElement* this, const char* name ) {
 	if (this == NULL) {return this;}
 	this->name = name;
 	return this;
@@ -413,7 +413,7 @@ const char   Reference_T = 'R';
 //
 // @operation
 // Tells if the given pointer is a pointer to Reference
-extern inline bool Reference_Is(void * this) {
+inline bool Reference_Is(void * this) {
 	return this!=NULL && ((Reference*)this)->type == Reference_T;
 }
 
@@ -431,13 +431,13 @@ Reference* Reference_new();
 
 // @method
 // Sets the cardinality of this reference, returning it transprently.
-extern inline Reference* Reference_cardinality(Reference* this, char cardinality) {
+inline Reference* Reference_cardinality(Reference* this, char cardinality) {
 	assert(this!=NULL);
 	this->cardinality = cardinality;
 	return this;
 }
 
-extern inline Reference* Reference_name(Reference* this, const char* name) {
+inline Reference* Reference_name(Reference* this, const char* name) {
 	assert(this!=NULL);
 	this->name        = name;
 	return this;
