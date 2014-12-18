@@ -94,8 +94,7 @@ typedef struct Iterator {
 	size_t         lines;     // Counter for lines that have been encountered
 	size_t         length;    // Buffer length (in bytes), might be bigger than the data acquired from the input
 	size_t         available; // Available data in buffer (in bytes), always `<= length`
-	// FIXME: The head should be freed when the offsets have been parsed,
-	// no need to keep in memory stuff we won't need.
+	// FIXME: The head should be freed when the offsets have been parsed, no need to keep in memory stuff we won't need.
 	void*          input;     // Pointer to the input source
 	bool          (*move) (struct Iterator*, int n); // Plug-in function to move to the previous/next positions
 } Iterator;
@@ -273,9 +272,9 @@ typedef struct ParsingElement {
 	unsigned short id;         // The ID, assigned by the grammar, as the relative distance to the axiom
 	const char*    name;       // The parsing element's name, for debugging
 	void*          config;     // The configuration of the parsing element
-	Reference*     children;   // The parsing element's children, if any
-	Match*         (*recognize) (struct ParsingElement*, ParsingContext*);
-	Match*         (*process)   (struct ParsingElement*, ParsingContext*, Match*);
+	struct Reference*     children;   // The parsing element's children, if any
+	struct Match*         (*recognize) (struct ParsingElement*, ParsingContext*);
+	struct Match*         (*process)   (struct ParsingElement*, ParsingContext*, Match*);
 } ParsingElement;
 
 
@@ -397,8 +396,8 @@ typedef struct Reference {
 	char            type;            // Set to Reference_T, to disambiguate with ParsingElement
 	char            cardinality;     // Either ONE (default), OPTIONAL, MANY or MANY_OPTIONAL
 	const char*     name;            // The name of the reference (optional)
-	ParsingElement* element;         // The reference to the parsing element
-	Reference*      next;            // The next child reference in the parsing elements
+	struct ParsingElement* element;         // The reference to the parsing element
+	struct Reference*      next;            // The next child reference in the parsing elements
 } Reference;
 
 // @define
@@ -528,8 +527,8 @@ typedef struct ParsingOffset  ParsingOffset;
 
 // @type ParsingContext
 typedef struct ParsingContext {
-	Grammar*              grammar;      // The grammar used to parse
-	Iterator*             iterator;     // Iterator on the input data
+	struct Grammar*              grammar;      // The grammar used to parse
+	struct Iterator*             iterator;     // Iterator on the input data
 	struct ParsingOffset* offsets;      // The parsing offsets, starting at 0
 	struct ParsingOffset* current;      // The current parsing offset
 } ParsingContext;

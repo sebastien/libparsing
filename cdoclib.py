@@ -6,7 +6,35 @@ from pygments.formatters import HtmlFormatter
 
 
 __doc__ = """
-Extracts structure from specifically formatted C header files.
+Extracts structure from specifically formatted C header files, allowing to
+generate documentation & Python CFFI data files.
+
+The format is relatively simple: documentation is extracted from comments,
+and is formatted in the `texto` (markdown-like) markup language.
+
+Structural elements within the code base are prefixed with a classifier
+definition, expressed in a comment. For instance:
+
+>	// @type ParsingContext
+>	typedef struct ParsingContext {
+>		struct Grammar*       grammar;      // The grammar used to parse
+>		struct Iterator*      iterator;     // Iterator on the input data
+>		struct ParsingOffset* offsets;      // The parsing offsets, starting at 0
+>		struct ParsingOffset* current;      // The current parsing offset
+>	} ParsingContext;
+
+Here @type is the classifier, which can be one of the following:
+
+- `@define`
+- `@macro`
+- `@singleton`
+- `@shared`
+- `@type`
+- `@operation`
+- `@constructor`
+- `@destructor`
+- `@method`
+
 """
 
 RE_DOC_LINE    = re.compile("\s*//(.*)")
@@ -15,6 +43,7 @@ RE_DOC_BODY    = re.compile("\s*\*\s*(.*)")
 RE_DOC_END     = re.compile("\*/()")
 RE_STRUCTURE   = re.compile("\s*@(\w+)\s*")
 RE_EMPTY       = re.compile("^\s*$")
+RE_ANNOTATION  = re.compile("^\s*(TODO|FIXME|SEE|NOTE).+")
 
 RE_MACRO       = re.compile("#define\s+(\w+)")
 RE_RETURN      = re.compile("\s*(\w+)")
@@ -30,13 +59,13 @@ TYPE_FILE      = "F"
 SYMBOL_EXTRACTORS = dict(
 	define      = RE_MACRO,
 	macro       = RE_MACRO,
+	singleton   = RE_SINGLE,
+	shared      = RE_FUNCTION,
+	type        = RE_STRUCT,
+	operation   = RE_FUNCTION,
 	constructor = RE_RETURN,
 	destructor  = RE_RETURN,
-	type        = RE_STRUCT,
-	singleton   = RE_SINGLE,
 	method      = RE_FUNCTION,
-	operation   = RE_FUNCTION,
-	shared      = RE_FUNCTION,
 )
 
 HTML_BODY = """
@@ -65,17 +94,26 @@ def strip(lines):
 
 class Library:
 
-	def __init__( self ):
+	def __init__( self, path=None ):
 		self.symbols = {}
 		self.files   = []
 		self.groups  = []
+		if path:
+			with file(path, "r") as f:
+				self.addGroups(Parser.Groups(Parser.Lines(f.read())))
 
 	def addGroups( self, groups ):
 		self.groups += groups
 		for g in groups:
 			if g.type == TYPE_SYMBOL:
-				self.symbols[g.name] = g
+				self.symbols.setdefault(g.name, {})[g.classifier] = g
 		return self
+
+	def getSymbolCode( self, symbol, classifier ):
+		return "\n".join(self.symbols[symbol][classifier].code)
+
+	def getCode( self, *args ):
+		return "\n".join((self.getSymbolCode(s,c) for (s,c) in args))
 
 class Group:
 
@@ -87,6 +125,9 @@ class Group:
 		self.code = [] if code is None else code
 		self.classifier = classifier
 		self.symbols    = {}
+
+	def getCode( self, name ):
+		return "\n".join(self.symbols[name].code)
 
 class Parser:
 
@@ -103,10 +144,13 @@ class Parser:
 					t,l = TYPE_SYMBOL, s.group(1)
 				else:
 					t,l = TYPE_DOC, m[0]
+					if RE_ANNOTATION.match(l):
+						t,l = None, None
 			else:
 				t,l = TYPE_CODE, line
 			counter += 1
-			yield counter, t, l
+			if t != None and l != None:
+				yield counter, t, l
 
 	@classmethod
 	def Groups( cls, lines ):
@@ -180,14 +224,25 @@ class Formatter:
 
 if __name__ == "__main__":
 	import ipdb
-	args = sys.argv[1:]
+	args = sys.argv[1:] or ["src/parsing.h"]
 	# reporter.install(reporter.StderrReporter)
 	lib  = Library()
 	for p in args:
 		with open(p) as f:
 			text   = f.read()
+			for line in Parser.Lines(text):
+				print line
 			groups = Parser.Groups(Parser.Lines(text))
 			lib.addGroups(groups)
-	print texto.toHTML(Formatter().format(lib))
+
+	print lib.getSymbolCode("Iterator", "type")
+	# with file("src/parsing.ffi", "w") as f:
+	# 	f.write(lib.getSymbolCode("Reference",      "type"))
+	# 	f.write(lib.getSymbolCode("Match",          "type"))
+	# 	f.write(lib.getSymbolCode("ParsingElement", "type"))
+	# 	f.write(lib.getSymbolCode("Grammar",        "type"))
+	# 	# f.write(lib.getCode("Token",          "constructor"))
+	# 	# f.write(lib.getCode("Word",           "constructor"))
+	# 	# f.write(lib.getCode("Grammar",        "constructor"))
 
 # EOF
