@@ -1,14 +1,24 @@
-PRODUCTS = parsing
+PROJECT  = parsing
+VERSION  = $(shell grep VERSION src/parsing.h | cut -d'"' -f2)
+MAJOR    = $(shell echo $(VERSION) | cut -d. -f1)
+PRODUCTS = $(PROJECT) lib$(PROJECT).so.$(VERSION)
 SOURCES  = $(wildcard src/*.c)
 OBJECTS  = $(SOURCES:src/%.c=build/%.o)
 CC       = colorgcc
 LIBS    := libpcre
-CFLAGS  += -g -std=c11 -DDEBUG_ENABLED
+CFLAGS  += -g -std=c11 -Wall -fPIC -DDEBUG_ENABLED
 LDFLAGS := $(shell pkg-config --cflags --libs $(LIBS))
 
+all: libparsing
+
+libparsing: lib$(PROJECT).so.$(VERSION)
+	
 parsing: build/parsing.o
-	gcc $< $(LDFLAGS) -o $@
+	$(CC) $< $(LDFLAGS) -o $@
 	chmod +x $@
+
+lib$(PROJECT).so.$(VERSION): build/parsing.o
+	$(CC) -shared -Wl,-soname,lib$(PROJECT).so.$(MAJOR) -o $@ $<
 
 run: parsing
 	./parsing

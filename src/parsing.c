@@ -165,7 +165,7 @@ bool FileInput_move   ( Iterator* this, int n ) {
 			}
 			DEBUG("[>] %d+%d == %zd (%zd bytes left)", ((int)this->offset) - n, n, this->offset, left);
 			if (n>left) {
-				this->status == STATUS_INPUT_ENDED;
+				this->status = STATUS_INPUT_ENDED;
 				return FALSE;
 			} else {
 				return TRUE;
@@ -514,6 +514,7 @@ void* Token_Group(ParsingElement* this, Match* match) {
 	//		printf("Match(%2d/%2d): (%2d,%2d): '%s'\n", j, r-1, vector[j*2], vector[j*2+1], match);
 	//		pcre_free_substring(match);
 	//	}
+
 }
 
 // ----------------------------------------------------------------------------
@@ -757,7 +758,7 @@ Match* Utilites_checkIndent( ParsingElement *this, ParsingContext* context ) {
 	return Match_Success(0);
 }
 
-int main (int argc, char* argv[]) {
+int XXXmain (int argc, char* argv[]) {
 
 	// We define the grammar
 	Grammar* g                 = Grammar_new();
@@ -768,8 +769,6 @@ int main (int argc, char* argv[]) {
 
 	SYMBOL (SPACES,            TOKEN("[ ]+"))
 	SYMBOL (TABS,              TOKEN("\\t*"))
-	SYMBOL (EMPTY_LINES,       TOKEN("([ \\t]*\\n)+"))
-	SYMBOL (INDENT,            TOKEN("\\t+"))
 	SYMBOL (COMMENT,           TOKEN("[ \\t]*//[^\\n]*"))
 	SYMBOL (EOL,               TOKEN("[ ]*\\n(\\s*\\n)*"))
 	SYMBOL (NUMBER,            TOKEN("-?(0x)?[0-9]+(\\.[0-9]+)?"))
@@ -785,7 +784,6 @@ int main (int argc, char* argv[]) {
 	SYMBOL (RP,                WORD(")"))
 	SYMBOL (SELF,              WORD("&"))
 	SYMBOL (COMMA,             WORD(","))
-	SYMBOL (TAB,               WORD("\t"))
 	SYMBOL (EQUAL,             WORD("="))
 	SYMBOL (LSBRACKET,         WORD("["))
 	SYMBOL (RSBRACKET,         WORD("]"))
@@ -807,7 +805,6 @@ int main (int argc, char* argv[]) {
 	SYMBOL (METHOD_NAME,       TOKEN("[\\w_][\\w\\d_]*"))
 	SYMBOL (MACRO_NAME,        TOKEN("[\\w_][\\w\\d_]*"))
 	SYMBOL (REFERENCE,         TOKEN("\\$([\\w_][\\w\\d_]*)"))
-	SYMBOL (COLOR_NAME,        TOKEN("[a-z][a-z0-9\\-]*"))
 	SYMBOL (COLOR_HEX,         TOKEN("#([A-Fa-f0-9][A-Fa-f0-9]?[A-Fa-f0-9]?[A-Fa-f0-9]?[A-Fa-f0-9]?[A-Fa-f0-9]?([A-Fa-f0-9][A-Fa-f0-9])?)"))
 	SYMBOL (COLOR_RGB,         TOKEN("rgba?\\((\\s*\\d+\\s*,\\s*\\d+\\s*,\\s*\\d+\\s*(,\\s*\\d+(\\.\\d+)?\\s*)?)\\)"))
 	SYMBOL (CSS_PROPERTY,      TOKEN("[a-z][a-z0-9\\-]*"))
