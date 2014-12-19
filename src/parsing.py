@@ -117,6 +117,9 @@ class CObject(object):
 
 class Match(CObject):
 
+	def _new( self, o ):
+		return o
+
 	def walk( self, callback ):
 		def c(m,s):
 			m = Match(m)
@@ -288,13 +291,14 @@ class Condition(ParsingElement):
 	@classmethod
 	def WrapCallback(cls, callback):
 		def c(e,ctx):
-			return callback(e,ctx)
+			callback(e,ctx)
+			return ffi.NULL
 		t = "Match*(*)(ParsingElement *, ParsingContext *)"
 		c = ffi.callback(t, c)
 		return c
 
 	def _new( self, callback ):
-		return lib.Condition_new(self.WrapCallback(callback))
+		return lib.Condition_new(ffi.NULL) # ;self.WrapCallback(callback))
 
 # -----------------------------------------------------------------------------
 #
@@ -307,13 +311,14 @@ class Procedure(ParsingElement):
 	@classmethod
 	def WrapCallback(cls, callback):
 		def c(e,ctx):
-			return callback(e,ctx)
+			callback(e,ctx)
+			return ffi.NULL
 		t = "void(*)(ParsingElement *, ParsingContext *)"
 		c = ffi.callback(t, c)
 		return c
 
 	def _new( self, callback ):
-		return lib.Procedure_new(self.WrapCallback(callback))
+		return lib.Procedure_new(ffi.NULL) #;self.WrapCallback(callback))
 
 # -----------------------------------------------------------------------------
 #
@@ -379,7 +384,7 @@ class Grammar(CObject):
 		self.symbols[name] = r
 		return r
 
-	def agroup( self, name, *children):
+	def agroup( self, *children):
 		return Group(*children)
 
 	def rule( self, name, *children):
@@ -388,7 +393,7 @@ class Grammar(CObject):
 		self.symbols[name] = r
 		return r
 
-	def arule( self, name, *children):
+	def arule( self, *children):
 		return Rule(*children)
 
 	def prepare( self ):

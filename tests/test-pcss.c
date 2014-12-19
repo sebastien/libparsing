@@ -185,9 +185,9 @@ int main (void) {
 	// AXIOM
 	// ========================================================================
 
-	SYMBOL     (Source,  GROUP(MANY_OPTIONAL(GROUP(
-		_S(Comment), _S(Block), _S(SpecialBlock), _S(Declaration), _S(Include)
-	))))
+	SYMBOL     (Source,  GROUP(MANY_OPTIONAL(
+		GROUP( _S(Comment), _S(Block), _S(SpecialBlock), _S(Declaration), _S(Include))
+	)))
 
 	g->axiom = s_Source;
 	g->skip  = s_SPACES;
