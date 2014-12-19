@@ -80,12 +80,20 @@ CARDINALITY_MANY          = '+'
 
 class CObject(object):
 
+	_TYPE = None
+
+	@classmethod
+	def Wrap( cls, cobject ):
+		if not cls._TYPE:
+			cls._TYPE = cls.__name__.rsplit(".")[-1] + "*"
+		return cls(cobject, wrap=cls._TYPE)
+
 	def __init__(self, *args, **kwargs):
 		self._cobject = None
 		if "wrap" in kwargs:
 			assert len(kwargs) == 1
 			assert len(args  ) == 1
-			self._wrap(args[0])
+			self._wrap(ffi.cast(kwargs["wrap"], args[0]))
 		else:
 			o = self._new(*args, **kwargs)
 			if o is not None: self._cobject = o
@@ -97,7 +105,7 @@ class CObject(object):
 	def _wrap( self, cobject ):
 		assert self._cobject == None
 		assert cobject
-		assert isinstance(cobject, CData)
+		assert isinstance(cobject, FFI.CData)
 		self._cobject = cobject
 		return self
 
@@ -130,14 +138,21 @@ class Match(CObject):
 
 class Reference(CObject):
 
-	_TYPE = "Reference*"
-	_IS   = lambda o: lib.Reference_Is(o)
+	@classmethod
+	def IsCType( self, element ):
+		return isinstance(element, FFI.CData) and lib.Reference_Is(element)
 
 	def _new( self, element ):
 		assert isinstance(element, ParsingElement)
 		r = lib.Reference_New(element._cobject)
 		assert r.element == element._cobject
 		return r
+
+	def name( self ):
+		return ffi.string(self._cobject.name)
+
+	def id( self ):
+		return self._cobject.id
 
 	def _as( self, name ):
 		lib.Reference_name(self._cobject, name)
@@ -174,13 +189,22 @@ class Reference(CObject):
 class ParsingElement(CObject):
 
 	_TYPE = "ParsingElement*"
-	_IS  = lambda o: lib.ParsingElement_Is(o)
+
+	@classmethod
+	def IsCType( self, element ):
+		return isinstance(element, FFI.CData) and lib.ParsingElement_Is(element)
 
 	def add( self, *children ):
 		for c in children:
 			assert isinstance(c, ParsingElement) or isinstance(c, Reference)
 			lib.ParsingElement_add(self._cobject, lib.Reference_Ensure(c._cobject))
 		return self
+
+	def name( self ):
+		return ffi.string(self._cobject.name)
+
+	def id( self ):
+		return self._cobject.id
 
 	def setName( self, name ):
 		lib.ParsingElement_name(self._cobject, name)
@@ -238,7 +262,7 @@ class Token(ParsingElement):
 class Group(ParsingElement):
 
 	def _new( self, *children ):
-		self._cobject = CObject.__init__(self, lib.Group_new(ffi.NULL))
+		self._cobject = lib.Group_new(ffi.NULL)
 		self.add(*children)
 
 # -----------------------------------------------------------------------------
@@ -250,7 +274,7 @@ class Group(ParsingElement):
 class Rule(ParsingElement):
 
 	def _new( self, *children ):
-		self._cobject = CObject.__init__(self, lib.Rule_new(ffi.NULL))
+		self._cobject = lib.Rule_new(ffi.NULL)
 		self.add(*children)
 
 # -----------------------------------------------------------------------------
@@ -321,16 +345,19 @@ class Grammar(CObject):
 
 	def word( self, name, word):
 		r = Word(word)
+		r.setName(name)
 		self.symbols[name] = r
 		return r
 
 	def token( self, name, token):
 		r = Token(token)
+		r.setName(name)
 		self.symbols[name] = r
 		return r
 
 	def procedure( self, name, callback):
 		r = Procedure(callback)
+		r.setName(name)
 		self.symbols[name] = r
 		return r
 
@@ -339,6 +366,7 @@ class Grammar(CObject):
 
 	def condition( self, name, callback):
 		r = Condition(callback)
+		r.setName(name)
 		self.symbols[name] = r
 		return r
 
@@ -347,19 +375,21 @@ class Grammar(CObject):
 
 	def group( self, name, *children):
 		r = Group(*children)
+		r.setName(name)
 		self.symbols[name] = r
 		return r
 
+	def agroup( self, name, *children):
+		return Group(*children)
+
 	def rule( self, name, *children):
 		r = Rule(*children)
+		r.setName(name)
 		self.symbols[name] = r
 		return r
 
 	def arule( self, name, *children):
 		return Rule(*children)
-
-	def agroup( self, name, *children):
-		return Group(*children)
 
 	def prepare( self ):
 		lib.Grammar_prepare(self._cobject)
@@ -383,17 +413,14 @@ class Grammar(CObject):
 
 	def walk( self, callback ):
 		def c(o,s):
-			# FIXME: This does not seem to work
-			if    Reference.Is(o):
+			if    Reference.IsCType(o):
 				o = Reference.Wrap(o)
-			elif  ParsingElement.Is(o):
-				# FIXME: Should return the proper references to the
-				# wrapped objects
+			elif  ParsingElement.IsCType(o):
 				o = ParsingElement.Wrap(o)
 			else:
 				o = Match.Wrap(o)
-			callback(o, s)
-		c = ffi.callback("void(*)(void *, size_t)", c)
+			return callback(o, s)
+		c = ffi.callback("int(*)(void *, int)", c)
 		return lib.Element__walk(self._cobject.axiom, c, 0)
 
 # -----------------------------------------------------------------------------
@@ -404,13 +431,23 @@ class Grammar(CObject):
 
 if __name__ == "__main__":
 	g  = Grammar()
-	word = lib.Word_new("HELLO")
-	ref  = lib.Reference_New(word)
-	assert (ref.element)
-	assert (ref.element == word)
-	w = Word("a")
-	r = Reference(w)
-	assert w._cobject == r._cobject.element
+	s  = g.symbols
+	g.token("NUMBER",   "\d+(\.\d+)?")
+	g.token("VARIABLE", "\w[\w_\d]*")
+	g.token("OPERATOR", "[\-\+\*/\^]")
+	g.group("Value",      s.NUMBER, s.VARIABLE)
+	g.rule("Suffix",      s.OPERATOR, s.Value)
+	g.rule("Expression")
+	s.Expression.set(s.Value, s.Suffix.zeroOrMore())
+	g.axiom(s.Expression)
+
+	visited = []
+	def gw(e, step):
+		print "[%5d] %s%s:%d" % (step, "*" if isinstance(e, Reference) else " ", e.name(), e.id())
+		return step
+	g.walk(gw)
+
+
 	# print lib.Reference_New(
 	# 	lib.Word_new("POUET")
 	# ).element

@@ -272,12 +272,12 @@ bool Match_isSuccess(Match* this) {
 }
 
 int Match__walk(Match* this, WalkingCallback callback, int step ){
-	callback(this, step++);
-	if (this->child != NULL) {
-		step = Match__walk(this->child, callback, step++);
+	step = callback(this, step);
+	if (this->child != NULL && step >= 0) {
+		step = Match__walk(this->child, callback, step + 1);
 	}
-	if (this->next != NULL) {
-		step = Match__walk(this->next, callback, step++);
+	if (this->next != NULL && step >= 0) {
+		step = Match__walk(this->next, callback, step + 1);
 	}
 	return step;
 }
@@ -350,14 +350,19 @@ ParsingElement* ParsingElement_name( ParsingElement* this, const char* name ) {
 }
 
 int ParsingElement__walk( ParsingElement* this, WalkingCallback callback, int step ) {
-	callback((Element*)this, step++);
+	step = callback((Element*)this, step);
 	Reference* child = this->children;
-	while ( child != NULL ) {
-		step  = Reference__walk(child, callback, step);
-		child = child->next;
+	while ( child != NULL && step >= 0) {
+		step  = Reference__walk(child, callback, step + 1);
+		if (step >= 0) {
+			child = child->next;
+		} else {
+			child = NULL;
+		}
 	}
 	return step;
 }
+
 // ----------------------------------------------------------------------------
 //
 // ELEMENT
@@ -404,6 +409,7 @@ Reference* Reference_New(ParsingElement* element){
 	NEW(Reference, this);
 	assert(element!=NULL);
 	this->element = element;
+	this->name    = element->name;
 	ASSERT(element->recognize, "Reference_New: Element %s has no recognize callback", element->name);
 	return this;
 }
@@ -431,8 +437,10 @@ Reference* Reference_name(Reference* this, const char* name) {
 }
 
 int Reference__walk( Reference* this, WalkingCallback callback, int step ) {
-	callback((Element*)this, step++);
-	step = ParsingElement__walk(this->element, callback, step);
+	step = callback((Element*)this, step);
+	if (step >= 0) {
+		step = ParsingElement__walk(this->element, callback, step + 1);
+	}
 	return step;
 }
 
