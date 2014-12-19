@@ -129,32 +129,23 @@ bool Iterator_open( Iterator* this, const char *path );
 
 // @method
 // Tells if the iterator has more available data
-inline bool Iterator_hasMore( Iterator* this ) {
-	// NOTE: This is STATUS_ENDED;
-	return this->status != 'E';
-}
+bool Iterator_hasMore( Iterator* this );
 
 // @method
 // Returns the number of bytes available from the current iterator's position.
 // This should be at least `ITERATOR_BUFFER_AHEAD` until end of input stream
 // is reached.
-size_t Iterator_remaining( Iterator* this ) {
-	return this->available - (this->current - this->buffer);
-}
+size_t Iterator_remaining( Iterator* this );
 
 // @method
 // Moves the iterator to the given offset
-inline bool Iterator_moveTo ( Iterator* this, size_t offset ) {
-	return this->move(this, offset - this->offset );
-}
+bool Iterator_moveTo ( Iterator* this, size_t offset );
 
-#ifndef ITERATOR_BUFFER_AHEAD
 // @define
 // The number of `iterated_t` that should be loaded after the iterator's
 // current position. This limits the numbers of `iterated_t` that a `Token`
 // could match.
 #define ITERATOR_BUFFER_AHEAD 64000
-#endif
 
 // @constructor
 FileInput* FileInput_new(const char* path );
@@ -195,7 +186,18 @@ typedef struct Grammar {
 	ParsingElement*  skip;        // The skipped element
 } Grammar;
 
+
+// @constructor
+Grammar* Grammar_new();
+
+// @destructor
+void Grammar_destroy(Grammar* this);
+
+// @method
 Match* Grammar_parseFromIterator( Grammar* this, Iterator* iterator );
+
+// @method
+Match* Grammar_parseFromPath( Grammar* this, const char* path );
 
 /**
  * Parsing Elements
@@ -262,9 +264,7 @@ Match* Match_new();
 void Match_destroy(Match* this);
 
 // @method
-bool Match_isSuccess(Match* this) {
-	return (this != NULL && this != FAILURE && this->status == STATUS_MATCHED);
-}
+bool Match_isSuccess(Match* this);
 
 // @type ParsingElement
 typedef struct ParsingElement {
@@ -305,18 +305,12 @@ ParsingElement* ParsingElement_add(ParsingElement *this, Reference *child);
 // Processes the given match once the parsing element has fully succeeded. This
 // is where user-bound actions will be applied, and where you're most likely
 // to do things such as construct an AST.
-inline Match* ParsingElement_process( ParsingElement* this, Match* match ) {
-	return match;
-}
+Match* ParsingElement_process( ParsingElement* this, Match* match );
 
 // FIXME: Maybe should inline
 // @method
 // Transparently sets the name of the element
-inline ParsingElement* ParsingElement_name( ParsingElement* this, const char* name ) {
-	if (this == NULL) {return this;}
-	this->name = name;
-	return this;
-}
+ParsingElement* ParsingElement_name( ParsingElement* this, const char* name );
 
 /**
  * Word
@@ -412,9 +406,7 @@ const char   Reference_T = 'R';
 //
 // @operation
 // Tells if the given pointer is a pointer to Reference
-inline bool Reference_Is(void * this) {
-	return this!=NULL && ((Reference*)this)->type == Reference_T;
-}
+bool Reference_Is(void * this);
 
 // @operation
 // Ensures that the given element (or reference) is a reference.
@@ -430,17 +422,9 @@ Reference* Reference_new();
 
 // @method
 // Sets the cardinality of this reference, returning it transprently.
-inline Reference* Reference_cardinality(Reference* this, char cardinality) {
-	assert(this!=NULL);
-	this->cardinality = cardinality;
-	return this;
-}
+Reference* Reference_cardinality(Reference* this, char cardinality);
 
-inline Reference* Reference_name(Reference* this, const char* name) {
-	assert(this!=NULL);
-	this->name        = name;
-	return this;
-}
+Reference* Reference_name(Reference* this, const char* name);
 
 // @method
 // Returns the matched value corresponding to the first match of this reference.
@@ -486,6 +470,7 @@ Match*          Rule_recognize(ParsingElement* this, ParsingContext* context);
  * in the parsing context.
 */
 
+// @callback
 typedef void (*ProcedureCallback)(ParsingElement* this, ParsingContext* context);
 
 // @constructor
@@ -502,6 +487,7 @@ Match*          Procedure_recognize(ParsingElement* this, ParsingContext* contex
  * they might return a FAILURE.
 */
 
+// @callback
 typedef Match* (*ConditionCallback)(ParsingElement*, ParsingContext*);
 
 // @constructor

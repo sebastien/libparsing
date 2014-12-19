@@ -17,22 +17,38 @@ VERSION  = "0.0.0"
 LICENSE  = "http://ffctn.com/doc/licenses/bsd"
 FFI_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "parsing.ffi")
 
-
-if not os.path.exists(FFI_PATH):
+if True or not os.path.exists(FFI_PATH):
 	clib = cdoclib.Library("src/parsing.h")
-	cdef = "typedef char* iterated_t;typedef struct ParsingElement Parsing;\n" + clib.getCode(
-		("Reference",      "type"),
-		("Match",          "type"),
-		("Iterator",       "type"),
-		("ParsingContext", "type"),
-		("ParsingElement", "type"),
-		("Grammar",        "type"),
+	O    = ("type", "constructor", "operation", "method", "destructor")
+	cdef = (
+		"typedef char* iterated_t;\n"
+		"typedef struct ParsingElement ParsingElement;\n"
+		"typedef struct ParsingContext ParsingContext;\n"
+		"typedef struct Match Match;\n"
+	) + clib.getCode(
+		("ConditionCallback",    None),
+		("ProcedureCallback",    None),
+		("Reference*",           O),
+		("Match*",               O),
+		("Iterator*",            O),
+		("ParsingContext*",      O),
+		("ParsingElement*",      O),
+		("Grammar*",             O),
 	)
-#cdef = file("src/parsing.ffi").read()
-file("src/parsing.ffi", "w").write(cdef)
+	with file(FFI_PATH, "w") as f:
+		f.write(cdef)
+else:
+	with file(FFI_PATH, "r") as f:
+		cdef = f.read()
 
-
-ffi     = FFI()
+ffi = FFI()
 ffi.cdef(cdef)
+lib = ffi.dlopen("libparsing.so.0.1.2")
+
+g   = lib.Grammar_new()
+
+import ipdb
+ipdb.set_trace()
+
 
 # EOF - vim: ts=4 sw=4 noet

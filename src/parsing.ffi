@@ -1,0 +1,122 @@
+typedef char* iterated_t;
+typedef struct ParsingElement ParsingElement;
+typedef struct ParsingContext ParsingContext;
+typedef struct Match Match;
+typedef Match* (*ConditionCallback)(ParsingElement*, ParsingContext*);
+
+typedef void (*ProcedureCallback)(ParsingElement* this, ParsingContext* context);
+
+typedef struct Reference {
+	char            type;            // Set to Reference_T, to disambiguate with ParsingElement
+	char            cardinality;     // Either ONE (default), OPTIONAL, MANY or MANY_OPTIONAL
+	const char*     name;            // The name of the reference (optional)
+	struct ParsingElement* element;         // The reference to the parsing element
+	struct Reference*      next;            // The next child reference in the parsing elements
+} Reference;
+
+bool Reference_Is(void * this);
+
+Reference* Reference_Ensure(void* elementOrReference);
+
+Reference* Reference_New(ParsingElement *);
+
+Reference* Reference_new();
+
+Reference* Reference_cardinality(Reference* this, char cardinality);
+
+Reference* Reference_name(Reference* this, const char* name);
+
+Match* Reference_recognize(Reference* this, ParsingContext* context);
+
+typedef struct Match {
+	char            status;     // The status of the match (see STATUS_XXX)
+	size_t          length;     // The number of `iterated_t` matched
+	void            *data;      // The matched data (usually a subset of the input stream)
+	struct Match    *next;      // A pointer to the next match (see `References`)
+} Match;
+
+
+Match* Match_Empty();
+
+Match* Match_Success(size_t length);
+
+Match* Match_new();
+
+bool Match_isSuccess(Match* this);
+
+typedef struct Iterator {
+	char           status;    // The status of the iterator, one of STATUS_{INIT|PROCESSING|INPUT_ENDED|ENDED}
+	char*          buffer;    // The buffer to the read data, note how it is a (void*) and not an `iterated_t`
+	iterated_t*    current;   // The for the current offset within the buffer
+	iterated_t     separator; // The character for line separator, `\n` by default.
+	size_t         offset;    // Offset in input (in bytes), might be different from `current - buffer` if some input was freed.
+	size_t         lines;     // Counter for lines that have been encountered
+	size_t         length;    // Buffer length (in bytes), might be bigger than the data acquired from the input
+	size_t         available; // Available data in buffer (in bytes), always `<= length`
+	void*          input;     // Pointer to the input source
+	bool          (*move) (struct Iterator*, int n); // Plug-in function to move to the previous/next positions
+} Iterator;
+
+Iterator* Iterator_Open(const char* path);
+
+Iterator* Iterator_new(void);
+
+bool Iterator_open( Iterator* this, const char *path );
+
+bool Iterator_hasMore( Iterator* this );
+
+size_t Iterator_remaining( Iterator* this );
+
+bool Iterator_moveTo ( Iterator* this, size_t offset );
+
+typedef struct ParsingContext {
+	struct Grammar*              grammar;      // The grammar used to parse
+	struct Iterator*             iterator;     // Iterator on the input data
+	struct ParsingOffset* offsets;      // The parsing offsets, starting at 0
+	struct ParsingOffset* current;      // The current parsing offset
+} ParsingContext;
+
+typedef struct ParsingElement {
+	char           type;       // Type is used du differentiate ParsingElement from Reference
+	unsigned short id;         // The ID, assigned by the grammar, as the relative distance to the axiom
+	const char*    name;       // The parsing element's name, for debugging
+	void*          config;     // The configuration of the parsing element
+	struct Reference*     children;   // The parsing element's children, if any
+	struct Match*         (*recognize) (struct ParsingElement*, ParsingContext*);
+	struct Match*         (*process)   (struct ParsingElement*, ParsingContext*, Match*);
+} ParsingElement;
+
+
+bool         ParsingElement_Is(void *);
+const char   ParsingElement_T = 'P';
+
+ParsingElement* ParsingElement_new(Reference* children[]);
+
+ParsingElement* ParsingElement_add(ParsingElement *this, Reference *child);
+
+
+Match* ParsingElement_process( ParsingElement* this, Match* match );
+
+ParsingElement* ParsingElement_name( ParsingElement* this, const char* name );
+
+ParsingElement* Word_new(const char* word);
+
+ParsingElement* Group_new(Reference* children[]);
+
+ParsingElement* Rule_new(Reference* children[]);
+
+ParsingElement* Procedure_new(ProcedureCallback c);
+
+ParsingElement* Condition_new(ConditionCallback c);
+
+typedef struct Grammar {
+	ParsingElement*  axiom;       // The axiom
+	ParsingElement*  skip;        // The skipped element
+} Grammar;
+
+
+Grammar* Grammar_new();
+
+Match* Grammar_parseFromIterator( Grammar* this, Iterator* iterator );
+
+Match* Grammar_parseFromPath( Grammar* this, const char* path );

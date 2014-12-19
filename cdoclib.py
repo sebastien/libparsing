@@ -1,4 +1,4 @@
-import sys, re
+import sys, re, fnmatch
 import reporter, texto, templating
 from pygments            import highlight
 from pygments.lexers     import CLexer
@@ -27,6 +27,7 @@ Here @type is the classifier, which can be one of the following:
 
 - `@define`
 - `@macro`
+- `@callback`
 - `@singleton`
 - `@shared`
 - `@type`
@@ -49,6 +50,7 @@ RE_MACRO       = re.compile("#define\s+(\w+)")
 RE_RETURN      = re.compile("\s*(\w+)")
 RE_FUNCTION    = re.compile("\s*(extern|inline)?[\w_]+\s*[\*]*\s+([\w\_]+)")
 RE_STRUCT      = re.compile("\s*typedef\s+struct\s+([\w_]+)")
+RE_CALLBACK    = re.compile("\s*typedef\s+\w[\w\d_]*\s*\*?\s+\(\s*\*([\w\_]+)\s*\)")
 RE_SINGLE      = re.compile("\s*static\s+\w+\s+([\w_]+)")
 
 TYPE_SYMBOL    = "S"
@@ -60,6 +62,7 @@ SYMBOL_EXTRACTORS = dict(
 	define      = RE_MACRO,
 	macro       = RE_MACRO,
 	singleton   = RE_SINGLE,
+	callback    = RE_CALLBACK,
 	shared      = RE_FUNCTION,
 	type        = RE_STRUCT,
 	operation   = RE_FUNCTION,
@@ -123,18 +126,30 @@ class Library:
 				self.symbols.setdefault(g.name, {})[g.classifier] = g
 		return self
 
-	def getSymbolCode( self, symbol, classifier ):
-		return "\n".join(self.symbols[symbol][classifier].code)
+	def getSymbols( self, pattern, classifiers=None ):
+		if classifiers and type(classifiers) not in (list, tuple): classifiers = list(classifiers)
+		assert type(pattern) in (unicode, str)
+		symbols = [_ for _ in self.groups if _.type == TYPE_SYMBOL and fnmatch.fnmatch(_.name, pattern)]
+		if classifiers: symbols = [_ for _ in symbols if _.classifier in classifiers]
+		return symbols
+
+	def getSymbolsCode( self, pattern, classifiers=None ):
+		return "\n".join(("\n".join(_.code) for _ in self.getSymbols(pattern, classifiers)))
 
 	def getCode( self, *args ):
-		return "\n".join((self.getSymbolCode(s,c) for (s,c) in args))
+		res = []
+		for p,c in args:
+			res.append(self.getSymbolsCode(p,c))
+		return "\n".join(res)
+
 
 class Group:
 
-	def __init__( self, type=None, name=None, code=None, doc=None, classifier=None ):
+	def __init__( self, type=None, name=None, code=None, doc=None, classifier=None, start=0 ):
 		self.type = type
 		self.name = name
 		self.code = code
+		self.start = start
 		self.doc  = [] if doc  is None else doc
 		self.code = [] if code is None else code
 		self.classifier = classifier
@@ -177,6 +192,7 @@ class Parser:
 				current = Group(
 					type       = TYPE_SYMBOL,
 					classifier = l.strip(),
+					start      = i,
 				)
 				result.append(current)
 			elif t == TYPE_DOC:
@@ -186,6 +202,7 @@ class Parser:
 					current  = Group(
 						type = TYPE_FILE,
 						doc  = [l],
+						start = i,
 					)
 					result.append(current)
 			elif t == TYPE_CODE:
@@ -244,19 +261,19 @@ if __name__ == "__main__":
 	for p in args:
 		with open(p) as f:
 			text   = f.read()
-			# for line in Parser.Lines(text):
-			# 	print line
+			for line in Parser.Lines(text):
+				print line
 			groups = Parser.Groups(Parser.Lines(text))
 			lib.addGroups(groups)
 	body = Formatter().format(lib)
-	if False:
-		print templating.Template(HTML_PAGE).apply(dict(
-			css  = open("texto.css").read(),
-			body = texto.toHTML(body),
-			groups = [_ for _ in lib.groups if _.type == TYPE_SYMBOL]
-		))
-	else:
-		print body
+	# if False:
+	# 	print templating.Template(HTML_PAGE).apply(dict(
+	# 		css  = open("texto.css").read(),
+	# 		body = texto.toHTML(body),
+	# 		groups = [_ for _ in lib.groups if _.type == TYPE_SYMBOL]
+	# 	))
+	# else:
+	# 	print body
 	# print lib.getSymbolCode("Iterator", "type")
 	# with file("src/parsing.ffi", "w") as f:
 	# 	f.write(lib.getSymbolCode("Reference",      "type"))

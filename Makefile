@@ -4,7 +4,7 @@ MAJOR    = $(shell echo $(VERSION) | cut -d. -f1)
 PRODUCTS = $(PROJECT) lib$(PROJECT).so.$(VERSION)
 SOURCES  = $(wildcard src/*.c)
 OBJECTS  = $(SOURCES:src/%.c=build/%.o)
-CC       = clang
+CC       = colorgcc
 LIBS    := libpcre
 CFLAGS  += -std=c11 -g -Wall -fPIC -DDEBUG_ENABLED
 LDFLAGS := -shared $(shell pkg-config --cflags --libs $(LIBS))

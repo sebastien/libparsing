@@ -75,6 +75,20 @@ bool Iterator_open( Iterator* this, const char *path ) {
 	}
 }
 
+bool Iterator_hasMore( Iterator* this ) {
+	// NOTE: This is STATUS_ENDED;
+	return this->status != 'E';
+}
+
+size_t Iterator_remaining( Iterator* this ) {
+	return this->available - (this->current - this->buffer);
+}
+
+bool Iterator_moveTo ( Iterator* this, size_t offset ) {
+	return this->move(this, offset - this->offset );
+}
+
+
 void Iterator_destroy( Iterator* this ) {
 	// TODO: Take care of input
 	__DEALLOC(this);
@@ -238,6 +252,10 @@ void Match_destroy(Match* this) {
 	__DEALLOC(this);
 }
 
+bool Match_isSuccess(Match* this) {
+	return (this != NULL && this != FAILURE && this->status == STATUS_MATCHED);
+}
+
 // ----------------------------------------------------------------------------
 //
 // PARSING ELEMENT
@@ -279,6 +297,7 @@ void ParsingElement_destroy(ParsingElement* this) {
 	__DEALLOC(this);
 }
 
+
 ParsingElement* ParsingElement_add(ParsingElement *this, Reference *child) {
 	assert(child->next == NULL);
 	assert(child->element->recognize!=NULL);
@@ -294,11 +313,25 @@ ParsingElement* ParsingElement_add(ParsingElement *this, Reference *child) {
 	return this;
 }
 
+Match* ParsingElement_process( ParsingElement* this, Match* match ) {
+	return match;
+}
+
+ParsingElement* ParsingElement_name( ParsingElement* this, const char* name ) {
+	if (this == NULL) {return this;}
+	this->name = name;
+	return this;
+}
+
 // ----------------------------------------------------------------------------
 //
 // REFERENCE
 //
 // ----------------------------------------------------------------------------
+
+bool Reference_Is(void * this) {
+	return this!=NULL && ((Reference*)this)->type == Reference_T;
+}
 
 Reference* Reference_Ensure(void* elementOrReference) {
 	void * element = elementOrReference;
@@ -322,6 +355,18 @@ Reference* Reference_new() {
 	this->name        = "_";
 	this->element     = NULL;
 	this->next        = NULL;
+	return this;
+}
+
+Reference* Reference_cardinality(Reference* this, char cardinality) {
+	assert(this!=NULL);
+	this->cardinality = cardinality;
+	return this;
+}
+
+Reference* Reference_name(Reference* this, const char* name) {
+	assert(this!=NULL);
+	this->name        = name;
 	return this;
 }
 
@@ -728,6 +773,13 @@ Match* Grammar_parseFromIterator( Grammar* this, Iterator* iterator ) {
 		LOG("Failed, parsed %zd bytes, %zd remaining", context.iterator->offset, Iterator_remaining(context.iterator))
 	}
 	return match;
+}
+
+Match* Grammar_parseFromPath( Grammar* this, const char* path ) {
+	Iterator* iterator = Iterator_Open(path);
+	Match*    result   = Grammar_parseFromIterator(this, iterator);
+	Iterator_destroy(iterator);
+	return result;
 }
 
 // ----------------------------------------------------------------------------
