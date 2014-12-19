@@ -825,22 +825,42 @@ void ParsingOffset_destroy( ParsingOffset* this ) {
 //
 // ----------------------------------------------------------------------------
 
-int Grammar__initElement(Element* e, int step) {
+int Grammar__resetElementIDs(Element* e, int step) {
 	if (Reference_Is(e)) {
 		Reference* r = (Reference*)e;
 		if (r->id != -1) {
 			r->id = -1;
-			return step + 1;
-		} else {
 			return step;
+		} else {
+			return -1;
 		}
 	} else {
 		ParsingElement * r = (ParsingElement*)e;
 		if (r->id != -1) {
 			r->id = -1;
-			return step + 1;
-		} else {
 			return step;
+		} else {
+			return -1;
+		}
+	}
+}
+
+int Grammar__assignElementIDs(Element* e, int step) {
+	if (Reference_Is(e)) {
+		Reference* r = (Reference*)e;
+		if (r->id == -1) {
+			r->id = step;
+			return step;
+		} else {
+			return -1;
+		}
+	} else {
+		ParsingElement * r = (ParsingElement*)e;
+		if (r->id == -1) {
+			r->id = step;
+			return step;
+		} else {
+			return -1;
 		}
 	}
 }
@@ -850,7 +870,8 @@ void Grammar_prepare ( Grammar* this ) {
 		this->skip->id = 0;
 	}
 	if (this->axiom!=NULL) {
-		Element_walk(this->axiom, Grammar__initElement);
+		Element_walk(this->axiom, Grammar__resetElementIDs);
+		Element_walk(this->axiom, Grammar__assignElementIDs);
 	}
 }
 

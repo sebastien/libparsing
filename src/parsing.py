@@ -438,11 +438,14 @@ if __name__ == "__main__":
 	g.group("Value",      s.NUMBER, s.VARIABLE)
 	g.rule("Suffix",      s.OPERATOR, s.Value)
 	g.rule("Expression")
-	s.Expression.set(s.Value, s.Suffix.zeroOrMore())
+	s.Expression.set(s.Value, s.Suffix.zeroOrMore(), s.Expression)
 	g.axiom(s.Expression)
+	# lib.Grammar_prepare(g._cobject)
 
 	visited = []
 	def gw(e, step):
+		# The following is an exit condition for recursion
+		if step > e.id(): return -1
 		print "[%5d] %s%s:%d" % (step, "*" if isinstance(e, Reference) else " ", e.name(), e.id())
 		return step
 	g.walk(gw)
