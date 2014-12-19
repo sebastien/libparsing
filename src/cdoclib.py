@@ -104,7 +104,7 @@ RE_FUNCTION    = re.compile("\s*(extern|inline)?[\w_]+\s*[\*]*\s+([\w\_]+)")
 RE_STRUCT      = re.compile("\s*typedef\s+struct\s+([\w_]+)")
 RE_CALLBACK    = re.compile("\s*typedef\s+\w[\w\d_]*\s*\*?\s+\(\s*\*([\w\_]+)\s*\)")
 RE_TYPEDEF     = re.compile("\s*typedef\s+\w[\w\d_]*\s*\*?\s+\s*([\w\_]+)\s*")
-RE_SINGLE      = re.compile("\s*static\s+\w+\s+([\w_]+)")
+RE_SINGLE      = re.compile("\s*(static|extern)\s+\w+\s+([\w_]+)")
 
 TYPE_SYMBOL    = "S"
 TYPE_DOC       = "D"

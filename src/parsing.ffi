@@ -8,11 +8,11 @@ typedef Match* (*ConditionCallback)(ParsingElement*, ParsingContext*);
 
 typedef void (*ProcedureCallback)(ParsingElement* this, ParsingContext* context);
 
-typedef bool (*WalkingCallback)(Element* this, size_t step);
+typedef int (*WalkingCallback)(Element* this, int step);
 
-size_t Element_walk( Element* this, WalkingCallback callback );
+int Element_walk( Element* this, WalkingCallback callback );
 
-size_t Element__walk( Element* this, WalkingCallback callback, size_t step );
+int Element__walk( Element* this, WalkingCallback callback, int step );
 
 typedef struct Reference {
 	char            type;            // Set to Reference_T, to disambiguate with ParsingElement
@@ -35,7 +35,7 @@ Reference* Reference_cardinality(Reference* this, char cardinality);
 
 Reference* Reference_name(Reference* this, const char* name);
 
-size_t Reference__walk( Reference* this, WalkingCallback callback, size_t step );
+int Reference__walk( Reference* this, WalkingCallback callback, int step );
 
 Match* Reference_recognize(Reference* this, ParsingContext* context);
 
@@ -56,7 +56,7 @@ Match* Match_new(void);
 
 bool Match_isSuccess(Match* this);
 
-size_t Match__walk(Match* this, WalkingCallback callback, size_t step );
+int Match__walk(Match* this, WalkingCallback callback, int step );
 
 typedef struct Iterator {
 	char           status;    // The status of the iterator, one of STATUS_{INIT|PROCESSING|INPUT_ENDED|ENDED}
@@ -102,7 +102,7 @@ typedef struct ParsingElement {
 
 
 bool         ParsingElement_Is(void *);
-const char   ParsingElement_T = 'P';
+const char   ParsingElement_T;
 
 ParsingElement* ParsingElement_new(Reference* children[]);
 

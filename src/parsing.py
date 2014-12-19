@@ -6,7 +6,7 @@
 # License           : BSD License
 # -----------------------------------------------------------------------------
 # Creation date     : 2014-Dec-18
-# Last modification : 2014-Dec-18
+# Last modification : 2014-Dec-19
 # -----------------------------------------------------------------------------
 
 from cffi import FFI
@@ -67,43 +67,47 @@ ffi = FFI()
 ffi.cdef(cdef)
 lib = ffi.dlopen("libparsing.so.0.2.0")
 
+CARDINALITY_OPTIONAL      = '?'
+CARDINALITY_ONE           = '1'
+CARDINALITY_MANY_OPTIONAL = '*'
+CARDINALITY_MANY          = '+'
+
 # -----------------------------------------------------------------------------
 #
 # C OJBECT ABSTRACTION
 #
 # -----------------------------------------------------------------------------
 
-CARDINALITY_OPTIONAL      = '?'
-CARDINALITY_ONE           = '1'
-CARDINALITY_MANY_OPTIONAL = '*'
-CARDINALITY_MANY          = '+'
-
 class CObject(object):
 
-	_IS   = None
-	_NEW  = None
-	_TYPE = None
-
-	@classmethod
-	def Is(cls, i ):
-		if isinstance(i, cls):
-			return True
-		elif isinstance(i, CObject) and cls._IS and cls._IS(i._cobject):
-			return True
+	def __init__(self, *args, **kwargs):
+		self._cobject = None
+		if "wrap" in kwargs:
+			assert len(kwargs) == 1
+			assert len(args  ) == 1
+			self._wrap(args[0])
 		else:
-			return False
+			o = self._new(*args, **kwargs)
+			if o is not None: self._cobject = o
+			assert self._cobject
 
-	@classmethod
-	def Wrap(cls, i):
-		return cls(ffi.cast(cls._TYPE, i))
+	def _new( self ):
+		raise NotImplementedError
 
-	def __init__(self, o, wrap=True):
-		self._cobject = o if not self._TYPE else ffi.cast(self._TYPE, o)
-		assert o
+	def _wrap( self, cobject ):
+		assert self._cobject == None
+		assert cobject
+		assert isinstance(cobject, CData)
+		self._cobject = cobject
+		return self
+
+# -----------------------------------------------------------------------------
+#
+# MATCH
+#
+# -----------------------------------------------------------------------------
 
 class Match(CObject):
-
-	_TYPE = "Match*"
 
 	def walk( self, callback ):
 		def c(m,s):
@@ -118,24 +122,22 @@ class Match(CObject):
 	def length( self ):
 		return self._cobject.length
 
+# -----------------------------------------------------------------------------
+#
+# REFERENCE
+#
+# -----------------------------------------------------------------------------
+
 class Reference(CObject):
 
 	_TYPE = "Reference*"
-	_IS  = lambda o: lib.Reference_Is(o)
+	_IS   = lambda o: lib.Reference_Is(o)
 
-	def __init__(self, o=None, wrap=False):
-		if not wrap:
-			assert isinstance(o, ParsingElement)
-			assert o._cobject != ffi.NULL
-			print "POUET", o._cobject
-			print lib.Reference_New(o._cobject).element
-			CObject.__init__(self, lib.Reference_New(o._cobject))
-			print self._cobject.element
-			assert self._cobject.element, "Ensured reference has no element: o={0}, reference={1}".format(e, self._cobject)
-		else:
-			assert o
-			print "REF2", o
-			CObject.__init__(self, lib.Reference_New(o))
+	def _new( self, element ):
+		assert isinstance(element, ParsingElement)
+		r = lib.Reference_New(element._cobject)
+		assert r.element == element._cobject
+		return r
 
 	def _as( self, name ):
 		lib.Reference_name(self._cobject, name)
@@ -162,6 +164,12 @@ class Reference(CObject):
 
 	def disableFailMemoize( self ):
 		return self
+
+# -----------------------------------------------------------------------------
+#
+# PARSING ELEMENT
+#
+# -----------------------------------------------------------------------------
 
 class ParsingElement(CObject):
 
@@ -199,27 +207,57 @@ class ParsingElement(CObject):
 	def disableFailMemoize( self ):
 		return self
 
+# -----------------------------------------------------------------------------
+#
+# WORD
+#
+# -----------------------------------------------------------------------------
+
 class Word(ParsingElement):
 
-	def __init__( self, word, wrap=False):
-		CObject.__init__(self, word if wrap else lib.Word_new(word))
+	def _new( self, word):
+		return lib.Word_new(word)
+
+# -----------------------------------------------------------------------------
+#
+# TOKEN
+#
+# -----------------------------------------------------------------------------
 
 class Token(ParsingElement):
 
-	def __init__( self, token, wrap=False ):
-		CObject.__init__(self, token if wrap else lib.Token_new(token))
+	def _new( self, token):
+		return lib.Token_new(token)
+
+# -----------------------------------------------------------------------------
+#
+# GROUP
+#
+# -----------------------------------------------------------------------------
 
 class Group(ParsingElement):
 
-	def __init__( self, *children ):
-		CObject.__init__(self, lib.Group_new(ffi.NULL))
+	def _new( self, *children ):
+		self._cobject = CObject.__init__(self, lib.Group_new(ffi.NULL))
 		self.add(*children)
+
+# -----------------------------------------------------------------------------
+#
+# RULE
+#
+# -----------------------------------------------------------------------------
 
 class Rule(ParsingElement):
 
-	def __init__( self, *children ):
-		CObject.__init__(self, lib.Rule_new(ffi.NULL))
+	def _new( self, *children ):
+		self._cobject = CObject.__init__(self, lib.Rule_new(ffi.NULL))
 		self.add(*children)
+
+# -----------------------------------------------------------------------------
+#
+# CONDITION
+#
+# -----------------------------------------------------------------------------
 
 class Condition(ParsingElement):
 
@@ -231,8 +269,14 @@ class Condition(ParsingElement):
 		c = ffi.callback(t, c)
 		return c
 
-	def __init__( self, callback, wrap=False ):
-		CObject.__init__(self, callback if wrap else lib.Condition_new(self.WrapCallback(callback)))
+	def _new( self, callback ):
+		return lib.Condition_new(self.WrapCallback(callback))
+
+# -----------------------------------------------------------------------------
+#
+# PROCEDURE
+#
+# -----------------------------------------------------------------------------
 
 class Procedure(ParsingElement):
 
@@ -244,8 +288,14 @@ class Procedure(ParsingElement):
 		c = ffi.callback(t, c)
 		return c
 
-	def __init__( self, callback, wrap=False ):
-		CObject.__init__(self, callback if wrap else lib.Procedure_new(self.WrapCallback(callback)))
+	def _new( self, callback ):
+		return lib.Procedure_new(self.WrapCallback(callback))
+
+# -----------------------------------------------------------------------------
+#
+# SYMBOLS
+#
+# -----------------------------------------------------------------------------
 
 class Symbols:
 
@@ -256,12 +306,18 @@ class Symbols:
 	def __getitem__( self, key ):
 		return getattr(self, key)
 
+# -----------------------------------------------------------------------------
+#
+# GRAMMAR
+#
+# -----------------------------------------------------------------------------
+
 class Grammar(CObject):
 
-	def __init__(self, name=None ):
-		CObject.__init__(self, lib.Grammar_new())
+	def _new(self, name=None ):
 		self.name    = name
 		self.symbols = Symbols()
+		return lib.Grammar_new()
 
 	def word( self, name, word):
 		r = Word(word)
@@ -348,9 +404,16 @@ class Grammar(CObject):
 
 if __name__ == "__main__":
 	g  = Grammar()
-	print lib.Reference_New(
-		lib.Word_new("POUET")
-	).element
+	word = lib.Word_new("HELLO")
+	ref  = lib.Reference_New(word)
+	assert (ref.element)
+	assert (ref.element == word)
+	w = Word("a")
+	r = Reference(w)
+	assert w._cobject == r._cobject.element
+	# print lib.Reference_New(
+	# 	lib.Word_new("POUET")
+	# ).element
 	# print Word("a")._as("name")
 	# assert Word("a")._cobject
 	# a  = Word("a")._as("a")
