@@ -603,6 +603,20 @@ ParsingStep* ParsingStep_new( ParsingElement* element );
 void ParsingStep_destroy( ParsingStep* this );
 
 /**
+ * Utilities
+ * =========
+*/
+
+// @method
+void Utilities_indent( ParsingElement* this, ParsingContext* context );
+
+// @method
+void Utilities_dedent( ParsingElement* this, ParsingContext* context );
+
+// @method
+Match* Utilites_checkIndent( ParsingElement *this, ParsingContext* context );
+
+/**
  * Syntax Sugar
  * ============
  *
