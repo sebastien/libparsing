@@ -232,9 +232,10 @@ Match* Match_Empty() {
 }
 
 
-Match* Match_Success(size_t length) {
+Match* Match_Success(size_t length, ParsingContext* context) {
 	NEW(Match,this);
 	this->status = STATUS_MATCHED;
+	this->offset = context->iterator->offset;
 	this->length = length;
 	return this;
 }
@@ -243,6 +244,7 @@ Match* Match_new() {
 	__ALLOC(Match,this);
 	this->status    = STATUS_INIT;
 	this->length    = 0;
+	this->offset    = 0;
 	this->data      = NULL;
 	this->child     = NULL;
 	this->next      = NULL;
@@ -259,7 +261,6 @@ bool Match_isSuccess(Match* this) {
 
 size_t Match__walk(Match* this, WalkingCallback callback, size_t step ){
 	callback(this, step++);
-	Match* child = this->child;
 	if (this->child != NULL) {
 		step = Match__walk(this->child, callback, step++);
 	}
@@ -500,7 +501,7 @@ Match* Word_recognize(ParsingElement* this, ParsingContext* context) {
 		// and moves the iterator.
 		context->iterator->move(context->iterator, config->length);
 		DEBUG("[✓] %s:%s matched at %zd", this->name, ((WordConfig*)this->config)->word, context->iterator->offset);
-		return Match_Success(config->length);
+		return Match_Success(config->length, context);
 	} else {
 		DEBUG("    %s:%s failed at %zd", this->name, ((WordConfig*)this->config)->word, context->iterator->offset);
 		return FAILURE;
@@ -588,7 +589,7 @@ Match* Token_recognize(ParsingElement* this, ParsingContext* context) {
 			r = vector_length / 3;
 		}
 		// FIXME: Make sure it is the length and not the end offset
-		result           = Match_Success(vector[1]);
+		result           = Match_Success(vector[1], context);
 		DEBUG("[✓] %s:%s matched at %zd", this->name, config->expr, context->iterator->offset);
 		context->iterator->move(context->iterator,result->length);
 		assert(Match_isSuccess(result));
@@ -721,7 +722,7 @@ Match*  Procedure_recognize(ParsingElement* this, ParsingContext* context) {
 	if (this->config != NULL) {
 		((ProcedureCallback)(this->config))(this, context);
 	}
-	return Match_Success(0);
+	return Match_Success(0, context);
 }
 
 // ----------------------------------------------------------------------------
@@ -745,7 +746,7 @@ Match*  Condition_recognize(ParsingElement* this, ParsingContext* context) {
 		return  result;
 	} else {
 		DEBUGIF("[✓] Condition %s matched by default at %zd", this->name, context->iterator->offset)
-		Match* result = Match_Success(0);
+		Match* result = Match_Success(0, context);
 		assert(Match_isSuccess(result));
 		return  result;
 	}
@@ -875,7 +876,7 @@ Match* Utilites_checkIndent( ParsingElement *this, ParsingContext* context ) {
 	// } else {
 	// 	return Match_Success();
 	// }
-	return Match_Success(0);
+	return Match_Success(0, context);
 }
 
 int XXXmain (int argc, char* argv[]) {

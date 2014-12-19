@@ -242,6 +242,7 @@ size_t Element__walk( Element* this, WalkingCallback callback, size_t step );
 typedef struct Match {
 	// TODO: We might need to put offset there
 	char            status;     // The status of the match (see STATUS_XXX)
+	size_t          offset;     // The offset of `iterated_t` matched
 	size_t          length;     // The number of `iterated_t` matched
 	void            *data;      // The matched data (usually a subset of the input stream)
 	struct Match    *next;      // A pointer to the next  match (see `References`)
@@ -280,7 +281,7 @@ Match* Match_Empty();
 
 // @operation
 // Creates a new successful match of the given length
-Match* Match_Success(size_t length);
+Match* Match_Success(size_t length, ParsingContext* context);
 
 // @constructor
 Match* Match_new(void);
@@ -712,7 +713,7 @@ void ParsingStep_destroy( ParsingStep* this );
 #define _MO(n)            MANY_OPTIONAL(s_ ## n)
 
 // @macro
-// Sets the name of refernce `r` to be v
+// Sets the name of reference `r` to be v
 #define _AS(r,v)          Reference_name(Reference_Ensure(r), v)
 
 /*

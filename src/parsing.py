@@ -73,10 +73,16 @@ lib = ffi.dlopen("libparsing.so.0.2.0")
 #
 # -----------------------------------------------------------------------------
 
+CARDINALITY_OPTIONAL      = '?'
+CARDINALITY_ONE           = '1'
+CARDINALITY_MANY_OPTIONAL = '*'
+CARDINALITY_MANY          = '+'
+
 class CObject(object):
 
-	_IS  = None
-	_NEW = None
+	_IS   = None
+	_NEW  = None
+	_TYPE = None
 
 	@classmethod
 	def Is(cls, i ):
@@ -89,13 +95,15 @@ class CObject(object):
 
 	@classmethod
 	def Wrap(cls, i):
-		return cls(i)
+		return cls(ffi.cast(cls._TYPE, i))
 
 	def __init__(self, o, wrap=True):
-		self._cobj = o
+		self._cobj = o if not self._TYPE else ffi.cast(self._TYPE, o)
 		assert o
 
 class Match(CObject):
+
+	_TYPE = "Match*"
 
 	def walk( self, callback ):
 		def c(m,s):
@@ -104,25 +112,90 @@ class Match(CObject):
 		c = ffi.callback("void(*)(void *, size_t)", c)
 		return lib.Match__walk(self._cobj, c, 0)
 
+	def offset( self ):
+		return self._cobj.offset
+
+	def length( self ):
+		return self._cobj.length
+
 class Reference(CObject):
 
+	_TYPE = "Reference*"
 	_IS  = lambda o: lib.Reference_Is(o)
+
+	def __init__(self, o=None, wrap=False):
+		if not wrap:
+			print "REFERENCE", o
+			if isinstance(o, CObject):
+				assert isinstance(o, ParsingElement)
+				o = lib.Reference_Ensure(o._cobj)
+			else:
+				o = lib.Reference_Ensure(o)
+			CObject.__init__(self, o)
+		else:
+			assert not o
+			CObject.__init__(self, lib.Reference_New())
 
 	def _as( self, name ):
 		lib.Reference_name(self._cobj, name)
 		return self
 
+	def one( self ):
+		lib.Reference_cardinality(self._cobj, CARDINALITY_ONE)
+		return self
+
+	def optional( self ):
+		lib.Reference_cardinality(self._cobj, CARDINALITY_OPTIONAL)
+		return self
+
+	def zeroOrMore( self ):
+		lib.Reference_cardinality(self._cobj, CARDINALITY_MANY_OPTIONAL)
+		return self
+
+	def oneOrMore( self ):
+		lib.Reference_cardinality(self._cobj, CARDINALITY_MANY)
+		return self
+
+	def disableMemoize( self ):
+		return self
+
+	def disableFailMemoize( self ):
+		return self
+
 class ParsingElement(CObject):
 
+	_TYPE = "ParsingElement*"
 	_IS  = lambda o: lib.ParsingElement_Is(o)
 
 	def add( self, *children ):
 		for c in children:
+			assert isinstance(c, ParsingElement) or isinstance(c, Reference)
 			lib.ParsingElement_add(self._cobj, lib.Reference_Ensure(c._cobj))
 		return self
 
-	def _as( self, name ):
+	def setName( self, name ):
 		lib.ParsingElement_name(self._cobj, name)
+		return self
+
+	def set( self, *children ):
+		return self.add(*children)
+
+	def _as( self, name ):
+		return Reference(lib.Reference_Ensure(self._cobj))._as(name)
+
+	def optional( self ):
+		return Reference(lib.Reference_Ensure(self._cobj)).optional()
+
+	def zeroOrMore( self ):
+		return Reference(lib.Reference_Ensure(self._cobj)).zeroOrMore()
+
+	def oneOrMore( self ):
+		return Reference(lib.Reference_Ensure(self._cobj)).oneOrMore()
+
+	def disableMemoize( self ):
+		return self
+
+	def disableFailMemoize( self ):
 		return self
 
 class Word(ParsingElement):
@@ -147,10 +220,89 @@ class Rule(ParsingElement):
 		CObject.__init__(self, lib.Rule_new(ffi.NULL))
 		self.add(*children)
 
+class Condition(ParsingElement):
+
+	@classmethod
+	def WrapCallback(cls, callback):
+		def c(e,ctx):
+			return callback(e,ctx)
+		t = "Match*(*)(ParsingElement *, ParsingContext *)"
+		c = ffi.callback(t, c)
+		return c
+
+	def __init__( self, callback, wrap=False ):
+		CObject.__init__(self, callback if wrap else lib.Condition_new(self.WrapCallback(callback)))
+
+class Procedure(ParsingElement):
+
+	@classmethod
+	def WrapCallback(cls, callback):
+		def c(e,ctx):
+			return callback(e,ctx)
+		t = "void(*)(ParsingElement *, ParsingContext *)"
+		c = ffi.callback(t, c)
+		return c
+
+	def __init__( self, callback, wrap=False ):
+		CObject.__init__(self, callback if wrap else lib.Procedure_new(self.WrapCallback(callback)))
+
+class Symbols:
+
+	def __setitem__( self, key, value ):
+		setattr(self, key, value)
+		return value
+
+	def __getitem__( self, key ):
+		return getattr(self, key)
+
 class Grammar(CObject):
 
-	def __init__(self):
+	def __init__(self, name):
 		CObject.__init__(self, lib.Grammar_new())
+		self.name    = name
+		self.symbols = Symbols()
+
+	def word( self, name, word):
+		r = Word(word)
+		self.symbols[name] = r
+		return r
+
+	def token( self, name, token):
+		r = Token(token)
+		self.symbols[name] = r
+		return r
+
+	def procedure( self, name, callback):
+		r = Procedure(callback)
+		self.symbols[name] = r
+		return r
+
+	def aprocedure( self, callback):
+		return Procedure(callback)
+
+	def condition( self, name, callback):
+		r = Condition(callback)
+		self.symbols[name] = r
+		return r
+
+	def acondition( self, callback):
+		return Condition(callback)
+
+	def group( self, name, *children):
+		r = Group(*children)
+		self.symbols[name] = r
+		return r
+
+	def rule( self, name, *children):
+		r = Rule(*children)
+		self.symbols[name] = r
+		return r
+
+	def arule( self, name, *children):
+		return Rule(*children)
+
+	def agroup( self, name, *children):
+		return Group(*children)
 
 	def prepare( self ):
 		lib.Grammar_prepare(self._cobj)
@@ -171,6 +323,7 @@ class Grammar(CObject):
 
 	def walk( self, callback ):
 		def c(o,s):
+			# FIXME: This does not seem to work
 			if    Reference.Is(o):
 				o = Reference.Wrap(o)
 			elif  ParsingElement.Is(o):
@@ -197,8 +350,12 @@ if __name__ == "__main__":
 	e  = Group(a, b)._as("e")
 	g.axiom(e).skip(ws)
 	match = g.parsePath("pouet.txt")
-	def w(m, step):
-		print "MATCH", step, m
-	match.walk(w)
+	def mw(m, step):
+		print "MATCH", step, m.offset(), m.length()
+	def gw(e, step):
+		print "ELEMENT", e
+	match.walk(mw)
+	# NOTE: The following does not work
+	# g.walk(gw)
 
 # EOF - vim: ts=4 sw=4 noet
