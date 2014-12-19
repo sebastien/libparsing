@@ -754,6 +754,7 @@ void ParsingOffset_destroy( ParsingOffset* this ) {
 // ----------------------------------------------------------------------------
 
 Match* Grammar_parseFromIterator( Grammar* this, Iterator* iterator ) {
+	assert(this->axiom != NULL);
 	ParsingOffset* offset  = ParsingOffset_new(iterator->offset);
 	ParsingContext context = (ParsingContext){
 		.grammar  = this,
@@ -761,7 +762,6 @@ Match* Grammar_parseFromIterator( Grammar* this, Iterator* iterator ) {
 		.offsets  = offset,
 		.offsets  = offset,
 	};
-	assert(this->axiom != NULL);
 	Match* match = this->axiom->recognize(this->axiom, &context);
 	if (match != FAILURE) {
 		if (Iterator_hasMore(context.iterator) && Iterator_remaining(context.iterator) > 0) {

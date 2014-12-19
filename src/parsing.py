@@ -58,21 +58,80 @@ ffi = FFI()
 ffi.cdef(cdef)
 lib = ffi.dlopen("libparsing.so.0.1.2")
 
+class CObject(object):
+
+	def __init__(self, o):
+		self._cobj = o
+
+class ParsingElement(CObject):
+
+	def add( self, *children ):
+		for c in children:
+			lib.ParsingElement_add(self._cobj, lib.Reference_Ensure(self._cobj))
+		return self
+
+	def _as( self, name ):
+		lib.ParsingElement_name(self._cobj, name)
+		return self
+
+class Word(ParsingElement):
+
+	def __init__( self, word ):
+		CObject.__init__(self, lib.Word_new(word))
+
+class Token(ParsingElement):
+
+	def __init__( self, token ):
+		CObject.__init__(self, lib.Token_new(token))
+
+class Group(ParsingElement):
+
+	def __init__( self, *children ):
+		CObject.__init__(self, lib.Group_new(ffi.NULL))
+		self.add(*children)
+
+class Rule(ParsingElement):
+
+	def __init__( self, *children ):
+		CObject.__init__(self, lib.Rule_new(ffi.NULL))
+		self.add(*children)
+
+class Grammar(CObject):
+
+	def __init__(self):
+		CObject.__init__(self, lib.Grammar_new())
+
+	def axiom( self, axiom ):
+		assert isinstance(axiom, ParsingElement)
+		self._cobj.axiom = axiom._cobj
+		return self
+
+	def skip( self, skip ):
+		assert isinstance(skip, ParsingElement)
+		self._cobj.skip = skip._cobj
+		return self
+
+	def parsePath( self, path ):
+		return lib.Grammar_parseFromPath(self._cobj, path )
+
 g   = lib.Grammar_new()
 a   = lib.ParsingElement_name(lib.Word_new ("a"), ("a"))
 b   = lib.ParsingElement_name(lib.Word_new ("b"), ("b"))
 ws  = lib.Token_new("\\s+")
 e   = lib.ParsingElement_name(lib.Group_new(ffi.NULL), "e")
+g.axiom = e
+g.skip  = ws
 
 lib.ParsingElement_add(e, lib.Reference_Ensure(a))
 lib.ParsingElement_add(e, lib.Reference_Ensure(b))
-
-g.axiom = e
-g.skip  = ws
 lib.Grammar_parseFromPath(g, "pouet.txt")
 
-import ipdb
-ipdb.set_trace()
-
+# g  = Grammar()
+# a  = Word("a")._as("a")
+# b  = Word("b")._as("b")
+# ws = Token("\\s+")
+# e  = Group(a, b)._as("e")
+# g.axiom(e).skip(ws)
+# g.parsePath("pouet.txt")
 
 # EOF - vim: ts=4 sw=4 noet
