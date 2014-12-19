@@ -4,10 +4,9 @@ MAJOR    = $(shell echo $(VERSION) | cut -d. -f1)
 PRODUCTS = $(PROJECT) lib$(PROJECT).so.$(VERSION)
 SOURCES  = $(wildcard src/*.c)
 OBJECTS  = $(SOURCES:src/%.c=build/%.o)
-CC       = colorgcc
+CC       = clang
 LIBS    := libpcre
-FLAGS    = -std=c11
-CFLAGS  += -g -Wall -fPIC -DDEBUG_ENABLED
+CFLAGS  += -std=c11 -g -Wall -fPIC -DDEBUG_ENABLED
 LDFLAGS := -shared $(shell pkg-config --cflags --libs $(LIBS))
 
 all: libparsing

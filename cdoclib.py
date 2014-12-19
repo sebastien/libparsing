@@ -1,5 +1,5 @@
 import sys, re
-import reporter, texto
+import reporter, texto, templating
 from pygments            import highlight
 from pygments.lexers     import CLexer
 from pygments.formatters import HtmlFormatter
@@ -39,8 +39,8 @@ Here @type is the classifier, which can be one of the following:
 
 RE_DOC_LINE    = re.compile("\s*//(.*)")
 RE_DOC_START   = re.compile("/\*\*?(.*)")
-RE_DOC_BODY    = re.compile("\s*\*\s*(.*)")
-RE_DOC_END     = re.compile("\*/()")
+RE_DOC_BODY    = re.compile("\s*\*+\s*(.*)")
+RE_DOC_END     = re.compile("\s*\*+/()")
 RE_STRUCTURE   = re.compile("\s*@(\w+)\s*")
 RE_EMPTY       = re.compile("^\s*$")
 RE_ANNOTATION  = re.compile("^\s*(TODO|FIXME|SEE|NOTE).+")
@@ -68,19 +68,33 @@ SYMBOL_EXTRACTORS = dict(
 	method      = RE_FUNCTION,
 )
 
-HTML_BODY = """
+HTML_PAGE = """
 <!DOCTYPE html>
 <html>
 	<head>
 		<meta charset="utf-8" />
 		<title>${library} &mdash; API</title>
+		<link rel="stylesheet" href="http://cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/styles/default.min.css">
+		<link rel="stylesheet" href="http://sebastienpierre.ca/lib/css/base.css">
+		<script src="http://cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/highlight.min.js"></script>
+		<script src="http://sebastienpierre.ca/lib/js/jquery-2.0.3.js"></script>
+		<script src="http://sebastienpierre.ca/lib/js/extend-2.5.0.js"></script>
+		<script src="http://sebastienpierre.ca/lib/js/html-5.0.3.js"></script>
+		<script src="http://sebastienpierre.ca/lib/js/texto.js"></script>
+		<style>${css}</style>
 	<body>
-		<div class=API>
-			<div class="index">
-				${index}
+		<div class="API use-texto use-base">
+			<div class="hidden index to-w expand-h" style="position:fixed;overflow:auto;width:250px;">
+				<ol>
+				${for:groups}
+				<li class="${this.classifier}"><a href="#${this.name}_${this.classifier}">${this.name}</a></li>
+				${end}
+				</ol>
 			</div>
-			<div class="documentation">
-				${documentation}
+			<div class="documentation" style="margin-left:250px;">
+				<div class="document">
+				${body}
+				</div>
 			</div>
 		</div>
 	</body>
@@ -144,7 +158,7 @@ class Parser:
 					t,l = TYPE_SYMBOL, s.group(1)
 				else:
 					t,l = TYPE_DOC, m[0]
-					if RE_ANNOTATION.match(l):
+					if RE_ANNOTATION.match(l) or l == "/":
 						t,l = None, None
 			else:
 				t,l = TYPE_CODE, line
@@ -203,7 +217,7 @@ class Formatter:
 		for group in library.groups:
 			d = []
 			if group.name:
-				l  = '%s %s [|%s|]' % (group.classifier, group.name, group.name)
+				l  = '\n[#%s_%s]`%s`' % (group.name, group.classifier, group.name)
 				d.append(l)
 				d.append("-" * len(l))
 				d.append("")
@@ -230,12 +244,20 @@ if __name__ == "__main__":
 	for p in args:
 		with open(p) as f:
 			text   = f.read()
-			for line in Parser.Lines(text):
-				print line
+			# for line in Parser.Lines(text):
+			# 	print line
 			groups = Parser.Groups(Parser.Lines(text))
 			lib.addGroups(groups)
-
-	print lib.getSymbolCode("Iterator", "type")
+	body = Formatter().format(lib)
+	if False:
+		print templating.Template(HTML_PAGE).apply(dict(
+			css  = open("texto.css").read(),
+			body = texto.toHTML(body),
+			groups = [_ for _ in lib.groups if _.type == TYPE_SYMBOL]
+		))
+	else:
+		print body
+	# print lib.getSymbolCode("Iterator", "type")
 	# with file("src/parsing.ffi", "w") as f:
 	# 	f.write(lib.getSymbolCode("Reference",      "type"))
 	# 	f.write(lib.getSymbolCode("Match",          "type"))

@@ -18,15 +18,16 @@ LICENSE  = "http://ffctn.com/doc/licenses/bsd"
 FFI_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "parsing.ffi")
 
 
-clib = cdoclib.Library("src/parsing.h")
-cdef = "typedef char* iterated_t;typedef struct ParsingElement Parsing;\n" + clib.getCode(
-	("Reference",      "type"),
-	("Match",          "type"),
-	("Iterator",       "type"),
-	("ParsingContext", "type"),
-	("ParsingElement", "type"),
-	("Grammar",        "type"),
-)
+if not os.path.exists(FFI_PATH):
+	clib = cdoclib.Library("src/parsing.h")
+	cdef = "typedef char* iterated_t;typedef struct ParsingElement Parsing;\n" + clib.getCode(
+		("Reference",      "type"),
+		("Match",          "type"),
+		("Iterator",       "type"),
+		("ParsingContext", "type"),
+		("ParsingElement", "type"),
+		("Grammar",        "type"),
+	)
 #cdef = file("src/parsing.ffi").read()
 file("src/parsing.ffi", "w").write(cdef)
 
