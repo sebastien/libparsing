@@ -88,7 +88,7 @@ class CObject(object):
 	def Is(cls, i ):
 		if isinstance(i, cls):
 			return True
-		elif isinstance(i, CObject) and cls._IS and cls._IS(i._cobj):
+		elif isinstance(i, CObject) and cls._IS and cls._IS(i._cobject):
 			return True
 		else:
 			return False
@@ -98,7 +98,7 @@ class CObject(object):
 		return cls(ffi.cast(cls._TYPE, i))
 
 	def __init__(self, o, wrap=True):
-		self._cobj = o if not self._TYPE else ffi.cast(self._TYPE, o)
+		self._cobject = o if not self._TYPE else ffi.cast(self._TYPE, o)
 		assert o
 
 class Match(CObject):
@@ -110,13 +110,13 @@ class Match(CObject):
 			m = Match(m)
 			callback(m,s)
 		c = ffi.callback("void(*)(void *, size_t)", c)
-		return lib.Match__walk(self._cobj, c, 0)
+		return lib.Match__walk(self._cobject, c, 0)
 
 	def offset( self ):
-		return self._cobj.offset
+		return self._cobject.offset
 
 	def length( self ):
-		return self._cobj.length
+		return self._cobject.length
 
 class Reference(CObject):
 
@@ -125,35 +125,36 @@ class Reference(CObject):
 
 	def __init__(self, o=None, wrap=False):
 		if not wrap:
-			print "REFERENCE", o
-			if isinstance(o, CObject):
-				assert isinstance(o, ParsingElement)
-				o = lib.Reference_Ensure(o._cobj)
-			else:
-				o = lib.Reference_Ensure(o)
-			CObject.__init__(self, o)
+			assert isinstance(o, ParsingElement)
+			assert o._cobject != ffi.NULL
+			print "POUET", o._cobject
+			print lib.Reference_New(o._cobject).element
+			CObject.__init__(self, lib.Reference_New(o._cobject))
+			print self._cobject.element
+			assert self._cobject.element, "Ensured reference has no element: o={0}, reference={1}".format(e, self._cobject)
 		else:
-			assert not o
-			CObject.__init__(self, lib.Reference_New())
+			assert o
+			print "REF2", o
+			CObject.__init__(self, lib.Reference_New(o))
 
 	def _as( self, name ):
-		lib.Reference_name(self._cobj, name)
+		lib.Reference_name(self._cobject, name)
 		return self
 
 	def one( self ):
-		lib.Reference_cardinality(self._cobj, CARDINALITY_ONE)
+		lib.Reference_cardinality(self._cobject, CARDINALITY_ONE)
 		return self
 
 	def optional( self ):
-		lib.Reference_cardinality(self._cobj, CARDINALITY_OPTIONAL)
+		lib.Reference_cardinality(self._cobject, CARDINALITY_OPTIONAL)
 		return self
 
 	def zeroOrMore( self ):
-		lib.Reference_cardinality(self._cobj, CARDINALITY_MANY_OPTIONAL)
+		lib.Reference_cardinality(self._cobject, CARDINALITY_MANY_OPTIONAL)
 		return self
 
 	def oneOrMore( self ):
-		lib.Reference_cardinality(self._cobj, CARDINALITY_MANY)
+		lib.Reference_cardinality(self._cobject, CARDINALITY_MANY)
 		return self
 
 	def disableMemoize( self ):
@@ -170,27 +171,27 @@ class ParsingElement(CObject):
 	def add( self, *children ):
 		for c in children:
 			assert isinstance(c, ParsingElement) or isinstance(c, Reference)
-			lib.ParsingElement_add(self._cobj, lib.Reference_Ensure(c._cobj))
+			lib.ParsingElement_add(self._cobject, lib.Reference_Ensure(c._cobject))
 		return self
 
 	def setName( self, name ):
-		lib.ParsingElement_name(self._cobj, name)
+		lib.ParsingElement_name(self._cobject, name)
 		return self
 
 	def set( self, *children ):
 		return self.add(*children)
 
 	def _as( self, name ):
-		return Reference(lib.Reference_Ensure(self._cobj))._as(name)
+		return Reference(self)._as(name)
 
 	def optional( self ):
-		return Reference(lib.Reference_Ensure(self._cobj)).optional()
+		return Reference(self).optional()
 
 	def zeroOrMore( self ):
-		return Reference(lib.Reference_Ensure(self._cobj)).zeroOrMore()
+		return Reference(self).zeroOrMore()
 
 	def oneOrMore( self ):
-		return Reference(lib.Reference_Ensure(self._cobj)).oneOrMore()
+		return Reference(self).oneOrMore()
 
 	def disableMemoize( self ):
 		return self
@@ -257,7 +258,7 @@ class Symbols:
 
 class Grammar(CObject):
 
-	def __init__(self, name):
+	def __init__(self, name=None ):
 		CObject.__init__(self, lib.Grammar_new())
 		self.name    = name
 		self.symbols = Symbols()
@@ -305,21 +306,24 @@ class Grammar(CObject):
 		return Group(*children)
 
 	def prepare( self ):
-		lib.Grammar_prepare(self._cobj)
+		lib.Grammar_prepare(self._cobject)
 		return self
 
 	def axiom( self, axiom ):
+		if isinstance(axiom, Reference):
+			axiom = axiom._cobject.element
+			assert axiom
 		assert isinstance(axiom, ParsingElement)
-		self._cobj.axiom = axiom._cobj
+		self._cobject.axiom = axiom._cobject
 		return self.prepare()
 
 	def skip( self, skip ):
 		assert isinstance(skip, ParsingElement)
-		self._cobj.skip = skip._cobj
+		self._cobject.skip = skip._cobject
 		return self
 
 	def parsePath( self, path ):
-		return Match(lib.Grammar_parseFromPath(self._cobj, path))
+		return Match(lib.Grammar_parseFromPath(self._cobject, path))
 
 	def walk( self, callback ):
 		def c(o,s):
@@ -334,7 +338,7 @@ class Grammar(CObject):
 				o = Match.Wrap(o)
 			callback(o, s)
 		c = ffi.callback("void(*)(void *, size_t)", c)
-		return lib.Element__walk(self._cobj.axiom, c, 0)
+		return lib.Element__walk(self._cobject.axiom, c, 0)
 
 # -----------------------------------------------------------------------------
 #
@@ -344,17 +348,22 @@ class Grammar(CObject):
 
 if __name__ == "__main__":
 	g  = Grammar()
-	a  = Word("a")._as("a")
-	b  = Word("b")._as("b")
-	ws = Token("\\s+")
-	e  = Group(a, b)._as("e")
-	g.axiom(e).skip(ws)
-	match = g.parsePath("pouet.txt")
-	def mw(m, step):
-		print "MATCH", step, m.offset(), m.length()
-	def gw(e, step):
-		print "ELEMENT", e
-	match.walk(mw)
+	print lib.Reference_New(
+		lib.Word_new("POUET")
+	).element
+	# print Word("a")._as("name")
+	# assert Word("a")._cobject
+	# a  = Word("a")._as("a")
+	# b  = Word("b")._as("b")
+	# ws = Token("\\s+")
+	# e  = Group(a, b)._as("e")
+	# g.axiom(e).skip(ws)
+	# match = g.parsePath("pouet.txt")
+	# def mw(m, step):
+	# 	print "MATCH", step, m.offset(), m.length()
+	# def gw(e, step):
+	# 	print "ELEMENT", e
+	# match.walk(mw)
 	# NOTE: The following does not work
 	# g.walk(gw)
 

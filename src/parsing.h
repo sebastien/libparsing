@@ -211,7 +211,7 @@ Match* Grammar_parseFromPath( Grammar* this, const char* path );
 typedef void Element;
 
 // @callback
-typedef void (*WalkingCallback)(Element* this, size_t step);
+typedef bool (*WalkingCallback)(Element* this, size_t step);
 
 // @method
 size_t Element_walk( Element* this, WalkingCallback callback );
@@ -298,7 +298,7 @@ size_t Match__walk(Match* this, WalkingCallback callback, size_t step );
 // @type ParsingElement
 typedef struct ParsingElement {
 	char           type;       // Type is used du differentiate ParsingElement from Reference
-	unsigned short id;         // The ID, assigned by the grammar, as the relative distance to the axiom
+	int            id;         // The ID, assigned by the grammar, as the relative distance to the axiom
 	const char*    name;       // The parsing element's name, for debugging
 	void*          config;     // The configuration of the parsing element
 	struct Reference*     children;   // The parsing element's children, if any
@@ -417,7 +417,7 @@ Match*          Token_recognize(ParsingElement* this, ParsingContext* context);
 // @type Reference
 typedef struct Reference {
 	char            type;            // Set to Reference_T, to disambiguate with ParsingElement
-	unsigned short id;               // The ID, assigned by the grammar, as the relative distance to the axiom
+	int             id;              // The ID, assigned by the grammar, as the relative distance to the axiom
 	char            cardinality;     // Either ONE (default), OPTIONAL, MANY or MANY_OPTIONAL
 	const char*     name;            // The name of the reference (optional)
 	struct ParsingElement* element;  // The reference to the parsing element
