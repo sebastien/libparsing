@@ -1,29 +1,70 @@
+#!/usr/bin/env python
+# encoding=utf8 ---------------------------------------------------------------
+# Project           : cdoclib
+# -----------------------------------------------------------------------------
+# Author            : FFunction
+# License           : BSD License
+# -----------------------------------------------------------------------------
+# Creation date     : 18-Dec-2014
+# Last modification : 18-Dec-2014
+# -----------------------------------------------------------------------------
 import sys, re, fnmatch
 import reporter, texto, templating
 from pygments            import highlight
 from pygments.lexers     import CLexer
 from pygments.formatters import HtmlFormatter
 
+VERSION = "0.0.0"
+LICENSE = "http://ffctn.com/doc/licenses/bsd"
 
+# START:DOC
 __doc__ = """
-Extracts structure from specifically formatted C header files, allowing to
-generate documentation & Python CFFI data files.
+== cdoclib
+-- A C documentation and FFI generation utility
 
-The format is relatively simple: documentation is extracted from comments,
-and is formatted in the `texto` (markdown-like) markup language.
+`cdoclib` extracts structure from specifically formatted C header files,
+allowing to generate API documentation & Python CFFI data files.
 
-Structural elements within the code base are prefixed with a classifier
-definition, expressed in a comment. For instance:
+The format is relatively simple: documentation and API is extracted from
+comment strings put in the given header files. The documentation is expected to
+be formatted in the `texto` (markdown-like) markup language.
 
->	// @type ParsingContext
->	typedef struct ParsingContext {
->		struct Grammar*       grammar;      // The grammar used to parse
->		struct Iterator*      iterator;     // Iterator on the input data
->		struct ParsingOffset* offsets;      // The parsing offsets, starting at 0
->		struct ParsingOffset* current;      // The current parsing offset
->	} ParsingContext;
+You can see an example here <http://github.com/sebastien/parsing/src/parsing.h>
+and the generated documentation <http://github.com/sebastien/parsing/parsing.html>.
 
-Here @type is the classifier, which can be one of the following:
+Usage
+=====
+
+```
+cdoclib include/header1.h include/header2.h
+cdoclib include/header1.h include/header2.h
+cdoclib include/header1.h include/header2.h  documentation.texto
+cdoclib include/header1.h include/header2.h  documentation.html
+cdoclib include/header1.h include/header2.h  documentation.ffi
+```
+
+Outputs
+=======
+
+`.texto`::
+	outputs `texto`-formatted text with the annotated bits of code embedded
+
+`.html`::
+	outputs an HTML-formatted document designed ass an API reference
+
+`.ffi`::
+	outputs a subset of the header that should be parseable by Python's CFFI
+
+
+Annotation `.h` files
+=====================
+
+The way to annotate structural elements within the header file is to use
+one-line comments of the following form:
+
+>	// @<CLASSIFIER>
+
+where `<CLASSIFIER>` is one of the following:
 
 - `@define`
 - `@macro`
@@ -36,7 +77,18 @@ Here @type is the classifier, which can be one of the following:
 - `@destructor`
 - `@method`
 
+Here's an example:
+
+>	// @type ParsingContext
+>	typedef struct ParsingContext {
+>		struct Grammar*       grammar;      // The grammar used to parse
+>		struct Iterator*      iterator;     // Iterator on the input data
+>		struct ParsingOffset* offsets;      // The parsing offsets, starting at 0
+>		struct ParsingOffset* current;      // The current parsing offset
+>	} ParsingContext;
+
 """
+# END:DOC
 
 RE_DOC_LINE    = re.compile("\s*//(.*)")
 RE_DOC_START   = re.compile("/\*\*?(.*)")
@@ -284,4 +336,4 @@ if __name__ == "__main__":
 	# 	# f.write(lib.getCode("Word",           "constructor"))
 	# 	# f.write(lib.getCode("Grammar",        "constructor"))
 
-# EOF
+# EOF - vim: ts=4 sw=4 noet
