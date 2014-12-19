@@ -167,9 +167,14 @@ class Library:
 		self.symbols = {}
 		self.files   = []
 		self.groups  = []
-		if path:
+		self.parse(path)
+
+	def parse( self, *paths ):
+		for path in paths:
+			if not path: continue
 			with file(path, "r") as f:
 				self.addGroups(Parser.Groups(Parser.Lines(f.read())))
+		return self
 
 	def addGroups( self, groups ):
 		self.groups += groups
@@ -304,6 +309,12 @@ class Formatter:
 		# We skip leading whitespace
 		body = strip(body)
 		return "\n".join(body)
+
+def parse( *paths ):
+	lib = Library()
+	for _ in paths:
+		lib.parse(_)
+	return lib
 
 if __name__ == "__main__":
 	import ipdb

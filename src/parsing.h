@@ -231,10 +231,15 @@ typedef struct Match {
 // @define
 // The different values for a match (or iterator)'s status
 #define STATUS_INIT        '-'
+// @define
 #define STATUS_PROCESSING  '~'
+// @define
 #define STATUS_MATCHED     'Y'
+// @define
 #define STATUS_FAILED      'X'
+// @define
 #define STATUS_INPUT_ENDED '.'
+// @define
 #define STATUS_ENDED       'E'
 
 // @singleton FAILURE_S
@@ -258,7 +263,7 @@ Match* Match_Empty();
 Match* Match_Success(size_t length);
 
 // @constructor
-Match* Match_new();
+Match* Match_new(void);
 
 // @destructor
 void Match_destroy(Match* this);
@@ -320,13 +325,13 @@ ParsingElement* ParsingElement_name( ParsingElement* this, const char* name );
  *
 */
 
-// @type Word
+// @type WordConfig
 // The parsing element configuration information that is used by the
 // `Token` methods.
-typedef struct Word {
+typedef struct WordConfig {
 	const char* word;
 	size_t      length;
-} Word;
+} WordConfig;
 
 // @constructor
 ParsingElement* Word_new(const char* word);
@@ -345,14 +350,14 @@ Match*          Word_recognize(ParsingElement* this, ParsingContext* context);
  *
 */
 
-// @type Token
+// @type TokenConfig
 // The parsing element configuration information that is used by the
 // `Token` methods.
-typedef struct Token {
+typedef struct TokenConfig {
 	const char* expr;
 	pcre*       regexp;
 	pcre_extra* extra;
-} Token;
+} TokenConfig;
 
 typedef struct TokenMatch {
 	int  groups;
@@ -397,8 +402,11 @@ typedef struct Reference {
 // @define
 // The different values for the `Reference` cardinality.
 #define CARDINALITY_OPTIONAL      '?'
+// @define
 #define CARDINALITY_ONE           '1'
+// @define
 #define CARDINALITY_MANY_OPTIONAL '*'
+// @define
 #define CARDINALITY_MANY          '+'
 
 const char   Reference_T = 'R';

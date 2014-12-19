@@ -1,5 +1,6 @@
 typedef char* iterated_t;
 typedef struct ParsingElement ParsingElement;
+typedef struct ParsingElement ParsingElement;
 typedef struct ParsingContext ParsingContext;
 typedef struct Match Match;
 typedef Match* (*ConditionCallback)(ParsingElement*, ParsingContext*);
@@ -40,7 +41,7 @@ Match* Match_Empty();
 
 Match* Match_Success(size_t length);
 
-Match* Match_new();
+Match* Match_new(void);
 
 bool Match_isSuccess(Match* this);
 
@@ -108,6 +109,26 @@ ParsingElement* Rule_new(Reference* children[]);
 ParsingElement* Procedure_new(ProcedureCallback c);
 
 ParsingElement* Condition_new(ConditionCallback c);
+
+typedef struct WordConfig {
+	const char* word;
+	size_t      length;
+} WordConfig;
+
+Match*          Word_recognize(ParsingElement* this, ParsingContext* context);
+
+
+ParsingElement* Token_new(const char* expr);
+
+Match*          Token_recognize(ParsingElement* this, ParsingContext* context);
+
+Match*          Group_recognize(ParsingElement* this, ParsingContext* context);
+
+Match*          Rule_recognize(ParsingElement* this, ParsingContext* context);
+
+Match*          Procedure_recognize(ParsingElement* this, ParsingContext* context);
+
+Match*          Condition_recognize(ParsingElement* this, ParsingContext* context);
 
 typedef struct Grammar {
 	ParsingElement*  axiom;       // The axiom

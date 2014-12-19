@@ -427,7 +427,7 @@ Match* Reference_recognize(Reference* this, ParsingContext* context) {
 // ----------------------------------------------------------------------------
 
 ParsingElement* Word_new(const char* word) {
-	__ALLOC(Word, config);
+	__ALLOC(WordConfig, config);
 	ParsingElement* this = ParsingElement_new(NULL);
 	this->recognize      = Word_recognize;
 	assert(word != NULL);
@@ -441,15 +441,15 @@ ParsingElement* Word_new(const char* word) {
 // TODO: Implement Word_destroy and regfree
 
 Match* Word_recognize(ParsingElement* this, ParsingContext* context) {
-	Word* config = ((Word*)this->config);
+	WordConfig* config = ((WordConfig*)this->config);
 	if (strncmp(config->word, context->iterator->current, config->length) == 0) {
 		// NOTE: You can see here that the word actually consumes input
 		// and moves the iterator.
 		context->iterator->move(context->iterator, config->length);
-		DEBUG("[✓] %s:%s matched at %zd", this->name, ((Word*)this->config)->word, context->iterator->offset);
+		DEBUG("[✓] %s:%s matched at %zd", this->name, ((WordConfig*)this->config)->word, context->iterator->offset);
 		return Match_Success(config->length);
 	} else {
-		DEBUG("    %s:%s failed at %zd", this->name, ((Word*)this->config)->word, context->iterator->offset);
+		DEBUG("    %s:%s failed at %zd", this->name, ((WordConfig*)this->config)->word, context->iterator->offset);
 		return FAILURE;
 	}
 }
@@ -461,7 +461,7 @@ Match* Word_recognize(ParsingElement* this, ParsingContext* context) {
 // ----------------------------------------------------------------------------
 
 ParsingElement* Token_new(const char* expr) {
-	__ALLOC(Token, config);
+	__ALLOC(TokenConfig, config);
 	ParsingElement* this = ParsingElement_new(NULL);
 	this->recognize      = Token_recognize;
 	const char* pcre_error;
@@ -486,7 +486,7 @@ ParsingElement* Token_new(const char* expr) {
 }
 
 void Token_destroy(ParsingElement* this) {
-	Token* config = (Token*)this->config;
+	TokenConfig* config = (TokenConfig*)this->config;
 	if (config != NULL) {
 		// FIXME: Not sure how to free a regexp
 		if (config->regexp != NULL) {}
@@ -499,7 +499,7 @@ void Token_destroy(ParsingElement* this) {
 Match* Token_recognize(ParsingElement* this, ParsingContext* context) {
 	assert(this->config);
 	if(this->config == NULL) {return FAILURE;}
-	Token* config     = (Token*)this->config;
+	TokenConfig* config     = (TokenConfig*)this->config;
 	// NOTE: This has to be a multiple of 3, according to `man pcre_exec`
 	int vector_length = 30;
 	int vector[vector_length];
