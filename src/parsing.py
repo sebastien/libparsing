@@ -18,6 +18,12 @@ LICENSE  = "http://ffctn.com/doc/licenses/bsd"
 FFI_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "parsing.ffi")
 H_PATH   = os.path.join(os.path.dirname(os.path.abspath(__file__)), "parsing.h")
 
+# -----------------------------------------------------------------------------
+#
+# FFI
+#
+# -----------------------------------------------------------------------------
+
 # Creates the .ffi file from the header or loads it directly from the
 # previously generated one.
 if os.path.exists(H_PATH):
@@ -27,6 +33,7 @@ if os.path.exists(H_PATH):
 	# the types.
 	cdef = (
 		"typedef char* iterated_t;\n"
+		"typedef void Element;\n"
 		"typedef struct ParsingElement ParsingElement;\n"
 		"typedef struct ParsingElement ParsingElement;\n"
 		"typedef struct ParsingContext ParsingContext;\n"
@@ -34,6 +41,7 @@ if os.path.exists(H_PATH):
 	) + clib.getCode(
 		("ConditionCallback",    None),
 		("ProcedureCallback",    None),
+		("WalkingCallback",      None),
 		("Reference*",           O),
 		("Match*",               O),
 		("Iterator*",            O),
@@ -56,18 +64,25 @@ else:
 
 ffi = FFI()
 ffi.cdef(cdef)
-lib = ffi.dlopen("libparsing.so.0.1.2")
+lib = ffi.dlopen("libparsing.so.0.2.0")
+
+# -----------------------------------------------------------------------------
+#
+# C OJBECT ABSTRACTION
+#
+# -----------------------------------------------------------------------------
 
 class CObject(object):
 
 	def __init__(self, o):
 		self._cobj = o
+		assert o
 
 class ParsingElement(CObject):
 
 	def add( self, *children ):
 		for c in children:
-			lib.ParsingElement_add(self._cobj, lib.Reference_Ensure(self._cobj))
+			lib.ParsingElement_add(self._cobj, lib.Reference_Ensure(c._cobj))
 		return self
 
 	def _as( self, name ):
@@ -101,10 +116,14 @@ class Grammar(CObject):
 	def __init__(self):
 		CObject.__init__(self, lib.Grammar_new())
 
+	def prepare( self ):
+		lib.Grammar_prepare(self._cobj)
+		return self
+
 	def axiom( self, axiom ):
 		assert isinstance(axiom, ParsingElement)
 		self._cobj.axiom = axiom._cobj
-		return self
+		return self.prepare()
 
 	def skip( self, skip ):
 		assert isinstance(skip, ParsingElement)
@@ -114,24 +133,31 @@ class Grammar(CObject):
 	def parsePath( self, path ):
 		return lib.Grammar_parseFromPath(self._cobj, path )
 
-g   = lib.Grammar_new()
-a   = lib.ParsingElement_name(lib.Word_new ("a"), ("a"))
-b   = lib.ParsingElement_name(lib.Word_new ("b"), ("b"))
-ws  = lib.Token_new("\\s+")
-e   = lib.ParsingElement_name(lib.Group_new(ffi.NULL), "e")
-g.axiom = e
-g.skip  = ws
+# -----------------------------------------------------------------------------
+#
+# MAIN
+#
+# -----------------------------------------------------------------------------
 
-lib.ParsingElement_add(e, lib.Reference_Ensure(a))
-lib.ParsingElement_add(e, lib.Reference_Ensure(b))
-lib.Grammar_parseFromPath(g, "pouet.txt")
+if False:
+	g   = lib.Grammar_new()
+	a   = lib.ParsingElement_name(lib.Word_new ("a"), ("a"))
+	b   = lib.ParsingElement_name(lib.Word_new ("b"), ("b"))
+	ws  = lib.Token_new("\\s+")
+	e   = lib.ParsingElement_name(lib.Group_new(ffi.NULL), "e")
+	g.axiom = e
+	g.skip  = ws
 
-# g  = Grammar()
-# a  = Word("a")._as("a")
-# b  = Word("b")._as("b")
-# ws = Token("\\s+")
-# e  = Group(a, b)._as("e")
-# g.axiom(e).skip(ws)
-# g.parsePath("pouet.txt")
+	lib.ParsingElement_add(e, lib.Reference_Ensure(a))
+	lib.ParsingElement_add(e, lib.Reference_Ensure(b))
+	lib.Grammar_parseFromPath(g, "pouet.txt")
+else:
+	g  = Grammar()
+	a  = Word("a")._as("a")
+	b  = Word("b")._as("b")
+	ws = Token("\\s+")
+	e  = Group(a, b)._as("e")
+	g.axiom(e).skip(ws)
+	match = g.parsePath("pouet.txt")
 
 # EOF - vim: ts=4 sw=4 noet

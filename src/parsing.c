@@ -323,6 +323,39 @@ ParsingElement* ParsingElement_name( ParsingElement* this, const char* name ) {
 	return this;
 }
 
+size_t ParsingElement__walk( ParsingElement* this, WalkingCallback callback, size_t step ) {
+	callback((Element*)this, step++);
+	Reference* child = this->children;
+	while ( child != NULL ) {
+		step  = Reference__walk(child, callback, step);
+		child = child->next;
+	}
+	return step;
+}
+// ----------------------------------------------------------------------------
+//
+// ELEMENT
+//
+// ----------------------------------------------------------------------------
+
+size_t Element_walk( Element* this, WalkingCallback callback ) {
+	return Element__walk(this, callback, 0);
+}
+
+size_t Element__walk( Element* this, WalkingCallback callback, size_t step ) {
+	assert (callback != NULL);
+	if (this!=NULL) {
+		if (Reference_Is(this)) {
+			step = Reference__walk((Reference*)this, callback, step);
+		} else if (ParsingElement_Is(this)) {
+			step = ParsingElement__walk((ParsingElement*)this, callback, step);
+		} else {
+			assert(NULL);
+		}
+	}
+	return step;
+}
+
 // ----------------------------------------------------------------------------
 //
 // REFERENCE
@@ -368,6 +401,12 @@ Reference* Reference_name(Reference* this, const char* name) {
 	assert(this!=NULL);
 	this->name        = name;
 	return this;
+}
+
+size_t Reference__walk( Reference* this, WalkingCallback callback, size_t step ) {
+	callback((Element*)this, step++);
+	step = ParsingElement__walk(this->element, callback, step);
+	return step;
 }
 
 Match* Reference_recognize(Reference* this, ParsingContext* context) {
@@ -698,8 +737,6 @@ Match*  Condition_recognize(ParsingElement* this, ParsingContext* context) {
 	}
 }
 
-
-
 // ----------------------------------------------------------------------------
 //
 // PARSING STEP
@@ -752,6 +789,23 @@ void ParsingOffset_destroy( ParsingOffset* this ) {
 // GRAMMAR
 //
 // ----------------------------------------------------------------------------
+
+void Grammar__initElement(Element* e, size_t step) {
+	if (Reference_Is(e)) {
+		((Reference*)e)->id = step;
+	} else {
+		((ParsingElement*)e)->id = step;
+	}
+}
+
+void Grammar_prepare ( Grammar* this ) {
+	if (this->skip!=NULL)  {
+		this->skip->id = 0;
+	}
+	if (this->axiom!=NULL) {
+		Element_walk(this->axiom, Grammar__initElement);
+	}
+}
 
 Match* Grammar_parseFromIterator( Grammar* this, Iterator* iterator ) {
 	assert(this->axiom != NULL);

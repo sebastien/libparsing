@@ -103,6 +103,7 @@ RE_RETURN      = re.compile("\s*(\w+)")
 RE_FUNCTION    = re.compile("\s*(extern|inline)?[\w_]+\s*[\*]*\s+([\w\_]+)")
 RE_STRUCT      = re.compile("\s*typedef\s+struct\s+([\w_]+)")
 RE_CALLBACK    = re.compile("\s*typedef\s+\w[\w\d_]*\s*\*?\s+\(\s*\*([\w\_]+)\s*\)")
+RE_TYPEDEF     = re.compile("\s*typedef\s+\w[\w\d_]*\s*\*?\s+\s*([\w\_]+)\s*")
 RE_SINGLE      = re.compile("\s*static\s+\w+\s+([\w_]+)")
 
 TYPE_SYMBOL    = "S"
@@ -117,6 +118,7 @@ SYMBOL_EXTRACTORS = dict(
 	callback    = RE_CALLBACK,
 	shared      = RE_FUNCTION,
 	type        = RE_STRUCT,
+	typedef     = RE_TYPEDEF,
 	operation   = RE_FUNCTION,
 	constructor = RE_RETURN,
 	destructor  = RE_RETURN,

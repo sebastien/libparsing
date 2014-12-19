@@ -5,7 +5,7 @@
 // License           : BSD License
 // ----------------------------------------------------------------------------
 // Creation date     : 12-Dec-2014
-// Last modification : 17-Dec-2014
+// Last modification : 19-Dec-2014
 // ----------------------------------------------------------------------------
 
 #include <stdlib.h>
@@ -20,7 +20,7 @@
 
 #ifndef __PARSING_H__
 #define __PARSING_H__
-#define __PARSING_VERSION__ "0.1.2"
+#define __PARSING_VERSION__ "0.2.0"
 
 /**
  * == parsing.h
@@ -194,10 +194,30 @@ Grammar* Grammar_new();
 void Grammar_destroy(Grammar* this);
 
 // @method
+void Grammar_prepare ( Grammar* this );
+
+// @method
 Match* Grammar_parseFromIterator( Grammar* this, Iterator* iterator );
 
 // @method
 Match* Grammar_parseFromPath( Grammar* this, const char* path );
+
+/**
+ * Elements
+ * ========
+*/
+
+// @typedef
+typedef void Element;
+
+// @callback
+typedef void (*WalkingCallback)(Element* this, size_t step);
+
+// @method
+size_t Element_walk( Element* this, WalkingCallback callback );
+
+// @method
+size_t Element__walk( Element* this, WalkingCallback callback, size_t step );
 
 /**
  * Parsing Elements
@@ -270,6 +290,8 @@ void Match_destroy(Match* this);
 
 // @method
 bool Match_isSuccess(Match* this);
+
+
 
 // @type ParsingElement
 typedef struct ParsingElement {
@@ -393,10 +415,11 @@ Match*          Token_recognize(ParsingElement* this, ParsingContext* context);
 // @type Reference
 typedef struct Reference {
 	char            type;            // Set to Reference_T, to disambiguate with ParsingElement
+	unsigned short id;               // The ID, assigned by the grammar, as the relative distance to the axiom
 	char            cardinality;     // Either ONE (default), OPTIONAL, MANY or MANY_OPTIONAL
 	const char*     name;            // The name of the reference (optional)
-	struct ParsingElement* element;         // The reference to the parsing element
-	struct Reference*      next;            // The next child reference in the parsing elements
+	struct ParsingElement* element;  // The reference to the parsing element
+	struct Reference*      next;     // The next child reference in the parsing elements
 } Reference;
 
 // @define
@@ -432,7 +455,11 @@ Reference* Reference_new();
 // Sets the cardinality of this reference, returning it transprently.
 Reference* Reference_cardinality(Reference* this, char cardinality);
 
+// @method
 Reference* Reference_name(Reference* this, const char* name);
+
+// @method
+size_t Reference__walk( Reference* this, WalkingCallback callback, size_t step );
 
 // @method
 // Returns the matched value corresponding to the first match of this reference.
@@ -745,4 +772,4 @@ void ParsingStep_destroy( ParsingStep* this );
  * ```
 */
 #endif
-// EOF
+// EOa
