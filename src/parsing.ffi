@@ -10,6 +10,10 @@ typedef void (*ProcedureCallback)(ParsingElement* this, ParsingContext* context)
 
 typedef void (*WalkingCallback)(Element* this, size_t step);
 
+size_t Element_walk( Element* this, WalkingCallback callback );
+
+size_t Element__walk( Element* this, WalkingCallback callback, size_t step );
+
 typedef struct Reference {
 	char            type;            // Set to Reference_T, to disambiguate with ParsingElement
 	unsigned short id;               // The ID, assigned by the grammar, as the relative distance to the axiom
@@ -39,9 +43,9 @@ typedef struct Match {
 	char            status;     // The status of the match (see STATUS_XXX)
 	size_t          length;     // The number of `iterated_t` matched
 	void            *data;      // The matched data (usually a subset of the input stream)
-	struct Match    *next;      // A pointer to the next match (see `References`)
+	struct Match    *next;      // A pointer to the next  match (see `References`)
+	struct Match    *child;     // A pointer to the child match (see `References`)
 } Match;
-
 
 Match* Match_Empty();
 
@@ -51,7 +55,7 @@ Match* Match_new(void);
 
 bool Match_isSuccess(Match* this);
 
-
+size_t Match__walk(Match* this, WalkingCallback callback, size_t step );
 
 typedef struct Iterator {
 	char           status;    // The status of the iterator, one of STATUS_{INIT|PROCESSING|INPUT_ENDED|ENDED}

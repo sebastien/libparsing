@@ -42,6 +42,7 @@ if os.path.exists(H_PATH):
 		("ConditionCallback",    None),
 		("ProcedureCallback",    None),
 		("WalkingCallback",      None),
+		("Element*",             O),
 		("Reference*",           O),
 		("Match*",               O),
 		("Iterator*",            O),
@@ -74,11 +75,46 @@ lib = ffi.dlopen("libparsing.so.0.2.0")
 
 class CObject(object):
 
-	def __init__(self, o):
+	_IS  = None
+	_NEW = None
+
+	@classmethod
+	def Is(cls, i ):
+		if isinstance(i, cls):
+			return True
+		elif isinstance(i, CObject) and cls._IS and cls._IS(i._cobj):
+			return True
+		else:
+			return False
+
+	@classmethod
+	def Wrap(cls, i):
+		return cls(i)
+
+	def __init__(self, o, wrap=True):
 		self._cobj = o
 		assert o
 
+class Match(CObject):
+
+	def walk( self, callback ):
+		def c(m,s):
+			m = Match(m)
+			callback(m,s)
+		c = ffi.callback("void(*)(void *, size_t)", c)
+		return lib.Match__walk(self._cobj, c, 0)
+
+class Reference(CObject):
+
+	_IS  = lambda o: lib.Reference_Is(o)
+
+	def _as( self, name ):
+		lib.Reference_name(self._cobj, name)
+		return self
+
 class ParsingElement(CObject):
+
+	_IS  = lambda o: lib.ParsingElement_Is(o)
 
 	def add( self, *children ):
 		for c in children:
@@ -91,13 +127,13 @@ class ParsingElement(CObject):
 
 class Word(ParsingElement):
 
-	def __init__( self, word ):
-		CObject.__init__(self, lib.Word_new(word))
+	def __init__( self, word, wrap=False):
+		CObject.__init__(self, word if wrap else lib.Word_new(word))
 
 class Token(ParsingElement):
 
-	def __init__( self, token ):
-		CObject.__init__(self, lib.Token_new(token))
+	def __init__( self, token, wrap=False ):
+		CObject.__init__(self, token if wrap else lib.Token_new(token))
 
 class Group(ParsingElement):
 
@@ -131,7 +167,21 @@ class Grammar(CObject):
 		return self
 
 	def parsePath( self, path ):
-		return lib.Grammar_parseFromPath(self._cobj, path )
+		return Match(lib.Grammar_parseFromPath(self._cobj, path))
+
+	def walk( self, callback ):
+		def c(o,s):
+			if    Reference.Is(o):
+				o = Reference.Wrap(o)
+			elif  ParsingElement.Is(o):
+				# FIXME: Should return the proper references to the
+				# wrapped objects
+				o = ParsingElement.Wrap(o)
+			else:
+				o = Match.Wrap(o)
+			callback(o, s)
+		c = ffi.callback("void(*)(void *, size_t)", c)
+		return lib.Element__walk(self._cobj.axiom, c, 0)
 
 # -----------------------------------------------------------------------------
 #
@@ -139,19 +189,7 @@ class Grammar(CObject):
 #
 # -----------------------------------------------------------------------------
 
-if False:
-	g   = lib.Grammar_new()
-	a   = lib.ParsingElement_name(lib.Word_new ("a"), ("a"))
-	b   = lib.ParsingElement_name(lib.Word_new ("b"), ("b"))
-	ws  = lib.Token_new("\\s+")
-	e   = lib.ParsingElement_name(lib.Group_new(ffi.NULL), "e")
-	g.axiom = e
-	g.skip  = ws
-
-	lib.ParsingElement_add(e, lib.Reference_Ensure(a))
-	lib.ParsingElement_add(e, lib.Reference_Ensure(b))
-	lib.Grammar_parseFromPath(g, "pouet.txt")
-else:
+if __name__ == "__main__":
 	g  = Grammar()
 	a  = Word("a")._as("a")
 	b  = Word("b")._as("b")
@@ -159,5 +197,8 @@ else:
 	e  = Group(a, b)._as("e")
 	g.axiom(e).skip(ws)
 	match = g.parsePath("pouet.txt")
+	def w(m, step):
+		print "MATCH", step, m
+	match.walk(w)
 
 # EOF - vim: ts=4 sw=4 noet

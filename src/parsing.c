@@ -5,7 +5,7 @@
 // License           : BSD License
 // ----------------------------------------------------------------------------
 // Creation date     : 12-Dec-2014
-// Last modification : 14-Dec-2014
+// Last modification : 19-Dec-2014
 // ----------------------------------------------------------------------------
 
 #include "parsing.h"
@@ -244,6 +244,7 @@ Match* Match_new() {
 	this->status    = STATUS_INIT;
 	this->length    = 0;
 	this->data      = NULL;
+	this->child     = NULL;
 	this->next      = NULL;
 	return this;
 }
@@ -254,6 +255,18 @@ void Match_destroy(Match* this) {
 
 bool Match_isSuccess(Match* this) {
 	return (this != NULL && this != FAILURE && this->status == STATUS_MATCHED);
+}
+
+size_t Match__walk(Match* this, WalkingCallback callback, size_t step ){
+	callback(this, step++);
+	Match* child = this->child;
+	if (this->child != NULL) {
+		step = Match__walk(this->child, callback, step++);
+	}
+	if (this->next != NULL) {
+		step = Match__walk(this->next, callback, step++);
+	}
+	return step;
 }
 
 // ----------------------------------------------------------------------------
@@ -350,7 +363,8 @@ size_t Element__walk( Element* this, WalkingCallback callback, size_t step ) {
 		} else if (ParsingElement_Is(this)) {
 			step = ParsingElement__walk((ParsingElement*)this, callback, step);
 		} else {
-			assert(NULL);
+			// If it is neither a reference or parsing element, it is a Match
+			step = Match__walk((Match*)this, callback, step);
 		}
 	}
 	return step;

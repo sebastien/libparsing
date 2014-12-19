@@ -244,9 +244,9 @@ typedef struct Match {
 	char            status;     // The status of the match (see STATUS_XXX)
 	size_t          length;     // The number of `iterated_t` matched
 	void            *data;      // The matched data (usually a subset of the input stream)
-	struct Match    *next;      // A pointer to the next match (see `References`)
+	struct Match    *next;      // A pointer to the next  match (see `References`)
+	struct Match    *child;     // A pointer to the child match (see `References`)
 } Match;
-
 
 // @define
 // The different values for a match (or iterator)'s status
@@ -291,7 +291,8 @@ void Match_destroy(Match* this);
 // @method
 bool Match_isSuccess(Match* this);
 
-
+// @method
+size_t Match__walk(Match* this, WalkingCallback callback, size_t step );
 
 // @type ParsingElement
 typedef struct ParsingElement {
