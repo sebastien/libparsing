@@ -15,6 +15,18 @@
 // SEE: http://stackoverflow.com/questions/18329532/pcre-is-not-matching-utf8-characters
 // HASH: search.h, hcreate, hsearch, etc
 
+iterated_t   EOL              = '\n';
+const char   ParsingElement_T = 'P';
+const char   Reference_T      = 'R';
+Match FAILURE_S = {
+	.status = STATUS_FAILED,
+	.length = 0,
+	.data   = NULL,
+	.next   = NULL    // NOTE: next should *always* be NULL for FAILURE
+};
+
+Match* FAILURE = &FAILURE_S;
+
 // ----------------------------------------------------------------------------
 //
 // ITERATOR
@@ -259,7 +271,7 @@ bool Match_isSuccess(Match* this) {
 	return (this != NULL && this != FAILURE && this->status == STATUS_MATCHED);
 }
 
-size_t Match__walk(Match* this, WalkingCallback callback, size_t step ){
+int Match__walk(Match* this, WalkingCallback callback, int step ){
 	callback(this, step++);
 	if (this->child != NULL) {
 		step = Match__walk(this->child, callback, step++);
@@ -337,7 +349,7 @@ ParsingElement* ParsingElement_name( ParsingElement* this, const char* name ) {
 	return this;
 }
 
-size_t ParsingElement__walk( ParsingElement* this, WalkingCallback callback, size_t step ) {
+int ParsingElement__walk( ParsingElement* this, WalkingCallback callback, int step ) {
 	callback((Element*)this, step++);
 	Reference* child = this->children;
 	while ( child != NULL ) {
@@ -352,11 +364,11 @@ size_t ParsingElement__walk( ParsingElement* this, WalkingCallback callback, siz
 //
 // ----------------------------------------------------------------------------
 
-size_t Element_walk( Element* this, WalkingCallback callback ) {
+int Element_walk( Element* this, WalkingCallback callback ) {
 	return Element__walk(this, callback, 0);
 }
 
-size_t Element__walk( Element* this, WalkingCallback callback, size_t step ) {
+int Element__walk( Element* this, WalkingCallback callback, int step ) {
 	assert (callback != NULL);
 	if (this!=NULL) {
 		if (Reference_Is(this)) {
@@ -418,7 +430,7 @@ Reference* Reference_name(Reference* this, const char* name) {
 	return this;
 }
 
-size_t Reference__walk( Reference* this, WalkingCallback callback, size_t step ) {
+int Reference__walk( Reference* this, WalkingCallback callback, int step ) {
 	callback((Element*)this, step++);
 	step = ParsingElement__walk(this->element, callback, step);
 	return step;
@@ -805,11 +817,23 @@ void ParsingOffset_destroy( ParsingOffset* this ) {
 //
 // ----------------------------------------------------------------------------
 
-void Grammar__initElement(Element* e, size_t step) {
+int Grammar__initElement(Element* e, int step) {
 	if (Reference_Is(e)) {
-		((Reference*)e)->id = step;
+		Reference* r = (Reference*)e;
+		if (r->id != -1) {
+			r->id = -1;
+			return step + 1;
+		} else {
+			return step;
+		}
 	} else {
-		((ParsingElement*)e)->id = step;
+		ParsingElement * r = (ParsingElement*)e;
+		if (r->id != -1) {
+			r->id = -1;
+			return step + 1;
+		} else {
+			return step;
+		}
 	}
 }
 

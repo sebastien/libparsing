@@ -9,7 +9,7 @@ PRODUCTS = lib$(PROJECT).so.$(VERSION) $(TESTS:tests/%.c=%)
 CC       = colorgcc
 LIBS    := libpcre
 CFLAGS  += -Isrc -std=c11 -g -Wall -fPIC -DDEBUG_ENABLED
-LDFLAGS := -shared $(shell pkg-config --cflags --libs $(LIBS))
+LDFLAGS := $(shell pkg-config --cflags --libs $(LIBS))
 
 all: $(PRODUCTS)
 	echo $(TESTS)
@@ -21,7 +21,6 @@ libparsing: lib$(PROJECT).so.$(VERSION)
 # 	chmod +x $@
 
 lib$(PROJECT).so.$(VERSION): build/parsing.o
-	#$(CC) -shared -lpcre -Wl,-soname,lib$(PROJECT).so.$(MAJOR) -o $@ $<
 	$(LD) -shared -lpcre $< -o $@
 
 run: parsing
@@ -31,11 +30,11 @@ debug: parsing
 	gdb ./parsing
 	
 experiment/%: build/%.o build/parsing.o
-	gcc $< $(LDFLAGS) -o $@
+	$(CC) $? $(LDFLAGS) -o $@
 	chmod +x $@
 
 test-%: build/test-%.o build/parsing.o
-	gcc $< $(LDFLAGS) -o $@
+	$(CC) $? $(LDFLAGS) -o $@
 	chmod +x $@
 
 clean:

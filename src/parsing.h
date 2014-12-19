@@ -109,7 +109,7 @@ typedef struct FileInput {
 
 // @shared
 // The EOL character used to count lines in an iterator context.
-iterated_t         EOL              = '\n';
+extern iterated_t         EOL;
 
 // @operation
 // Returns a new iterator instance with the given open file as input
@@ -211,13 +211,13 @@ Match* Grammar_parseFromPath( Grammar* this, const char* path );
 typedef void Element;
 
 // @callback
-typedef bool (*WalkingCallback)(Element* this, size_t step);
+typedef int (*WalkingCallback)(Element* this, int step);
 
 // @method
-size_t Element_walk( Element* this, WalkingCallback callback );
+int Element_walk( Element* this, WalkingCallback callback );
 
 // @method
-size_t Element__walk( Element* this, WalkingCallback callback, size_t step );
+int Element__walk( Element* this, WalkingCallback callback, int step );
 
 /**
  * Parsing Elements
@@ -265,15 +265,10 @@ typedef struct Match {
 
 // @singleton FAILURE_S
 // A specific match that indicates a failure
-static Match FAILURE_S = {
-	.status = STATUS_FAILED,
-	.length = 0,
-	.data   = NULL,
-	.next   = NULL    // NOTE: next should *always* be NULL for FAILURE
-};
+extern Match FAILURE_S;
 
 // @shared FAILURE
-static Match* FAILURE = &FAILURE_S;
+extern Match* FAILURE;
 
 // @operation
 // Creates new empty (successful) match
@@ -293,7 +288,7 @@ void Match_destroy(Match* this);
 bool Match_isSuccess(Match* this);
 
 // @method
-size_t Match__walk(Match* this, WalkingCallback callback, size_t step );
+int Match__walk(Match* this, WalkingCallback callback, int step );
 
 // @type ParsingElement
 typedef struct ParsingElement {
@@ -310,7 +305,7 @@ typedef struct ParsingElement {
 // @operation
 // Tells if the given pointer is a pointer to a ParsingElement.
 bool         ParsingElement_Is(void *);
-const char   ParsingElement_T = 'P';
+const char   ParsingElement_T;
 
 // @constructor
 // Creates a new parsing element and adds the given referenced
@@ -434,7 +429,7 @@ typedef struct Reference {
 // @define
 #define CARDINALITY_MANY          '+'
 
-const char   Reference_T = 'R';
+extern const char   Reference_T;
 
 //
 // @operation
@@ -461,7 +456,7 @@ Reference* Reference_cardinality(Reference* this, char cardinality);
 Reference* Reference_name(Reference* this, const char* name);
 
 // @method
-size_t Reference__walk( Reference* this, WalkingCallback callback, size_t step );
+int Reference__walk( Reference* this, WalkingCallback callback, int step );
 
 // @method
 // Returns the matched value corresponding to the first match of this reference.
