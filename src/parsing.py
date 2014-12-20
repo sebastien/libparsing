@@ -127,6 +127,20 @@ class Match(CObject):
 		c = ffi.callback("int(*)(void *, int)", c)
 		return lib.Match__walk(self._cobject, c, 0)
 
+	def next( self ):
+		return Match.Wrap(self._cobject.next) if self._cobject.next != ffi.NULL else None
+
+	def child( self ):
+		return Match.Wrap(self._cobject.child) if self._cobject.child != ffi.NULL else None
+
+	def children( self ):
+		child = self._cobject.child
+		res   = []
+		while child and child != ffi.NULL:
+			res.append(Match.Wrap(child))
+			child = child.next
+		return res
+
 	def element( self ):
 		return ParsingElement.Wrap(self._cobject.element)
 
@@ -139,6 +153,15 @@ class Match(CObject):
 	def range( self ):
 		o, l = self.offset(), self.length()
 		return o, o + l
+
+	def __getitem__( self, index ):
+		assert type(index) is int
+		i = 0
+		for c in self.children():
+			if i == index:
+				return c
+			i += 1
+		return None
 
 # -----------------------------------------------------------------------------
 #

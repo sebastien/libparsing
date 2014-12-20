@@ -683,7 +683,9 @@ if __name__ == "__main__":
 	def walk(match, step):
 		print step, match.element().id(), match.element().name(), match.range()
 		return step
-	match.walk(walk)
+	# match.walk(walk)
+	import ipdb
+	ipdb.set_trace()
 	# for path in args:
 	# 	parse(path)
 

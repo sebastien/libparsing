@@ -119,7 +119,7 @@ Iterator* Iterator_Open(const char* path);
 Iterator* Iterator_new(void);
 
 // @destructor
-void      Iterator_destroy(Iterator* this);
+void      Iterator_free(Iterator* this);
 
 // @method
 // Makes the given iterator open the file at the given path.
@@ -151,7 +151,7 @@ bool Iterator_moveTo ( Iterator* this, size_t offset );
 FileInput* FileInput_new(const char* path );
 
 // @destructor
-void       FileInput_destroy(FileInput* this);
+void       FileInput_free(FileInput* this);
 
 // @method
 // Preloads data from the input source so that the buffer
@@ -191,7 +191,7 @@ typedef struct Grammar {
 Grammar* Grammar_new();
 
 // @destructor
-void Grammar_destroy(Grammar* this);
+void Grammar_free(Grammar* this);
 
 // @method
 void Grammar_prepare ( Grammar* this );
@@ -283,7 +283,7 @@ Match* Match_Success(size_t length, ParsingElement* element, ParsingContext* con
 Match* Match_new(void);
 
 // @destructor
-void Match_destroy(Match* this);
+void Match_free(Match* this);
 
 // @method
 bool Match_isSuccess(Match* this);
@@ -315,7 +315,7 @@ const char   ParsingElement_T;
 ParsingElement* ParsingElement_new(Reference* children[]);
 
 // @destructor
-void ParsingElement_destroy(ParsingElement* this);
+void ParsingElement_free(ParsingElement* this);
 
 // @method
 // Adds a new reference as child of this parsing element. This will only
@@ -389,7 +389,7 @@ typedef struct TokenMatch {
 ParsingElement* Token_new(const char* expr);
 
 // @destructor
-void Token_destroy(ParsingElement*);
+void Token_free(ParsingElement*);
 
 // @method
 // The specialized match function for token parsing elements.
@@ -581,7 +581,7 @@ typedef struct ParsingOffset {
 ParsingOffset* ParsingOffset_new( size_t offset );
 
 // @destructor
-void ParsingOffset_destroy( ParsingOffset* this );
+void ParsingOffset_free( ParsingOffset* this );
 
 /**
  * The parsing step allows to memoize the state of a parsing element at a given
@@ -601,7 +601,7 @@ typedef struct ParsingStep {
 ParsingStep* ParsingStep_new( ParsingElement* element );
 
 // @destructor
-void ParsingStep_destroy( ParsingStep* this );
+void ParsingStep_free( ParsingStep* this );
 
 /**
  * Utilities

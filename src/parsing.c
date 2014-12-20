@@ -38,7 +38,7 @@ Iterator* Iterator_Open(const char* path) {
 	if (Iterator_open(result, path)) {
 		return result;
 	} else {
-		Iterator_destroy(result);
+		Iterator_free(result);
 		return NULL;
 	}
 }
@@ -101,7 +101,7 @@ bool Iterator_moveTo ( Iterator* this, size_t offset ) {
 }
 
 
-void Iterator_destroy( Iterator* this ) {
+void Iterator_free( Iterator* this ) {
 	// TODO: Take care of input
 	__DEALLOC(this);
 }
@@ -126,7 +126,7 @@ FileInput* FileInput_new(const char* path ) {
 	}
 }
 
-void FileInput_destroy(FileInput* this) {
+void FileInput_free(FileInput* this) {
 	if (this->file != NULL) { fclose(this->file);   }
 }
 
@@ -266,8 +266,8 @@ Match* Match_new() {
 	return this;
 }
 
-void Match_destroy(Match* this) {
-	__DEALLOC(this);
+void Match_free(Match* this) {
+	if (this!=NULL && this!=FAILURE) {__DEALLOC(this);}
 }
 
 bool Match_isSuccess(Match* this) {
@@ -316,7 +316,7 @@ ParsingElement* ParsingElement_new(Reference* children[]) {
 	return this;
 }
 
-void ParsingElement_destroy(ParsingElement* this) {
+void ParsingElement_free(ParsingElement* this) {
 	Reference* child = this->children;
 	while (child != NULL) {
 		Reference* next = child->next;
@@ -515,7 +515,7 @@ ParsingElement* Word_new(const char* word) {
 	return this;
 }
 
-// TODO: Implement Word_destroy and regfree
+// TODO: Implement Word_free and regfree
 
 Match* Word_recognize(ParsingElement* this, ParsingContext* context) {
 	WordConfig* config = ((WordConfig*)this->config);
@@ -562,7 +562,7 @@ ParsingElement* Token_new(const char* expr) {
 	return this;
 }
 
-void Token_destroy(ParsingElement* this) {
+void Token_free(ParsingElement* this) {
 	TokenConfig* config = (TokenConfig*)this->config;
 	if (config != NULL) {
 		// FIXME: Not sure how to free a regexp
@@ -629,6 +629,7 @@ Match* Token_recognize(ParsingElement* this, ParsingContext* context) {
 // FIXME: Not sure what to do exactly here, but we'd like to retrieve the group
 void* Token_Group(ParsingElement* this, Match* match) {
 	if (!Match_isSuccess(match)) {return NULL;}
+	else {return NULL;}
 	//	// PCRE contains a handy function to do the above for you:
 	//	for( int j=0; j<r; j++ ) {
 	//		const char *match;
@@ -654,13 +655,15 @@ ParsingElement* Group_new(Reference* children[]) {
 Match* Group_recognize(ParsingElement* this, ParsingContext* context){
 	DEBUGIF(strcmp(this->name, "_") != 0,"--- Group:%s at %zd", this->name, context->iterator->offset);
 	Reference* child = this->children;
-	Match*     match;
+	Match*     match = NULL;
 	size_t     offset = context->iterator->offset;
 	while (child != NULL ) {
 		match = Reference_recognize(child, context);
 		if (Match_isSuccess(match)) {
 			// The first succeding child wins
-			return match;
+			Match* result = Match_Success(match->length, this, context);
+			result->child = match;
+			return result;
 		} else {
 			// Otherwise we skip to the next child
 			child = child->next;
@@ -700,18 +703,22 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 		Match* match = Reference_recognize(child, context);
 		// DEBUG("Rule:%s[%d]=%s %s at %zd", this->name, step, child->element->name, (Match_isSuccess(match) ? "matched" : "failed"), context->iterator->offset);
 		if (!Match_isSuccess(match)) {
+			// Match_free(match);
 			ParsingElement* skip = context->grammar->skip;
 			Match* skip_match    = skip->recognize(skip, context);
 			int    skip_count    = 0;
 			while (Match_isSuccess(skip_match)){skip_match = skip->recognize(skip, context); skip_count++; }
 			if (skip_count > 0) {match = Reference_recognize(child, context);}
+			// If we haven't matched even after the skip
 			if (!Match_isSuccess(match)) {
+				// Match_free(match);
 				result = FAILURE;
 				break;
 			}
 		}
 		if (last == NULL) {
-			last = result = match;
+			result = Match_Success(0, this, context);
+			result->child = last = match;
 		} else {
 			last = last->next = match;
 		}
@@ -720,10 +727,18 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 	}
 	DEBUGIF( offset != context->iterator->offset && strcmp(this->name, "_") != 0 && !Match_isSuccess(result), "[!] %s[%d] failed at %zd", this->name, step, context->iterator->offset)
 	DEBUGIF( strcmp(this->name, "_") != 0 &&  Match_isSuccess(result), "[✓] %s[%d] matched at %zd", this->name, step, context->iterator->offset)
-	if (!Match_isSuccess(result) && offset != context->iterator->offset) {
-		DEBUG( "... backtracking to %zd", offset)
-		Iterator_moveTo(context->iterator, offset);
-		assert( context->iterator->offset == offset );
+	if (!Match_isSuccess(result)) {
+		// Match_free(result);
+		// If we had a failure, then we backtrack the iterator
+		if (offset != context->iterator->offset) {
+			DEBUG( "... backtracking to %zd", offset)
+			Iterator_moveTo(context->iterator, offset);
+			assert( context->iterator->offset == offset );
+		}
+	} else {
+		// In case of a success, we update the length based on the last
+		// match.
+		result->length = last->offset - result->offset + last->length;
 	}
 	return result;
 }
@@ -792,7 +807,7 @@ ParsingStep* ParsingStep_new( ParsingElement* element ) {
 	return this;
 }
 
-void ParsingStep_destroy( ParsingStep* this ) {
+void ParsingStep_free( ParsingStep* this ) {
 	__DEALLOC(this);
 }
 
@@ -811,12 +826,12 @@ ParsingOffset* ParsingOffset_new( size_t offset ) {
 	return this;
 }
 
-void ParsingOffset_destroy( ParsingOffset* this ) {
+void ParsingOffset_free( ParsingOffset* this ) {
 	ParsingStep* step     = this->last;
 	ParsingStep* previous = NULL;
 	while (step != NULL) {
 		previous   = step->previous;
-		ParsingStep_destroy(step);
+		ParsingStep_free(step);
 		step       = previous;
 	}
 	__DEALLOC(this);
@@ -903,7 +918,7 @@ Match* Grammar_parseFromIterator( Grammar* this, Iterator* iterator ) {
 Match* Grammar_parseFromPath( Grammar* this, const char* path ) {
 	Iterator* iterator = Iterator_Open(path);
 	Match*    result   = Grammar_parseFromIterator(this, iterator);
-	Iterator_destroy(iterator);
+	Iterator_free(iterator);
 	return result;
 }
 
