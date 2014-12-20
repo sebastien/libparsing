@@ -679,7 +679,11 @@ if __name__ == "__main__":
 	# getEngine().onFailureAxiom = log_failure
 	# getEngine().onFailureRest  = log_failure
 	# FIXME: It segfaults when file is not found
-	parse("tests/test-pcss.pcss")
+	match = parse("tests/test-pcss.pcss")
+	def walk(match, step):
+		print step, match.element().id(), match.element().name(), match.range()
+		return step
+	match.walk(walk)
 	# for path in args:
 	# 	parse(path)
 

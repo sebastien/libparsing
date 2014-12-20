@@ -118,20 +118,27 @@ class CObject(object):
 class Match(CObject):
 
 	def _new( self, o ):
-		return o
+		return ffi.cast("Match*", o)
 
 	def walk( self, callback ):
 		def c(m,s):
-			m = Match(m)
-			callback(m,s)
-		c = ffi.callback("void(*)(void *, size_t)", c)
+			m = Match.Wrap(m)
+			return callback(m,s)
+		c = ffi.callback("int(*)(void *, int)", c)
 		return lib.Match__walk(self._cobject, c, 0)
+
+	def element( self ):
+		return ParsingElement.Wrap(self._cobject.element)
 
 	def offset( self ):
 		return self._cobject.offset
 
 	def length( self ):
 		return self._cobject.length
+
+	def range( self ):
+		o, l = self.offset(), self.length()
+		return o, o + l
 
 # -----------------------------------------------------------------------------
 #

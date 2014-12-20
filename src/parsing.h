@@ -244,9 +244,10 @@ typedef struct Match {
 	char            status;     // The status of the match (see STATUS_XXX)
 	size_t          offset;     // The offset of `iterated_t` matched
 	size_t          length;     // The number of `iterated_t` matched
-	void            *data;      // The matched data (usually a subset of the input stream)
-	struct Match    *next;      // A pointer to the next  match (see `References`)
-	struct Match    *child;     // A pointer to the child match (see `References`)
+	ParsingElement* element;
+	void*           data;      // The matched data (usually a subset of the input stream)
+	struct Match*   next;      // A pointer to the next  match (see `References`)
+	struct Match*   child;     // A pointer to the child match (see `References`)
 } Match;
 
 // @define
@@ -276,7 +277,7 @@ Match* Match_Empty();
 
 // @operation
 // Creates a new successful match of the given length
-Match* Match_Success(size_t length, ParsingContext* context);
+Match* Match_Success(size_t length, ParsingElement* element, ParsingContext* context);
 
 // @constructor
 Match* Match_new(void);
