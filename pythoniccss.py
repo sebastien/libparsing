@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 import re, reporter, sys
 sys.path.insert(0, "src")
-from  parsing import Grammar, Token, Word, Rule, Group, Condition, Procedure
+from  parsing import Grammar, Token, Word, Rule, Group, Condition, Procedure, Reference
 # FIXME
 
 VERSION = "0.0.1"
@@ -680,9 +680,14 @@ if __name__ == "__main__":
 	# getEngine().onFailureRest  = log_failure
 	# FIXME: It segfaults when file is not found
 	match = parse("tests/test-pcss.pcss")
+	def walk_g(element, step):
+		if step > element.id() * 2: return -1
+		print step, "*" if isinstance(element, Reference) else "", element.name(), element.id()
+		return step
 	def walk(match, step):
 		print step, match.element().id(), match.element().name(), match.range()
 		return step
+	getGrammar().walk(walk_g)
 	# match.walk(walk)
 	import ipdb
 	ipdb.set_trace()

@@ -5,7 +5,7 @@
 // License           : BSD License
 // ----------------------------------------------------------------------------
 // Creation date     : 12-Dec-2014
-// Last modification : 19-Dec-2014
+// Last modification : 20-Dec-2014
 // ----------------------------------------------------------------------------
 
 #include <stdlib.h>
@@ -264,6 +264,23 @@ typedef struct Match {
 // @define
 #define STATUS_ENDED       'E'
 
+// @define
+#define TYPE_ELEMENT    'E'
+// @define
+#define TYPE_WORD       'W'
+// @define
+#define TYPE_TOKEN      'T'
+// @define
+#define TYPE_GROUP      'G'
+// @define
+#define TYPE_RULE       'R'
+// @define
+#define TYPE_CONDITION  'c'
+// @define
+#define TYPE_PROCEDURE  'p'
+// @define
+#define TYPE_REFERENCE  '#'
+
 // @singleton FAILURE_S
 // A specific match that indicates a failure
 extern Match FAILURE_S;
@@ -306,7 +323,6 @@ typedef struct ParsingElement {
 // @operation
 // Tells if the given pointer is a pointer to a ParsingElement.
 bool         ParsingElement_Is(void *);
-const char   ParsingElement_T;
 
 // @constructor
 // Creates a new parsing element and adds the given referenced
@@ -429,8 +445,6 @@ typedef struct Reference {
 #define CARDINALITY_MANY_OPTIONAL '*'
 // @define
 #define CARDINALITY_MANY          '+'
-
-extern const char   Reference_T;
 
 //
 // @operation

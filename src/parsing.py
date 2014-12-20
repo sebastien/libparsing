@@ -13,6 +13,8 @@ from cffi import FFI
 import re, os
 import cdoclib
 
+NOTHING = re
+
 VERSION  = "0.0.0"
 LICENSE  = "http://ffctn.com/doc/licenses/bsd"
 FFI_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "parsing.ffi")
@@ -71,6 +73,19 @@ CARDINALITY_OPTIONAL      = '?'
 CARDINALITY_ONE           = '1'
 CARDINALITY_MANY_OPTIONAL = '*'
 CARDINALITY_MANY          = '+'
+TYPE_WORD                 = 'W'
+TYPE_TOKEN                = 'T'
+TYPE_GROUP                = 'G'
+TYPE_RULE                 = 'R'
+TYPE_CONDITION            = 'c'
+TYPE_PROCEDURE            = 'p'
+TYPE_REFERENCE            = '#'
+STATUS_INIT               = '-'
+STATUS_PROCESSING         = '~'
+STATUS_MATCHED            = 'Y'
+STATUS_FAILED             = 'X'
+STATUS_INPUT_ENDED        = '.'
+STATUS_ENDED              = 'E'
 
 # -----------------------------------------------------------------------------
 #
@@ -143,6 +158,13 @@ class Match(CObject):
 
 	def element( self ):
 		return ParsingElement.Wrap(self._cobject.element)
+
+	def data( self, data=NOTHING ):
+		if data is NOTHING:
+			return self._cobject.data
+		else:
+			self._cobject.data = data
+			return data
 
 	def offset( self ):
 		return self._cobject.offset
@@ -377,6 +399,13 @@ class Grammar(CObject):
 		self.name    = name
 		self.symbols = Symbols()
 		return lib.Grammar_new()
+
+	def list( self ):
+		res = []
+		for k in dir(self.symbols):
+			if k.startswith("__"): continue
+			res.append((k, getattr(self.symbols, k)))
+		return res
 
 	def word( self, name, word):
 		r = Word(word)

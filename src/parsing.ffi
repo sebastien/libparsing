@@ -103,7 +103,6 @@ typedef struct ParsingElement {
 
 
 bool         ParsingElement_Is(void *);
-const char   ParsingElement_T;
 
 ParsingElement* ParsingElement_new(Reference* children[]);
 

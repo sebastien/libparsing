@@ -16,8 +16,6 @@
 // HASH: search.h, hcreate, hsearch, etc
 
 iterated_t   EOL              = '\n';
-const char   ParsingElement_T = 'P';
-const char   Reference_T      = 'R';
 Match FAILURE_S = {
 	.status = STATUS_FAILED,
 	.length = 0,
@@ -292,12 +290,24 @@ int Match__walk(Match* this, WalkingCallback callback, int step ){
 // ----------------------------------------------------------------------------
 
 bool ParsingElement_Is(void *this) {
-	return this!=NULL && ((ParsingElement*)this)->type == ParsingElement_T;
+	if (this == NULL) { return FALSE; }
+	switch (((ParsingElement*)this)->type) {
+		case TYPE_ELEMENT:
+		case TYPE_WORD:
+		case TYPE_TOKEN:
+		case TYPE_GROUP:
+		case TYPE_RULE:
+		case TYPE_CONDITION:
+		case TYPE_PROCEDURE:
+			return TRUE;
+		default:
+			return FALSE;
+	}
 }
 
 ParsingElement* ParsingElement_new(Reference* children[]) {
 	__ALLOC(ParsingElement, this);
-	this->type      = ParsingElement_T;
+	this->type      = TYPE_ELEMENT;
 	this->id        = 0;
 	this->name      = "_";
 	this->config    = NULL;
@@ -398,7 +408,7 @@ int Element__walk( Element* this, WalkingCallback callback, int step ) {
 // ----------------------------------------------------------------------------
 
 bool Reference_Is(void * this) {
-	return this!=NULL && ((Reference*)this)->type == Reference_T;
+	return this!=NULL && ((Reference*)this)->type == TYPE_REFERENCE;
 }
 
 Reference* Reference_Ensure(void* elementOrReference) {
@@ -419,7 +429,7 @@ Reference* Reference_New(ParsingElement* element){
 
 Reference* Reference_new() {
 	__ALLOC(Reference, this);
-	this->type        = Reference_T;
+	this->type        = TYPE_REFERENCE;
 	this->cardinality = CARDINALITY_ONE;
 	this->name        = "_";
 	this->element     = NULL;
@@ -506,6 +516,7 @@ Match* Reference_recognize(Reference* this, ParsingContext* context) {
 ParsingElement* Word_new(const char* word) {
 	__ALLOC(WordConfig, config);
 	ParsingElement* this = ParsingElement_new(NULL);
+	this->type           = TYPE_WORD;
 	this->recognize      = Word_recognize;
 	assert(word != NULL);
 	config->word         = word;
@@ -540,6 +551,7 @@ Match* Word_recognize(ParsingElement* this, ParsingContext* context) {
 ParsingElement* Token_new(const char* expr) {
 	__ALLOC(TokenConfig, config);
 	ParsingElement* this = ParsingElement_new(NULL);
+	this->type           = TYPE_TOKEN;
 	this->recognize      = Token_recognize;
 	const char* pcre_error;
 	int         pcre_error_offset = -1;
@@ -648,7 +660,8 @@ void* Token_Group(ParsingElement* this, Match* match) {
 
 ParsingElement* Group_new(Reference* children[]) {
 	ParsingElement* this = ParsingElement_new(children);
-	this->recognize = Group_recognize;
+	this->type           = TYPE_GROUP;
+	this->recognize      = Group_recognize;
 	return this;
 }
 
@@ -686,6 +699,7 @@ Match* Group_recognize(ParsingElement* this, ParsingContext* context){
 
 ParsingElement* Rule_new(Reference* children[]) {
 	ParsingElement* this = ParsingElement_new(children);
+	this->type           = TYPE_RULE;
 	this->recognize      = Rule_recognize;
 	return this;
 }
@@ -751,7 +765,8 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 
 ParsingElement* Procedure_new(ProcedureCallback c) {
 	ParsingElement* this = ParsingElement_new(NULL);
-	this->config = c;
+	this->type      = TYPE_PROCEDURE;
+	this->config    = c;
 	this->recognize = Procedure_recognize;
 	return this;
 }
@@ -771,7 +786,8 @@ Match*  Procedure_recognize(ParsingElement* this, ParsingContext* context) {
 
 ParsingElement* Condition_new(ConditionCallback c) {
 	ParsingElement* this = ParsingElement_new(NULL);
-	this->config = c;
+	this->type      = TYPE_CONDITION;
+	this->config    = c;
 	this->recognize = Condition_recognize;
 	return this;
 }
