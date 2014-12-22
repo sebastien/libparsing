@@ -414,11 +414,11 @@ class Processor(AbstractProcessor):
 		return match.group()
 
 	def onString( self, match ):
-		return (match.group(), "S")
+		return (self.process(match.group()), "S")
 
 	def onValue( self, match ):
-		print match, match.element()
-		return ["V", match.group()]
+		value = self.process(match.group())
+		return ["V", value]
 
 	def onParameters( self, match ):
 		return [self.defaultProcess(match[0])] + [self.process(_[1]) for _ in self.process(match[1])]
@@ -439,24 +439,15 @@ class Processor(AbstractProcessor):
 
 	def onPrefix( self, match ):
 		result = self.defaultProcess(match)
-		# FIXME: Not sure what's going on here
-		print "???", result
-		return result
-		# child = match[0]
-		# if child.element().name() == "Value":
-		# 	# It is a value
-		# 	return self.process(child)
-		# else:
-		# 	# It is a parenthesed expression
-		# 	r = self.process(child)
-		# 	print r
-		# 	assert None
+		child = match[0]
+		# FIXME: Not sure about that
+		return self.process(child)
 
 	def onExpression( self, match ):
-		prefix   = self.defaultProcess(match[0])
-		suffixes = self.defaultProcess(match[1])
+		prefix   = self.process(match[0])
+		suffixes = self.process(match[1])
 		res      = prefix
-		for suffix in suffixes:
+		for suffix in suffixes or []:
 			if suffix[0] == "O":
 				suffix[2] = res
 			elif suffix[0] == "I":
@@ -475,10 +466,10 @@ class Processor(AbstractProcessor):
 		"""Selectors are returned as tuples `(scope, id, class, attributes, suffix)`.
 		We need to keep this structure as we need to be able to expand the `&`
 		reference."""
-		scope  = context.text[scope] if type(scope) == int else scope  and scope.group()  or ""
-		nid    = nid    and nid.group()    or ""
-		suffix = "".join([_.data.group() for _ in suffix]) or ""
-		nclass = "".join([_.data.group() for _ in nclass]) if isinstance(nclass, list) else nclass and nclass.group() or ""
+		scope  = scope[0]
+		nid    = nid[0] if nid else ""
+		suffix = "".join(suffix) if suffix else ""
+		nclass = "".join(nclass) if nclass else ""
 		if (scope or nid or nclass or attributes or suffix):
 			return [scope, nid, nclass, attributes or "", suffix]
 		else:
@@ -504,8 +495,6 @@ class Processor(AbstractProcessor):
 
 	def onSelectionList( self, match, head, tail ):
 		"""Updates the current scope and writes the scope selection line."""
-		# head is s.Selection
-		head   = [head]
 		# tail is [[s.COMMA, s.Selection], ...]
 		tail   = [_.data[1].data for _ in tail or []]
 		scopes = head + tail
@@ -531,12 +520,9 @@ class Processor(AbstractProcessor):
 	def onAssignment( self, match, name, values, important ):
 		suffix = "!important" if important else ""
 		try:
-			evalues = [self._valueAsString(self.evaluate(_.data, name=name)) for _ in values]
+			evalues = [self._valueAsString(self.evaluate(_, name=name)) for _ in values]
 		except ProcessingException as e:
-			l, c = context.getCurrentCoordinates()
-			error("{0} at line {1}:".format(e, l))
-			error(">>> {0}".format(context.text[match[0].start():match[-1].end()]))
-			e.context = context
+			error("{0} at  offset {1}:".format(e, match.range()))
 			raise e
 		if name in self.PREFIXABLE_PROPERTIES:
 			res = []
@@ -619,7 +605,7 @@ class Processor(AbstractProcessor):
 		return "".join(_ or "" for _ in scope)
 
 	def _selectionAsString( self, selection ):
-		return "".join(self._scopeAsString(_) if isinstance(_, list) else _ for _ in selection if _)
+		return "".join(self._scopeAsString(_) if isinstance(_, list) else _ for _ in selection if _) if selection else ""
 
 	def _valueAsString( self, value ):
 		v, u = value ; u = u or ""

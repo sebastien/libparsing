@@ -158,7 +158,11 @@ class Match(CObject):
 		return ffi.cast("Match*", o)
 
 	def group( self ):
-		return self.children()
+		e = ffi.cast("ParsingElement*", self._cobject.element)
+		if e.type == TYPE_GROUP:
+			return self.children()[0]
+		else:
+			return self.children()
 
 	def walk( self, callback ):
 		def c(m,s):
@@ -641,7 +645,8 @@ class AbstractProcessor:
 	def _process( self, match ):
 		eid = match.element().id()
 		handler = self.handlerByID.get(eid)
-		if False and handler:
+		# print "[PROCESS]", eid, match.element().name()
+		if handler:
 			kwargs = {}
 			for m in match.children():
 				e = m.element()
@@ -653,11 +658,15 @@ class AbstractProcessor:
 				return handler(match, **kwargs)
 		else:
 			# If we don't have a handler, we recurse
-			self.defaultProcess(match)
+			return self.defaultProcess(match)
 
 	def defaultProcess( self, match ):
 		m = [self._process(m) for m in match.children()]
-		if m and match.isFromReference():
+		if not m:
+			return match.group() or None
+		elif len(m) == 1 and m[0] is None:
+			return None
+		elif match.isFromReference():
 			r = match.element()
 			if r.isOptional():
 				return m[0]
