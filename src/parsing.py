@@ -258,7 +258,10 @@ class Match(CObject):
 class WordMatch(Match):
 
 	def group( self ):
-		config = ffi.cast("WordConfig*", self._cobject.config)
+		return "FIXME:WORD"
+		# FIXME: The following causes a segfault
+		element = ffi.cast("ParsingElement*", self._cobject)
+		config = ffi.cast("WordConfig*", element.config)
 		return ffi.string(config.word)
 
 # -----------------------------------------------------------------------------

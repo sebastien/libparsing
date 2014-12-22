@@ -466,7 +466,7 @@ class Processor(AbstractProcessor):
 		"""Selectors are returned as tuples `(scope, id, class, attributes, suffix)`.
 		We need to keep this structure as we need to be able to expand the `&`
 		reference."""
-		scope  = scope[0]
+		scope  = scope[0] if scope else ""
 		nid    = nid[0] if nid else ""
 		suffix = "".join(suffix) if suffix else ""
 		nclass = "".join(nclass) if nclass else ""
@@ -477,7 +477,7 @@ class Processor(AbstractProcessor):
 
 	def onSelectorNarrower( self, match, op, sel ):
 		"""Returns a `(op, selector)` couple."""
-		op = op and (op.group().strip() + " ") or ""
+		op = op and (op.strip() + " ") or ""
 		return (op, sel) if op or sel else None
 
 	def onSelection( self, match, head, tail ):
@@ -487,16 +487,16 @@ class Processor(AbstractProcessor):
 		"""
 		res = [head]
 		for _ in tail or []:
-			if type(_) in (str, unicode, list, tuple):
-				res.append(_)
-			else:
-				res.extend(_.data)
+			_ = _[1]
+			res.append(_)
 		return res
 
 	def onSelectionList( self, match, head, tail ):
 		"""Updates the current scope and writes the scope selection line."""
 		# tail is [[s.COMMA, s.Selection], ...]
-		tail   = [_.data[1].data for _ in tail or []]
+		tail   = [_[1][1][1] for _ in tail or []]
+		print "HEAD",head
+		print "TAIL", tail
 		scopes = head + tail
 		# We want to epxand the `&` in the scopes
 		scopes = self._expandScopes(scopes)
@@ -507,13 +507,12 @@ class Processor(AbstractProcessor):
 		self._write(",\n".join((self._selectionAsString(_) for _ in self.scopes[-1])) + " {")
 
 	def onNumber( self, match, value, unit ):
-		value = value.group()
 		value = float(value) if "." in value else int(value)
-		unit  = unit.group() if unit else None
+		unit  = unit if unit else None
 		return (value, unit)
 
 	def onDeclaration( self, match, name, value ):
-		name = name.group()
+		name = name
 		self.variables[name] = value
 		return None
 
@@ -563,6 +562,7 @@ class Processor(AbstractProcessor):
 
 	def _expandScopes( self, scopes ):
 		"""Expands the `&` in the list of given scopes."""
+		print ("EXPAND", scopes)
 		res = []
 		parent_scopes = self._listCurrentScopes()
 		for scope in scopes:
@@ -586,6 +586,7 @@ class Processor(AbstractProcessor):
 						res.append(full_scope[0:-1] + [merged])
 				else:
 					for full_scope in parent_scopes:
+						print ("F", full_scope, "/", scope)
 						res.append(full_scope + [" "] + scope)
 			else:
 				res.append(scope)
@@ -659,8 +660,8 @@ if __name__ == "__main__":
 	import sys, os
 	args = sys.argv[1:]
 	reporter.install()
-	# match  = parse("tests/test-pcss.pcss")
-	match  = parse("pouet.pcss")
+	match  = parse("tests/test-pcss.pcss")
+	# match  = parse("pouet.pcss")
 	print "=" * 80
 	p      = Processor()
 	result = p.process(match)
