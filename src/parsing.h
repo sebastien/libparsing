@@ -266,7 +266,7 @@ typedef struct Match {
 // @define
 #define STATUS_PROCESSING  '~'
 // @define
-#define STATUS_MATCHED     'Y'
+#define STATUS_MATCHED     'M'
 // @define
 #define STATUS_FAILED      'X'
 // @define
@@ -310,11 +310,11 @@ extern Match* FAILURE;
 
 // @operation
 // Creates new empty (successful) match
-Match* Match_Empty();
+Match* Match_Empty(Element* element, ParsingContext* context);
 
 // @operation
 // Creates a new successful match of the given length
-Match* Match_Success(size_t length, ParsingElement* element, ParsingContext* context);
+Match* Match_Success(size_t length, Element* element, ParsingContext* context);
 
 // @constructor
 Match* Match_new(void);

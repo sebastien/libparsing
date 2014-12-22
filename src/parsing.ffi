@@ -51,9 +51,9 @@ typedef struct Match {
 	struct Match*   child;     // A pointer to the child match (see `References`)
 } Match;
 
-Match* Match_Empty();
+Match* Match_Empty(Element* element, ParsingContext* context);
 
-Match* Match_Success(size_t length, ParsingElement* element, ParsingContext* context);
+Match* Match_Success(size_t length, Element* element, ParsingContext* context);
 
 Match* Match_new(void);
 

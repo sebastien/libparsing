@@ -129,6 +129,7 @@ class CObject(object):
 	def _wrap( self, cobject ):
 		assert self._cobject == None
 		assert isinstance(cobject, FFI.CData), "%s: Trying to wrap non CData value: %s" % (self.__class__.__name__, cobject)
+		assert cobject != ffi.NULL, "%s: Trying to wrap NULL value: %s" % (self.__class__.__name__, cobject)
 		self._cobject = cobject
 		return self
 
@@ -144,6 +145,7 @@ class Match(CObject):
 
 	@classmethod
 	def Wrap( cls, cobject ):
+		assert cobject.element != ffi.NULL, "Match C object does not have an element: %s %d+%d" % (cobject.status, cobject.offset, cobject.length)
 		e = ffi.cast("ParsingElement*", cobject.element)
 		if e.type == TYPE_WORD:
 			return WordMatch( cobject, wrap=cls._TYPE)
@@ -185,6 +187,8 @@ class Match(CObject):
 		child = self._cobject.child
 		res   = []
 		while child and child != ffi.NULL:
+			print "CHILD", child, child.element
+			assert child.element
 			res.append(Match.Wrap(child))
 			child = child.next
 		return res
@@ -637,8 +641,9 @@ class AbstractProcessor:
 
 	def _process( self, match ):
 		eid = match.element().id()
+		print "Handling: %s #%d" % (match.element().name(), eid)
 		handler = self.handlerByID.get(eid)
-		if handler:
+		if False and handler:
 			kwargs = {}
 			for m in match.children():
 				e = m.element()
@@ -653,6 +658,7 @@ class AbstractProcessor:
 			self.defaultProcess(match)
 
 	def defaultProcess( self, match ):
+		print "DEFAULT PROCESS", match.element().name(), match.children()
 		m = [self._process(m) for m in match.children()]
 		if match.isFromReference():
 			r = match.element()

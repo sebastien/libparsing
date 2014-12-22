@@ -290,14 +290,12 @@ Grammar* Grammar_new() {
 //
 // ----------------------------------------------------------------------------
 
-Match* Match_Empty() {
-	NEW(Match,this);
-	this->status = STATUS_MATCHED;
-	return this;
+Match* Match_Empty(Element* element, ParsingContext* context) {
+	return Match_Success(0, element, context);
 }
 
 
-Match* Match_Success(size_t length, ParsingElement* element, ParsingContext* context) {
+Match* Match_Success(size_t length, Element* element, ParsingContext* context) {
 	NEW(Match,this);
 	assert( element != NULL );
 	this->status  = STATUS_MATCHED;
@@ -551,13 +549,13 @@ Match* Reference_recognize(Reference* this, ParsingContext* context) {
 		case CARDINALITY_OPTIONAL:
 			// For optional, we return the an empty match if
 			// the match fails.
-			result = result == FAILURE ? Match_Empty() : result;
+			result = result == FAILURE ? Match_Empty((ParsingElement*)this, context) : result;
 			break;
 		case CARDINALITY_MANY:
 			result = count > 0 ? result : FAILURE;
 			break;
 		case CARDINALITY_MANY_OPTIONAL:
-			result = count > 0 ? result : Match_Empty();
+			result = count > 0 ? result : Match_Empty((ParsingElement*)this, context);
 			break;
 		default:
 			// Unsuported cardinality
@@ -566,7 +564,8 @@ Match* Reference_recognize(Reference* this, ParsingContext* context) {
 	}
 	if (Match_isSuccess(result)) {
 		int    length   = context->iterator->offset - offset;
-		Match* m        = Match_Success(length, (Element*)this, context);
+		Match* m        = Match_Success(length, (ParsingElement*)this, context);
+		assert(result->element != NULL);
 		m->child        = result;
 		m->offset       = offset;
 		return m;
@@ -902,6 +901,7 @@ Match*  Condition_recognize(ParsingElement* this, ParsingContext* context) {
 
 ParsingStep* ParsingStep_new( ParsingElement* element ) {
 	__ALLOC(ParsingStep, this);
+	assert(element != NULL);
 	this->element   = element;
 	this->step      = 0;
 	this->iteration = 0;
