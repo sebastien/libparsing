@@ -678,7 +678,5 @@ if __name__ == "__main__":
 	print "=" * 80
 	p      = Processor()
 	result = p.process(match)
-	import ipdb
-	ipdb.set_trace()
 
 # EOF

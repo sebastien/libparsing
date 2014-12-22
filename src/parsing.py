@@ -187,7 +187,6 @@ class Match(CObject):
 		child = self._cobject.child
 		res   = []
 		while child and child != ffi.NULL:
-			print "CHILD", child, child.element
 			assert child.element
 			res.append(Match.Wrap(child))
 			child = child.next
@@ -641,7 +640,6 @@ class AbstractProcessor:
 
 	def _process( self, match ):
 		eid = match.element().id()
-		print "Handling: %s #%d" % (match.element().name(), eid)
 		handler = self.handlerByID.get(eid)
 		if False and handler:
 			kwargs = {}
@@ -658,9 +656,8 @@ class AbstractProcessor:
 			self.defaultProcess(match)
 
 	def defaultProcess( self, match ):
-		print "DEFAULT PROCESS", match.element().name(), match.children()
 		m = [self._process(m) for m in match.children()]
-		if match.isFromReference():
+		if m and match.isFromReference():
 			r = match.element()
 			if r.isOptional():
 				return m[0]

@@ -972,7 +972,7 @@ int Grammar__assignElementIDs(Element* e, int step) {
 		Reference* r = (Reference*)e;
 		if (r->id == -1) {
 			r->id = step;
-			DEBUG("Grammar_prepare[%d]: reference %s is #%d", step, r->name, r->id);
+			DEBUGIF(r->name != NULL, "[%03d] [%c] %s", r->id, r->type, r->name);
 			return step;
 		} else {
 			return -1;
@@ -981,7 +981,7 @@ int Grammar__assignElementIDs(Element* e, int step) {
 		ParsingElement * r = (ParsingElement*)e;
 		if (r->id == -1) {
 			r->id = step;
-			DEBUG("Grammar_prepare[%d]: element %s is #%d", step, r->name, r->id);
+			DEBUGIF(r->name != NULL, "[%03d] [%c] %s", r->id, r->type, r->name);
 			return step;
 		} else {
 			return -1;
