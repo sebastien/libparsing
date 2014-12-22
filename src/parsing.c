@@ -466,6 +466,7 @@ Match* Reference_recognize(Reference* this, ParsingContext* context) {
 	Match* head;
 	Match* match;
 	int    count    = 0;
+	int    offset   = context->iterator->offset;
 	while (Iterator_hasMore(context->iterator)) {
 		ASSERT(this->element->recognize, "Reference_recognize: Element %s has no recognize callback", this->element->name);
 		// We ask the element to recognize the current iterator's position
@@ -493,20 +494,31 @@ Match* Reference_recognize(Reference* this, ParsingContext* context) {
 	// Depending on the cardinality, we might return FAILURE, or not
 	switch (this->cardinality) {
 		case CARDINALITY_ONE:
-			// For single, we return the match as-is
-			return result;
+			break;
 		case CARDINALITY_OPTIONAL:
 			// For optional, we return the an empty match if
 			// the match fails.
-			return result == FAILURE ? Match_Empty() : result;
+			result = result == FAILURE ? Match_Empty() : result;
+			break;
 		case CARDINALITY_MANY:
-			return count > 0 ? result : FAILURE;
+			result = count > 0 ? result : FAILURE;
+			break;
 		case CARDINALITY_MANY_OPTIONAL:
-			return count > 0 ? result : Match_Empty();
+			result = count > 0 ? result : Match_Empty();
+			break;
 		default:
 			// Unsuported cardinality
 			ERROR("Unsupported cardinality %c", this->cardinality);
 			return FAILURE;
+	}
+	if (Match_isSuccess(result)) {
+		int    length   = context->iterator->offset - offset;
+		Match* m        = Match_Success(length, (Element*)this, context);
+		m->child        = result;
+		m->offset       = offset;
+		return m;
+	} else {
+		return FAILURE;
 	}
 }
 
@@ -597,6 +609,7 @@ Match* Token_recognize(ParsingElement* this, ParsingContext* context) {
 	int vector_length = 30;
 	int vector[vector_length];
 	const char* line = (const char*)context->iterator->current;
+	// SEE: http://www.mitchr.me/SS/exampleCode/AUPG/pcre_example.c.html
 	int r = pcre_exec(
 		config->regexp, config->extra,     // Regex
 		line,                              // Line
@@ -651,11 +664,11 @@ Match* Token_recognize(ParsingElement* this, ParsingContext* context) {
 	return result;
 }
 
-char* TokenMatch_group(Match* match, int index) {
+const char* TokenMatch_group(Match* match, int index) {
 	assert (match                != NULL);
 	assert (match->data          != NULL);
 	assert (match->context       != NULL);
-	assert (match->element->type == TYPE_TOKEN);
+	assert (((ParsingElement*)(match->element))->type == TYPE_TOKEN);
 	TokenMatch* m = (TokenMatch*)match->data;
 	assert (index - m->count);
 	return m->groups[index];
@@ -665,7 +678,7 @@ void TokenMatch_free(Match* match) {
 	assert (match                != NULL);
 	assert (match->data          != NULL);
 	assert (match->context       != NULL);
-	assert (match->element->type == TYPE_TOKEN);
+	assert (((ParsingElement*)(match->element))->type == TYPE_TOKEN);
 	TokenMatch* m = (TokenMatch*)match->data;
 	if (m != NULL ) {
 		for (int j=0 ; j<m->count ; j++) {

@@ -2,11 +2,11 @@
 # encoding=utf8 ---------------------------------------------------------------
 # Project           : cdoclib
 # -----------------------------------------------------------------------------
-# Author            : FFunction
+# Author            : Sébastien Pierre
 # License           : BSD License
 # -----------------------------------------------------------------------------
-# Creation date     : 18-Dec-2014
-# Last modification : 18-Dec-2014
+# Creation date     : 2014-12-18
+# Last modification : 2014-12-22
 # -----------------------------------------------------------------------------
 import sys, re, fnmatch
 import reporter, texto, templating
@@ -100,7 +100,7 @@ RE_ANNOTATION  = re.compile("^\s*(TODO|FIXME|SEE|NOTE).+")
 
 RE_MACRO       = re.compile("#define\s+(\w+)")
 RE_RETURN      = re.compile("\s*(\w+)")
-RE_FUNCTION    = re.compile("\s*(extern|inline)?[\w_]+\s*[\*]*\s+([\w\_]+)")
+RE_FUNCTION    = re.compile("\s*(static|const|extern|inline)?\s*[\w_]+\s*[\*]*\s+([\w\_]+)")
 RE_STRUCT      = re.compile("\s*typedef\s+struct\s+([\w_]+)")
 RE_CALLBACK    = re.compile("\s*typedef\s+\w[\w\d_]*\s*\*?\s+\(\s*\*([\w\_]+)\s*\)")
 RE_TYPEDEF     = re.compile("\s*typedef\s+\w[\w\d_]*\s*\*?\s+\s*([\w\_]+)\s*")

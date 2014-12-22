@@ -244,7 +244,7 @@ typedef struct Match {
 	char            status;     // The status of the match (see STATUS_XXX)
 	size_t          offset;     // The offset of `iterated_t` matched
 	size_t          length;     // The number of `iterated_t` matched
-	ParsingElement* element;
+	Element*        element;
 	ParsingContext* context;
 	void*           data;      // The matched data (usually a subset of the input stream)
 	struct Match*   next;      // A pointer to the next  match (see `References`)
@@ -420,7 +420,7 @@ Match*          Token_recognize(ParsingElement* this, ParsingContext* context);
 void TokenMatch_free(Match* match);
 
 // @method
-char* TokenMatch_group(Match* match, int index);
+const char* TokenMatch_group(Match* match, int index);
 
 /**
  * References

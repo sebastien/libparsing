@@ -689,8 +689,8 @@ if __name__ == "__main__":
 		return step
 	getGrammar().walk(walk_g)
 	# match.walk(walk)
-	import ipdb
-	ipdb.set_trace()
+	# import ipdb
+	# ipdb.set_trace()
 	# for path in args:
 	# 	parse(path)
 

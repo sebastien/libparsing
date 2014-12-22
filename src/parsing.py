@@ -5,8 +5,8 @@
 # Author            : Sébastien Pierre
 # License           : BSD License
 # -----------------------------------------------------------------------------
-# Creation date     : 2014-Dec-18
-# Last modification : 2014-Dec-19
+# Creation date     : 2014-12-18
+# Last modification : 2014-12-19
 # -----------------------------------------------------------------------------
 
 from cffi import FFI
@@ -139,9 +139,10 @@ class Match(CObject):
 
 	@classmethod
 	def Wrap( cls, cobject ):
-		if cobject.element.type == TYPE_WORD:
+		e = ffi.cast("ParsingElement*", cobject.element)
+		if e.type == TYPE_WORD:
 			return WordMatch( cobject, wrap=cls._TYPE)
-		elif cobject.element.type == TYPE_TOKEN:
+		elif e.type == TYPE_TOKEN:
 			return TokenMatch( cobject, wrap=cls._TYPE)
 		else:
 			return cls(cobject, wrap=cls._TYPE)
@@ -181,7 +182,10 @@ class Match(CObject):
 		return res
 
 	def element( self ):
-		return ParsingElement.Wrap(self._cobject.element)
+		return Reference.Wrap(self._cobject.element) if self.isFromReference() else ParsingElement.Wrap(self._cobject.element)
+
+	def isFromReference( self ):
+		return lib.Reference_Is(self._cobject.element)
 
 	def data( self, data=NOTHING ):
 		if data is NOTHING:
@@ -245,7 +249,7 @@ class Reference(CObject):
 		return r
 
 	def name( self ):
-		return ffi.string(self._cobject.name)
+		return ffi.string(self._cobject.name) if self._cobject.name != ffi.NULL else None
 
 	def id( self ):
 		return self._cobject.id
@@ -258,17 +262,32 @@ class Reference(CObject):
 		lib.Reference_cardinality(self._cobject, CARDINALITY_ONE)
 		return self
 
+	def isOne( self ):
+		return self.cardinality() == CARDINALITY_ONE
+
 	def optional( self ):
 		lib.Reference_cardinality(self._cobject, CARDINALITY_OPTIONAL)
 		return self
+
+	def isOptional( self ):
+		return self.cardinality() == CARDINALITY_OPTIONAL
 
 	def zeroOrMore( self ):
 		lib.Reference_cardinality(self._cobject, CARDINALITY_MANY_OPTIONAL)
 		return self
 
+	def isZeroOrMore( self ):
+		return self.cardinality() == CARDINALITY_MANY_OPTIONAL
+
 	def oneOrMore( self ):
 		lib.Reference_cardinality(self._cobject, CARDINALITY_MANY)
 		return self
+
+	def isOneOrMore( self ):
+		return self.cardinality() == CARDINALITY_MANY
+
+	def cardinality( self ):
+		return self._cobject.cardinality
 
 	def disableMemoize( self ):
 		return self
