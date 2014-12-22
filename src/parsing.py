@@ -40,6 +40,7 @@ if os.path.exists(H_PATH):
 		"typedef struct ParsingElement ParsingElement;\n"
 		"typedef struct ParsingContext ParsingContext;\n"
 		"typedef struct Match Match;\n"
+		"typedef struct TokenMatchGroup TokenMatchGroup;\n"
 	) + clib.getCode(
 		("ConditionCallback",    None),
 		("ProcedureCallback",    None),
@@ -52,7 +53,9 @@ if os.path.exists(H_PATH):
 		("ParsingElement*",      O),
 		("Word*" ,               O),
 		("Token",                O),
+		("TokenMatch",           O),
 		("Token_*",              O),
+		("TokenMatch_*",         O),
 		("Group*",               O),
 		("Rule*",                O),
 		("Procedure*",           O),
@@ -67,7 +70,7 @@ else:
 
 ffi = FFI()
 ffi.cdef(cdef)
-lib = ffi.dlopen("libparsing.so.0.2.0")
+lib = ffi.dlopen("libparsing.so.0.3.0")
 
 CARDINALITY_OPTIONAL      = '?'
 CARDINALITY_ONE           = '1'
@@ -98,7 +101,7 @@ class CObject(object):
 	_TYPE = None
 
 	@classmethod
-	def Wrap( cls, cobject ):
+	def Wrap( cls, cobject, ocls=None ):
 		if not cls._TYPE:
 			cls._TYPE = cls.__name__.rsplit(".")[-1] + "*"
 		return cls(cobject, wrap=cls._TYPE)
@@ -132,6 +135,17 @@ class CObject(object):
 
 class Match(CObject):
 
+	_TYPE = "Match*"
+
+	@classmethod
+	def Wrap( cls, cobject ):
+		if cobject.element.type == TYPE_WORD:
+			return WordMatch( cobject, wrap=cls._TYPE)
+		elif cobject.element.type == TYPE_TOKEN:
+			return TokenMatch( cobject, wrap=cls._TYPE)
+		else:
+			return cls(cobject, wrap=cls._TYPE)
+
 	def _new( self, o ):
 		return ffi.cast("Match*", o)
 
@@ -147,6 +161,16 @@ class Match(CObject):
 
 	def child( self ):
 		return Match.Wrap(self._cobject.child) if self._cobject.child != ffi.NULL else None
+
+	def resolveID( self, id ):
+		for c in self.children():
+			e = match.element()
+			if isinstance(e, Reference) and e.id() == id:
+				pass
+
+	def variables( self ):
+		"""Returns a list of named references"""
+		pass
 
 	def children( self ):
 		child = self._cobject.child
@@ -176,6 +200,9 @@ class Match(CObject):
 		o, l = self.offset(), self.length()
 		return o, o + l
 
+	def __iter__( self ):
+		return self.children()
+
 	def __getitem__( self, index ):
 		assert type(index) is int
 		i = 0
@@ -184,6 +211,20 @@ class Match(CObject):
 				return c
 			i += 1
 		return None
+
+class WordMatch(Match):
+
+	def group( self ):
+		config = ffi.cast("WordConfig*", self._cobject.config)
+		return ffi.string(config.word)
+
+class TokenMatch(Match):
+
+	def group( self, i=0 ):
+		r = lib.TokenMatch_group(self._cobject, i)
+		s      = lib.TokenMatch_group(self._cobject, i)
+		r      = "" + ffi.string(s)
+		return r
 
 # -----------------------------------------------------------------------------
 #

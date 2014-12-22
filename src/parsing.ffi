@@ -4,6 +4,7 @@ typedef struct ParsingElement ParsingElement;
 typedef struct ParsingElement ParsingElement;
 typedef struct ParsingContext ParsingContext;
 typedef struct Match Match;
+typedef struct TokenMatchGroup TokenMatchGroup;
 typedef Match* (*ConditionCallback)(ParsingElement*, ParsingContext*);
 
 typedef void (*ProcedureCallback)(ParsingElement* this, ParsingContext* context);
@@ -44,6 +45,7 @@ typedef struct Match {
 	size_t          offset;     // The offset of `iterated_t` matched
 	size_t          length;     // The number of `iterated_t` matched
 	ParsingElement* element;
+	ParsingContext* context;
 	void*           data;      // The matched data (usually a subset of the input stream)
 	struct Match*   next;      // A pointer to the next  match (see `References`)
 	struct Match*   child;     // A pointer to the child match (see `References`)
@@ -99,6 +101,7 @@ typedef struct ParsingElement {
 	struct Reference*     children;   // The parsing element's children, if any
 	struct Match*         (*recognize) (struct ParsingElement*, ParsingContext*);
 	struct Match*         (*process)   (struct ParsingElement*, ParsingContext*, Match*);
+	void                  (*freeMatch) (Match*);
 } ParsingElement;
 
 
@@ -131,9 +134,19 @@ typedef struct WordConfig {
 Match*          Word_recognize(ParsingElement* this, ParsingContext* context);
 
 
+typedef struct TokenMatch {
+	int             count;
+	const char**    groups;
+} TokenMatch;
+
+
 ParsingElement* Token_new(const char* expr);
 
 Match*          Token_recognize(ParsingElement* this, ParsingContext* context);
+
+void TokenMatch_free(Match* match);
+
+char* TokenMatch_group(Match* match, int index);
 
 Match*          Group_recognize(ParsingElement* this, ParsingContext* context);
 

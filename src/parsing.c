@@ -5,7 +5,7 @@
 // License           : BSD License
 // ----------------------------------------------------------------------------
 // Creation date     : 12-Dec-2014
-// Last modification : 19-Dec-2014
+// Last modification : 22-Dec-2014
 // ----------------------------------------------------------------------------
 
 #include "parsing.h"
@@ -247,6 +247,7 @@ Match* Match_Success(size_t length, ParsingElement* element, ParsingContext* con
 	assert( element != NULL );
 	this->status  = STATUS_MATCHED;
 	this->element = element;
+	this->context = context;
 	this->offset  = context->iterator->offset;
 	this->length  = length;
 	return this;
@@ -258,6 +259,7 @@ Match* Match_new() {
 	this->element   = NULL;
 	this->length    = 0;
 	this->offset    = 0;
+	this->context   = NULL;
 	this->data      = NULL;
 	this->child     = NULL;
 	this->next      = NULL;
@@ -314,6 +316,7 @@ ParsingElement* ParsingElement_new(Reference* children[]) {
 	this->children  = NULL;
 	this->recognize = NULL;
 	this->process   = NULL;
+	this->freeMatch = NULL;
 	if (children != NULL && *children != NULL) {
 		Reference* r = Reference_Ensure(*children);
 		while ( r != NULL ) {
@@ -422,7 +425,7 @@ Reference* Reference_New(ParsingElement* element){
 	NEW(Reference, this);
 	assert(element!=NULL);
 	this->element = element;
-	this->name    = element->name;
+	this->name    = NULL;
 	ASSERT(element->recognize, "Reference_New: Element %s has no recognize callback", element->name);
 	return this;
 }
@@ -553,6 +556,7 @@ ParsingElement* Token_new(const char* expr) {
 	ParsingElement* this = ParsingElement_new(NULL);
 	this->type           = TYPE_TOKEN;
 	this->recognize      = Token_recognize;
+	this->freeMatch      = TokenMatch_free;
 	const char* pcre_error;
 	int         pcre_error_offset = -1;
 	config->expr   = expr;
@@ -592,9 +596,10 @@ Match* Token_recognize(ParsingElement* this, ParsingContext* context) {
 	// NOTE: This has to be a multiple of 3, according to `man pcre_exec`
 	int vector_length = 30;
 	int vector[vector_length];
+	const char* line = (const char*)context->iterator->current;
 	int r = pcre_exec(
 		config->regexp, config->extra,     // Regex
-		(char*)context->iterator->current, // Line
+		line,                              // Line
 		context->iterator->available,      // Available data
 		0,                                 // Offset
 		PCRE_ANCHORED,                     // OPTIONS -- we do not skip position
@@ -626,30 +631,47 @@ Match* Token_recognize(ParsingElement* this, ParsingContext* context) {
 		// FIXME: Make sure it is the length and not the end offset
 		result           = Match_Success(vector[1], this, context);
 		DEBUG("[✓] %s:%s matched at %zd", this->name, config->expr, context->iterator->offset);
+
+		// We create the token match
+		__ALLOC(TokenMatch, data);
+		data->count    = r;
+		data->groups   = (const char**)malloc(sizeof(const char*) * r);
+		// NOTE: We do  this here, but it's probably better to do it later
+		// once the token is recognized, although this poses the problem
+		// of preserving the input.
+		for (int j=0 ; j<r ; j++) {
+			const char* substring;
+			pcre_get_substring(line, vector, r, j, &(substring));
+			data->groups[j] = substring;
+		}
+		result->data = data;
 		context->iterator->move(context->iterator,result->length);
 		assert(Match_isSuccess(result));
-
-		// TokenMatch* data = _ALLOC(TokenMatch);
-		// data->groups     = r;
-		// data->vector     = malloc(r * 3);
-		// memcpy(data->vector, &vector, r * 3);
 	}
 	return result;
 }
 
+char* TokenMatch_group(Match* match, int index) {
+	assert (match                != NULL);
+	assert (match->data          != NULL);
+	assert (match->context       != NULL);
+	assert (match->element->type == TYPE_TOKEN);
+	TokenMatch* m = (TokenMatch*)match->data;
+	assert (index - m->count);
+	return m->groups[index];
+}
 
-// FIXME: Not sure what to do exactly here, but we'd like to retrieve the group
-void* Token_Group(ParsingElement* this, Match* match) {
-	if (!Match_isSuccess(match)) {return NULL;}
-	else {return NULL;}
-	//	// PCRE contains a handy function to do the above for you:
-	//	for( int j=0; j<r; j++ ) {
-	//		const char *match;
-	//		pcre_get_substring(line, vector, r, j, &match);
-	//		printf("Match(%2d/%2d): (%2d,%2d): '%s'\n", j, r-1, vector[j*2], vector[j*2+1], match);
-	//		pcre_free_substring(match);
-	//	}
-
+void TokenMatch_free(Match* match) {
+	assert (match                != NULL);
+	assert (match->data          != NULL);
+	assert (match->context       != NULL);
+	assert (match->element->type == TYPE_TOKEN);
+	TokenMatch* m = (TokenMatch*)match->data;
+	if (m != NULL ) {
+		for (int j=0 ; j<m->count ; j++) {
+			pcre_free_substring(m->groups[j]);
+		}
+	}
 }
 
 // ----------------------------------------------------------------------------

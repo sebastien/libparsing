@@ -5,7 +5,7 @@
 // License           : BSD License
 // ----------------------------------------------------------------------------
 // Creation date     : 12-Dec-2014
-// Last modification : 20-Dec-2014
+// Last modification : 22-Dec-2014
 // ----------------------------------------------------------------------------
 
 #include <stdlib.h>
@@ -20,7 +20,7 @@
 
 #ifndef __PARSING_H__
 #define __PARSING_H__
-#define __PARSING_VERSION__ "0.2.0"
+#define __PARSING_VERSION__ "0.3.0"
 
 /**
  * == parsing.h
@@ -245,6 +245,7 @@ typedef struct Match {
 	size_t          offset;     // The offset of `iterated_t` matched
 	size_t          length;     // The number of `iterated_t` matched
 	ParsingElement* element;
+	ParsingContext* context;
 	void*           data;      // The matched data (usually a subset of the input stream)
 	struct Match*   next;      // A pointer to the next  match (see `References`)
 	struct Match*   child;     // A pointer to the child match (see `References`)
@@ -317,6 +318,7 @@ typedef struct ParsingElement {
 	struct Reference*     children;   // The parsing element's children, if any
 	struct Match*         (*recognize) (struct ParsingElement*, ParsingContext*);
 	struct Match*         (*process)   (struct ParsingElement*, ParsingContext*, Match*);
+	void                  (*freeMatch) (Match*);
 } ParsingElement;
 
 
@@ -395,10 +397,12 @@ typedef struct TokenConfig {
 	pcre_extra* extra;
 } TokenConfig;
 
+// @type
 typedef struct TokenMatch {
-	int  groups;
-	int* vector;
+	int             count;
+	const char**    groups;
 } TokenMatch;
+
 
 // @method
 // Creates a new token with the given POSIX extended regular expression
@@ -410,6 +414,13 @@ void Token_free(ParsingElement*);
 // @method
 // The specialized match function for token parsing elements.
 Match*          Token_recognize(ParsingElement* this, ParsingContext* context);
+
+// @method
+// Frees the `TokenMatch` created in `Token_recognize`
+void TokenMatch_free(Match* match);
+
+// @method
+char* TokenMatch_group(Match* match, int index);
 
 /**
  * References
@@ -519,6 +530,9 @@ Match*          Rule_recognize(ParsingElement* this, ParsingContext* context);
 
 // @callback
 typedef void (*ProcedureCallback)(ParsingElement* this, ParsingContext* context);
+
+// @callback
+typedef void (*MatchCallback)(Match* m);
 
 // @constructor
 ParsingElement* Procedure_new(ProcedureCallback c);
