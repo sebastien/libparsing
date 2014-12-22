@@ -41,6 +41,18 @@ Iterator* Iterator_Open(const char* path) {
 	}
 }
 
+Iterator* Iterator_FromString(const char* text) {
+	NEW(Iterator, this);
+	if (this!=NULL) {
+		this->buffer     = (iterated_t*)text;
+		this->current    = (iterated_t*)text;
+		this->length     = strlen(text);
+		this->available  = this->length;
+		this->move       = String_move;
+	}
+	return this;
+}
+
 Iterator* Iterator_new( void ) {
 	__ALLOC(Iterator, this);
 	this->status        = STATUS_INIT;
@@ -102,6 +114,47 @@ bool Iterator_moveTo ( Iterator* this, size_t offset ) {
 void Iterator_free( Iterator* this ) {
 	// TODO: Take care of input
 	__DEALLOC(this);
+}
+
+// ----------------------------------------------------------------------------
+//
+// STRING INPUT
+//
+// ----------------------------------------------------------------------------
+
+bool String_move ( Iterator* this, int n ) {
+	if ( n == 0) {
+		// We're not moving position
+		return TRUE;
+	} else if ( n >= 0 ) {
+		// We're moving forward, so we want to know if there is at one more element
+		// in the file input.
+		size_t left = this->available - this->offset;
+		size_t c    = n < left ? n : left;
+		while (c > 0) {
+			this->current++;
+			this->offset++;
+			if (*(this->current) == this->separator) {this->lines++;}
+			c--;
+		}
+		this->available = this->length - this->offset;
+		if (n != c) {
+			this->status = STATUS_ENDED;
+			return FALSE;
+		} else {
+			return TRUE;
+		}
+	} else {
+		// We make sure that `n` is not bigger than the length of the available buffer
+		n = this->available + n < 0 ? 0 - this->available : n;
+		this->current = (((char*)this->current) + n);
+		this->offset += n;
+		if (n!=0) {
+			this->status  = STATUS_PROCESSING;
+		}
+		assert(Iterator_remaining(this) >= 0 - n);
+		return TRUE;
+	}
 }
 
 // ----------------------------------------------------------------------------
@@ -208,7 +261,7 @@ bool FileInput_move   ( Iterator* this, int n ) {
 		n = this->length + n < 0 ? 0 - this->length : n;
 		this->current = (((char*)this->current) + n);
 		this->offset += n;
-		this->status  = STATUS_PROCESSING;
+		if (n!=0) {this->status  = STATUS_PROCESSING;}
 		DEBUG("[<] %d%d == %zd (%zd available, %zd length, %zd bytes left)", ((int)this->offset) - n, n, this->offset, this->available, this->length, Iterator_remaining(this));
 		assert(Iterator_remaining(this) >= 0 - n);
 		return TRUE;
@@ -968,9 +1021,26 @@ Match* Grammar_parseFromIterator( Grammar* this, Iterator* iterator ) {
 
 Match* Grammar_parseFromPath( Grammar* this, const char* path ) {
 	Iterator* iterator = Iterator_Open(path);
-	Match*    result   = Grammar_parseFromIterator(this, iterator);
-	Iterator_free(iterator);
-	return result;
+	if (iterator != NULL) {
+		Match*    result   = Grammar_parseFromIterator(this, iterator);
+		Iterator_free(iterator);
+		return result;
+	} else {
+		errno = ENOENT;
+		return NULL;
+	}
+}
+
+Match* Grammar_parseFromString( Grammar* this, const char* text ) {
+	Iterator* iterator = Iterator_FromString(text);
+	if (iterator != NULL) {
+		Match*    result   = Grammar_parseFromIterator(this, iterator);
+		Iterator_free(iterator);
+		return result;
+	} else {
+		errno = ENOENT;
+		return NULL;
+	}
 }
 
 // ----------------------------------------------------------------------------

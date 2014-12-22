@@ -115,6 +115,10 @@ extern iterated_t         EOL;
 // Returns a new iterator instance with the given open file as input
 Iterator* Iterator_Open(const char* path);
 
+// @operation
+// Returns a new iterator instance with the text
+Iterator* Iterator_FromString(const char* text);
+
 // @constructor
 Iterator* Iterator_new(void);
 
@@ -140,6 +144,9 @@ size_t Iterator_remaining( Iterator* this );
 // @method
 // Moves the iterator to the given offset
 bool Iterator_moveTo ( Iterator* this, size_t offset );
+
+// @method
+bool String_move ( Iterator* this, int offset );
 
 // @define
 // The number of `iterated_t` that should be loaded after the iterator's

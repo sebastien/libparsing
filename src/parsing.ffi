@@ -76,6 +76,8 @@ typedef struct Iterator {
 
 Iterator* Iterator_Open(const char* path);
 
+Iterator* Iterator_FromString(const char* text);
+
 Iterator* Iterator_new(void);
 
 bool Iterator_open( Iterator* this, const char *path );

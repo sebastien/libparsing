@@ -216,11 +216,23 @@ class Match(CObject):
 			i += 1
 		return None
 
+# -----------------------------------------------------------------------------
+#
+# WORD MATCH
+#
+# -----------------------------------------------------------------------------
+
 class WordMatch(Match):
 
 	def group( self ):
 		config = ffi.cast("WordConfig*", self._cobject.config)
 		return ffi.string(config.word)
+
+# -----------------------------------------------------------------------------
+#
+# TOKEN MATCH
+#
+# -----------------------------------------------------------------------------
 
 class TokenMatch(Match):
 
@@ -546,6 +558,70 @@ class Grammar(CObject):
 			return callback(o, s)
 		c = ffi.callback("int(*)(void *, int)", c)
 		return lib.Element__walk(self._cobject.axiom, c, 0)
+
+# -----------------------------------------------------------------------------
+#
+# PROCESSOR
+#
+# -----------------------------------------------------------------------------
+
+class Processor:
+
+	def __init__( self, grammar ):
+		self.symbols = grammar.list()
+		self.symbolByName = {}
+		self.symbolByID   = {}
+		self.handlerByID  = {}
+		self._bindSymbols()
+		self._bindHandlers()
+
+	def _bindSymbols( self ):
+		for n, s in self.symbols:
+			if not s:
+				reporter.error("[!] Name without symbol: %s" % (n))
+				continue
+			self.symbolByName[s.name()] = s
+			self.symbolByID[s.id()]     = s
+
+	def _bindHandlers( self ):
+		for k in dir(self):
+			if not k.startswith("on"): continue
+			name = k[2:]
+			# assert name in self.symbolByName, "Handler does not match any symbol: {0}".format(k)
+			symbol = self.symbolByName[name]
+			self.handlerByID[symbol.id()] = getattr(self, k)
+
+	def process( self, match ):
+		# res = [self.walk(_) for _ in match.children()]
+		#print "MATCH", match.element().name(), ":", res, self._handle(match)
+		return self._handle(match)
+
+	def _handle( self, match ):
+		eid = match.element().id()
+		handler = self.handlerByID.get(eid)
+		if handler:
+			kwargs = {}
+			for m in match.children():
+				e = m.element()
+				n = e.name()
+				if n: kwargs[n] = self.process(m)
+			if match.isFromReference():
+				return handler(match, **kwargs)
+			else:
+				return handler(match, **kwargs)
+		else:
+			# If we don't have a handler, we recurse
+			m = [self._handle(m) for m in match.children()]
+			if match.isFromReference():
+				r = match.element()
+				if r.isOptional():
+					return m[0]
+				elif r.isOne():
+					return m[0]
+				else:
+					return m
+			else:
+				return m
 
 # -----------------------------------------------------------------------------
 #
