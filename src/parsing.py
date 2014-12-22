@@ -128,8 +128,7 @@ class CObject(object):
 
 	def _wrap( self, cobject ):
 		assert self._cobject == None
-		assert cobject
-		assert isinstance(cobject, FFI.CData)
+		assert isinstance(cobject, FFI.CData), "%s: Trying to wrap non CData value: %s" % (self.__class__.__name__, cobject)
 		self._cobject = cobject
 		return self
 
@@ -228,7 +227,7 @@ class Match(CObject):
 	def __repr__(self):
 		element = self.element()
 		type    = element._cobject.type
-		name    = element.name()
+		name    = element.name() or "#" + str(element.id())
 		if isinstance(element, Reference):
 			suffix = element.cardinality()
 		else:
@@ -612,7 +611,6 @@ class AbstractProcessor:
 
 	def _bindSymbols( self ):
 		for n, s in self.symbols:
-			print ("N", n, s)
 			if not s:
 				reporter.error("[!] Name without symbol: %s" % (n))
 				continue
@@ -640,7 +638,6 @@ class AbstractProcessor:
 	def _process( self, match ):
 		eid = match.element().id()
 		handler = self.handlerByID.get(eid)
-		print ("HANDLINE", eid, match.element().name())
 		if handler:
 			kwargs = {}
 			for m in match.children():

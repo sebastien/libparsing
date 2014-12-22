@@ -67,8 +67,6 @@ def grammar(g=Grammar("PythonicCSS")):
 	s = g.symbols
 	g.token   ("SPACE",            "[ ]+")
 	g.token   ("TABS",             "\t*")
-	g.token   ("EMPTY_LINES",      "([ \t]*\n)+")
-	g.token   ("INDENT",           "\t+")
 	g.token   ("COMMENT",          "[ \t]*\//[^\n]*")
 	g.token   ("EQUAL",             "=")
 	g.token   ("EOL",              "[ ]*\n(\s*\n)*")
@@ -85,7 +83,6 @@ def grammar(g=Grammar("PythonicCSS")):
 	g.word    ("RP",               ")")
 	g.word    ("SELF",             "&")
 	g.word    ("COMMA",            ",")
-	g.word    ("TAB",              "\t")
 	g.word    ("EQUAL",            "=")
 	g.word    ("LSBRACKET",        "[")
 	g.word    ("RSBRACKET",        "]")
@@ -383,7 +380,7 @@ class Processor(AbstractProcessor):
 	# ==========================================================================
 
 	def onCOLOR_HEX(self, match ):
-		c = (result.group(1))
+		c = (match.group(1))
 		while len(c) < 6: c += "0"
 		r = int(c[0:2], 16)
 		g = int(c[2:4], 16)
@@ -395,26 +392,26 @@ class Processor(AbstractProcessor):
 			return [(r,g,b), "C"]
 
 	def onCOLOR_RGB(self, match ):
-		c = result.group(1).split(",")
+		c = match.group(1).split(",")
 		if len(c) == 3:
 			return [[int(_) for _ in c], "C"]
 		else:
 			return [[int(_) for _ in c[:3] + [float(c[3])]], "C"]
 
 	def onREFERENCE(self, match):
-		return (result.group(1), "R")
+		return (match.group(1), "R")
 
 	def onCSS_PROPERTY(self, match ):
-		return result.group()
+		return match.group()
 
 	def onSTRING_DQ(self, match ):
-		return result.group(1)
+		return match.group(1)
 
 	def onSTRING_SQ(self, match ):
-		return result.group(1)
+		return match.group(1)
 
 	def onSTRING_UQ(self, match ):
-		return result.group()
+		return match.group()
 
 	def onString( self, match ):
 		return (match.group(), "S")
@@ -424,31 +421,40 @@ class Processor(AbstractProcessor):
 		return ["V", match.group()]
 
 	def onParameters( self, match ):
-		return [result[0].data] + [_[1].data for _ in result[1].data]
+		return [self.defaultProcess(match[0])] + [self.process(_[1]) for _ in self.process(match[1])]
 
 	def onArguments( self, match ):
-		return [self.evaluate(_) for _ in [result[0].data] + [_[1].data for _ in result[1].data]]
+		return [self.evaluate(_) for _ in [self.process(match[0])] + [self.process(_[1]) for _ in self.process(match[1])]]
 
 	def onInvocation( self, match, method, arguments ):
 		return ["I", None, method, arguments]
 
 	def onInfixOperation( self, match ):
-		op   = result[0].data
-		expr = result[1].data
+		op   = self.process(match[0])
+		expr = self.process(match[1])
 		return ["O", op.group(), None, expr]
 
 	def onSuffixes( self, match ):
 		return match.group()
 
 	def onPrefix( self, match ):
-		if result.element == self.s.Value:
-			return match.group()
-		else:
-			return match.group()[1].data
+		result = self.defaultProcess(match)
+		# FIXME: Not sure what's going on here
+		print "???", result
+		return result
+		# child = match[0]
+		# if child.element().name() == "Value":
+		# 	# It is a value
+		# 	return self.process(child)
+		# else:
+		# 	# It is a parenthesed expression
+		# 	r = self.process(child)
+		# 	print r
+		# 	assert None
 
 	def onExpression( self, match ):
-		prefix   = result[0].data
-		suffixes = [_.data for _ in result[1].data]
+		prefix   = self.defaultProcess(match[0])
+		suffixes = self.defaultProcess(match[1])
 		res      = prefix
 		for suffix in suffixes:
 			if suffix[0] == "O":
@@ -529,7 +535,7 @@ class Processor(AbstractProcessor):
 		except ProcessingException as e:
 			l, c = context.getCurrentCoordinates()
 			error("{0} at line {1}:".format(e, l))
-			error(">>> {0}".format(context.text[result[0].start:result[-1].end]))
+			error(">>> {0}".format(context.text[match[0].start():match[-1].end()]))
 			e.context = context
 			raise e
 		if name in self.PREFIXABLE_PROPERTIES:
@@ -550,7 +556,6 @@ class Processor(AbstractProcessor):
 		self.scopes.pop()
 
 	def onSource( self, match ):
-		print "FUCK", match.children()
 		return self.defaultProcess(match)
 
 	# ==========================================================================
@@ -668,7 +673,8 @@ if __name__ == "__main__":
 	import sys, os
 	args = sys.argv[1:]
 	reporter.install()
-	match  = parse("tests/test-pcss.pcss")
+	# match  = parse("tests/test-pcss.pcss")
+	match  = parse("pouet.pcss")
 	print "=" * 80
 	p      = Processor()
 	result = p.process(match)
