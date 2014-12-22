@@ -1,6 +1,6 @@
 import sys, os, reporter
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + "/src")
-from  parsing import Grammar, Token, Word, Rule, Group, Condition, Procedure, Processor, NOTHING
+from  parsing import Grammar, Token, Word, Rule, Group, Condition, Procedure, AbstractProcessor, NOTHING
 
 g = Grammar()
 s = g.symbols
@@ -15,7 +15,7 @@ g.rule("Expression", s.Value, s.Suffix.zeroOrMore())
 g.axiom(s.Expression)
 g.skip(s.WS)
 
-class EP(Processor):
+class EP(AbstractProcessor):
 
 	def onNUMBER( self, match ):
 		return int(match.group())

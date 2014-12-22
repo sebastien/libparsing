@@ -277,8 +277,10 @@ bool FileInput_move   ( Iterator* this, int n ) {
 
 Grammar* Grammar_new() {
 	__ALLOC(Grammar, this);
-	this->axiom     = NULL;
-	this->skip      = NULL;
+	this->axiom      = NULL;
+	this->skip       = NULL;
+	this->axiomCount = 0;
+	this->skipCount  = 0;
 	return this;
 }
 
@@ -363,7 +365,7 @@ bool ParsingElement_Is(void *this) {
 ParsingElement* ParsingElement_new(Reference* children[]) {
 	__ALLOC(ParsingElement, this);
 	this->type      = TYPE_ELEMENT;
-	this->id        = 0;
+	this->id        = ID_UNBOUND;
 	this->name      = "_";
 	this->config    = NULL;
 	this->children  = NULL;
@@ -419,17 +421,15 @@ ParsingElement* ParsingElement_name( ParsingElement* this, const char* name ) {
 }
 
 int ParsingElement__walk( ParsingElement* this, WalkingCallback callback, int step ) {
-	step = callback((Element*)this, step);
+	int i = step;
+	step  = callback((Element*)this, step);
 	Reference* child = this->children;
 	while ( child != NULL && step >= 0) {
-		step  = Reference__walk(child, callback, step + 1);
-		if (step >= 0) {
-			child = child->next;
-		} else {
-			child = NULL;
-		}
+		int j = Reference__walk(child, callback, ++i);
+		if (j > 0) { step = i = j; }
+		child = child->next;
 	}
-	return step;
+	return (step > 0) ? step : i;
 }
 
 // ----------------------------------------------------------------------------
@@ -950,16 +950,16 @@ void ParsingOffset_free( ParsingOffset* this ) {
 int Grammar__resetElementIDs(Element* e, int step) {
 	if (Reference_Is(e)) {
 		Reference* r = (Reference*)e;
-		if (r->id != -1) {
-			r->id = -1;
+		if (r->id != ID_BINDING) {
+			r->id = ID_BINDING;
 			return step;
 		} else {
 			return -1;
 		}
 	} else {
 		ParsingElement * r = (ParsingElement*)e;
-		if (r->id != -1) {
-			r->id = -1;
+		if (r->id != ID_BINDING) {
+			r->id = ID_BINDING;
 			return step;
 		} else {
 			return -1;
@@ -972,6 +972,7 @@ int Grammar__assignElementIDs(Element* e, int step) {
 		Reference* r = (Reference*)e;
 		if (r->id == -1) {
 			r->id = step;
+			DEBUG("Grammar_prepare[%d]: reference %s is #%d", step, r->name, r->id);
 			return step;
 		} else {
 			return -1;
@@ -980,6 +981,7 @@ int Grammar__assignElementIDs(Element* e, int step) {
 		ParsingElement * r = (ParsingElement*)e;
 		if (r->id == -1) {
 			r->id = step;
+			DEBUG("Grammar_prepare[%d]: element %s is #%d", step, r->name, r->id);
 			return step;
 		} else {
 			return -1;
@@ -993,7 +995,14 @@ void Grammar_prepare ( Grammar* this ) {
 	}
 	if (this->axiom!=NULL) {
 		Element_walk(this->axiom, Grammar__resetElementIDs);
-		Element_walk(this->axiom, Grammar__assignElementIDs);
+		if (this->skip != NULL) {
+			Element_walk(this->skip, Grammar__resetElementIDs);
+		}
+		int count = Element_walk(this->axiom, Grammar__assignElementIDs);
+		this->axiomCount = count;
+		if (this->skip != NULL) {
+			this->skipCount = Element__walk(this->skip, Grammar__assignElementIDs, count) - count;
+		}
 	}
 }
 

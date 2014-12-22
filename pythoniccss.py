@@ -1,12 +1,23 @@
 #!/usr/bin/env python
+# encoding=utf8 ---------------------------------------------------------------
+# Project           : PythonicCSS
+# -----------------------------------------------------------------------------
+# Author            : FFunction
+# License           : BSD License
+# -----------------------------------------------------------------------------
+# Creation date     : 2013-07-15
+# Last modification : 2014-12-22
+# -----------------------------------------------------------------------------
+
+
 import re, reporter, sys
 sys.path.insert(0, "src")
-from  parsing import Grammar, Token, Word, Rule, Group, Condition, Procedure, Reference
-# FIXME
+from  parsing import Grammar, Token, Word, Rule, Group, Condition, Procedure, Reference, AbstractProcessor
 
-VERSION = "0.0.1"
 _, _, info, warning, error, fatal = reporter.bind("PythonicCSS")
 
+VERSION = "0.0.1"
+LICENSE = "http://ffctn.com/doc/licenses/bsd"
 __doc__ = """
 Processor for the PythonicCSS language. This module use a PEG-based parsing
 engine <http://github.com/sebastien/parsing>, which sadly has an important
@@ -92,7 +103,7 @@ def grammar(g=Grammar("PythonicCSS")):
 
 	# SEE: http://www.w3schools.com/cssref/css_units.asp
 	g.token   ("UNIT",             "em|ex|px|cm|mm|in|pt|pc|ch|rem|vh|vmin|vmax|s|deg|rad|grad|ms|Hz|kHz|\%")
-	g.token   ("VARIABLE_NAME",    "[\w_][\w\d_]*")
+	g.token   ("VARIABLE_NAME",    "[\w_Processor()][\w\d_]*")
 	g.token   ("METHOD_NAME",      "[\w_][\w\d_]*")
 	g.token   ("MACRO_NAME",       "[\w_][\w\d_]*")
 	g.token   ("REFERENCE",        "\$([\w_][\w\d_]*)")
@@ -200,7 +211,7 @@ class ProcessingException(Exception):
 			msg = "Line {0}, char {1}: {2}".format(l, c, msg)
 		return msg
 
-class Processor:
+class Processor(AbstractProcessor):
 	"""Replaces some of the grammar's symbols processing functions. This is
 	the main code that converts the parsing's recognized data to the output
 	CSS. There is not really an intermediate AST (excepted for expressions),
@@ -292,9 +303,9 @@ class Processor:
 		else:
 			return cls.RGB[name.lower().strip()]
 
-	def __init__( self ):
+	def __init__( self, grammar=None ):
+		AbstractProcessor.__init__(self, grammar or getGrammar())
 		self.reset()
-		self.s      = None
 		self.output = sys.stdout
 
 	def reset( self ):
@@ -304,21 +315,6 @@ class Processor:
 		self.variables  = {}
 		self._evaluated = {}
 		self.scopes     = []
-
-	def bind( self, g ):
-		"""Binds the processor to the given grammar. Should be called just one."""
-		self.s = s = g.symbols
-		for name in dir(s):
-			r = getattr(s, name)
-			n = "on" + name
-			m = hasattr(self, n)
-			if r and m:
-				method = getattr(self, n)
-				def wrapper(context, result, rule=r, method=method):
-					values = dict( (k, rule.resolveData(k, result)) for k in rule.listBoundSymbols() )
-					return method(context, result, **values)
-				r.action = wrapper
-		return g
 
 	# ==========================================================================
 	# EVALUATION
@@ -386,7 +382,7 @@ class Processor:
 	# GRAMMAR RULES
 	# ==========================================================================
 
-	def onCOLOR_HEX(self, context, result ):
+	def onCOLOR_HEX(self, match ):
 		c = (result.group(1))
 		while len(c) < 6: c += "0"
 		r = int(c[0:2], 16)
@@ -398,58 +394,59 @@ class Processor:
 		else:
 			return [(r,g,b), "C"]
 
-	def onCOLOR_RGB(self, context, result ):
+	def onCOLOR_RGB(self, match ):
 		c = result.group(1).split(",")
 		if len(c) == 3:
 			return [[int(_) for _ in c], "C"]
 		else:
 			return [[int(_) for _ in c[:3] + [float(c[3])]], "C"]
 
-	def onREFERENCE(self, context, result):
+	def onREFERENCE(self, match):
 		return (result.group(1), "R")
 
-	def onCSS_PROPERTY(self, context, result ):
+	def onCSS_PROPERTY(self, match ):
 		return result.group()
 
-	def onSTRING_DQ(self, context, result ):
+	def onSTRING_DQ(self, match ):
 		return result.group(1)
 
-	def onSTRING_SQ(self, context, result ):
+	def onSTRING_SQ(self, match ):
 		return result.group(1)
 
-	def onSTRING_UQ(self, context, result ):
+	def onSTRING_UQ(self, match ):
 		return result.group()
 
-	def onString( self, context, result ):
-		return (result.data, "S")
+	def onString( self, match ):
+		return (match.group(), "S")
 
-	def onValue( self, context, result ):
-		return ["V", result.data]
+	def onValue( self, match ):
+		print match, match.element()
+		return ["V", match.group()]
 
-	def onParameters( self, context, result ):
+	def onParameters( self, match ):
 		return [result[0].data] + [_[1].data for _ in result[1].data]
 
-	def onArguments( self, context, result ):
+	def onArguments( self, match ):
 		return [self.evaluate(_) for _ in [result[0].data] + [_[1].data for _ in result[1].data]]
 
-	def onInvocation( self, context, result, method, arguments ):
+	def onInvocation( self, match, method, arguments ):
 		return ["I", None, method, arguments]
 
-	def onInfixOperation( self, context, result ):
+	def onInfixOperation( self, match ):
 		op   = result[0].data
 		expr = result[1].data
 		return ["O", op.group(), None, expr]
 
-	def onSuffixes( self, context, result ):
-		return result.data
+	def onSuffixes( self, match ):
+		return match.group()
 
-	def onPrefix( self, context, result ):
+	def onPrefix( self, match ):
 		if result.element == self.s.Value:
-			return result.data
+			return match.group()
 		else:
-			return result.data[1].data
+			return match.group()[1].data
 
-	def onExpression( self, context, result ):
+	def onExpression( self, match ):
 		prefix   = result[0].data
 		suffixes = [_.data for _ in result[1].data]
 		res      = prefix
@@ -461,14 +458,14 @@ class Processor:
 			res = suffix
 		return res
 
-	def onAttribute( self, context, result, name, value ):
+	def onAttribute( self, match, name, value ):
 		return "[{0}={1}]".format(name.group(), value[1].data.group())
 
-	def onAttributes( self, context, result, head, tail ):
+	def onAttributes( self, match, head, tail ):
 		tail = [_.data[1].data for _ in tail]
 		return "".join([head] + tail)
 
-	def onSelector( self, context, result, scope, nid,  nclass, attributes, suffix ):
+	def onSelector( self, match, scope, nid,  nclass, attributes, suffix ):
 		"""Selectors are returned as tuples `(scope, id, class, attributes, suffix)`.
 		We need to keep this structure as we need to be able to expand the `&`
 		reference."""
@@ -481,12 +478,12 @@ class Processor:
 		else:
 			return None
 
-	def onSelectorNarrower( self, context, result, op, sel ):
+	def onSelectorNarrower( self, match, op, sel ):
 		"""Returns a `(op, selector)` couple."""
 		op = op and (op.group().strip() + " ") or ""
 		return (op, sel) if op or sel else None
 
-	def onSelection( self, context, result, head, tail ):
+	def onSelection( self, match, head, tail ):
 		"""Returns a structure like the following:
 		>   [[('div', '', '', '', ''), '> ', ('label', '', '', '', '')]]
 		>   ---SELECTOR------------   OP   --SELECTOR---------------
@@ -499,7 +496,7 @@ class Processor:
 				res.extend(_.data)
 		return res
 
-	def onSelectionList( self, context, result, head, tail ):
+	def onSelectionList( self, match, head, tail ):
 		"""Updates the current scope and writes the scope selection line."""
 		# head is s.Selection
 		head   = [head]
@@ -514,18 +511,18 @@ class Processor:
 		self.scopes.append(scopes)
 		self._write(",\n".join((self._selectionAsString(_) for _ in self.scopes[-1])) + " {")
 
-	def onNumber( self, context, result, value, unit ):
+	def onNumber( self, match, value, unit ):
 		value = value.group()
 		value = float(value) if "." in value else int(value)
 		unit  = unit.group() if unit else None
 		return (value, unit)
 
-	def onDeclaration( self, context, result, name, value ):
+	def onDeclaration( self, match, name, value ):
 		name = name.group()
 		self.variables[name] = value
 		return None
 
-	def onAssignment( self, context, result, name, values, important ):
+	def onAssignment( self, match, name, values, important ):
 		suffix = "!important" if important else ""
 		try:
 			evalues = [self._valueAsString(self.evaluate(_.data, name=name)) for _ in values]
@@ -547,13 +544,14 @@ class Processor:
 		else:
 			return self._write("{0}: {1}{2};".format(name, " ".join(evalues), suffix), indent=1)
 
-	def onBlock( self, context, result, selector, code ):
+	def onBlock( self, match, selector, code ):
 		if len(self.scopes) == 1:
 			self._write("}")
 		self.scopes.pop()
 
-	def onSource( self, context, result ):
-		return result
+	def onSource( self, match ):
+		print "FUCK", match.children()
+		return self.defaultProcess(match)
 
 	# ==========================================================================
 	# OUTPUT
@@ -670,28 +668,11 @@ if __name__ == "__main__":
 	import sys, os
 	args = sys.argv[1:]
 	reporter.install()
-	# processor = Processor()
-	# g         = processor.bind(getGrammar())
-	# def log_failure( engine, context, rest ):
-	# 	l, c = context.getCurrentCoordinates()
-	# 	head, tail = engine.getErrorContext(context)
-	# 	error("Parsing failed at line {0}, char {1} with {2} chars left:\n{3}[ERROR]{4}".format(l,c,len(rest),head,tail))
-	# getEngine().onFailureAxiom = log_failure
-	# getEngine().onFailureRest  = log_failure
-	# FIXME: It segfaults when file is not found
-	match = parse("tests/test-pcss.pcss")
-	def walk_g(element, step):
-		if step > element.id() * 2: return -1
-		print step, "*" if isinstance(element, Reference) else "", element.name(), element.id()
-		return step
-	def walk(match, step):
-		print step, match.element().id(), match.element().name(), match.range()
-		return step
-	getGrammar().walk(walk_g)
-	# match.walk(walk)
-	# import ipdb
-	# ipdb.set_trace()
-	# for path in args:
-	# 	parse(path)
+	match  = parse("tests/test-pcss.pcss")
+	print "=" * 80
+	p      = Processor()
+	result = p.process(match)
+	print p.handlerByID
+	print p.symbolByName["Source"].id()
 
 # EOF

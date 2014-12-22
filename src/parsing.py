@@ -13,12 +13,16 @@ from cffi import FFI
 import re, os
 import cdoclib
 
-NOTHING = re
+try:
+	import reporter as logging
+except ImportError:
+	import logging
 
 VERSION  = "0.0.0"
 LICENSE  = "http://ffctn.com/doc/licenses/bsd"
 FFI_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "parsing.ffi")
 H_PATH   = os.path.join(os.path.dirname(os.path.abspath(__file__)), "parsing.h")
+NOTHING  = re
 
 # -----------------------------------------------------------------------------
 #
@@ -89,6 +93,8 @@ STATUS_MATCHED            = 'Y'
 STATUS_FAILED             = 'X'
 STATUS_INPUT_ENDED        = '.'
 STATUS_ENDED              = 'E'
+ID_BINDING                = -1
+ID_UNBOUND                = -10
 
 # -----------------------------------------------------------------------------
 #
@@ -149,6 +155,9 @@ class Match(CObject):
 
 	def _new( self, o ):
 		return ffi.cast("Match*", o)
+
+	def group( self ):
+		return self.children()
 
 	def walk( self, callback ):
 		def c(m,s):
@@ -215,6 +224,24 @@ class Match(CObject):
 				return c
 			i += 1
 		return None
+
+	def __repr__(self):
+		element = self.element()
+		type    = element._cobject.type
+		name    = element.name()
+		if isinstance(element, Reference):
+			suffix = element.cardinality()
+		else:
+			suffix = ""
+		return "<%s:%s[%s]%s(%d) %d-%d>" % (
+			self.__class__.__name__.rsplit(".", 1)[-1],
+			type,
+			name,
+			suffix,
+			len(self.children()),
+			self.offset(),
+			self.offset() + self.length(),
+		)
 
 # -----------------------------------------------------------------------------
 #
@@ -357,6 +384,14 @@ class ParsingElement(CObject):
 
 	def disableFailMemoize( self ):
 		return self
+
+	def __repr__(self):
+		return "<%s:%s[%s]#%d>" % (
+			self.__class__.__name__.rsplit(".", 1)[-1],
+			self._cobject.type,
+			ffi.string(self._cobject.name),
+			self._cobject.id,
+		)
 
 # -----------------------------------------------------------------------------
 #
@@ -561,11 +596,11 @@ class Grammar(CObject):
 
 # -----------------------------------------------------------------------------
 #
-# PROCESSOR
+# ABSTRACT PROCESSOR
 #
 # -----------------------------------------------------------------------------
 
-class Processor:
+class AbstractProcessor:
 
 	def __init__( self, grammar ):
 		self.symbols = grammar.list()
@@ -577,10 +612,16 @@ class Processor:
 
 	def _bindSymbols( self ):
 		for n, s in self.symbols:
+			print ("N", n, s)
 			if not s:
 				reporter.error("[!] Name without symbol: %s" % (n))
 				continue
 			self.symbolByName[s.name()] = s
+			if s.id() in self.symbolByID:
+				if s.id() >= 0:
+					raise Exception("Duplicate symbol id: %d, has %s already while trying to assign %s" % (s.id(), self.symbolByID[s.id()].name(), s.name()))
+				else:
+					logging.warn("Unused symbol: %s" % (repr(s)))
 			self.symbolByID[s.id()]     = s
 
 	def _bindHandlers( self ):
@@ -593,12 +634,13 @@ class Processor:
 
 	def process( self, match ):
 		# res = [self.walk(_) for _ in match.children()]
-		#print "MATCH", match.element().name(), ":", res, self._handle(match)
-		return self._handle(match)
+		#print "MATCH", match.element().name(), ":", res, self._process(match)
+		return self._process(match)
 
-	def _handle( self, match ):
+	def _process( self, match ):
 		eid = match.element().id()
 		handler = self.handlerByID.get(eid)
+		print ("HANDLINE", eid, match.element().name())
 		if handler:
 			kwargs = {}
 			for m in match.children():
@@ -611,17 +653,20 @@ class Processor:
 				return handler(match, **kwargs)
 		else:
 			# If we don't have a handler, we recurse
-			m = [self._handle(m) for m in match.children()]
-			if match.isFromReference():
-				r = match.element()
-				if r.isOptional():
-					return m[0]
-				elif r.isOne():
-					return m[0]
-				else:
-					return m
+			self.defaultProcess(match)
+
+	def defaultProcess( self, match ):
+		m = [self._process(m) for m in match.children()]
+		if match.isFromReference():
+			r = match.element()
+			if r.isOptional():
+				return m[0]
+			elif r.isOne():
+				return m[0]
 			else:
 				return m
+		else:
+			return m
 
 # -----------------------------------------------------------------------------
 #

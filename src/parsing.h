@@ -191,6 +191,8 @@ typedef struct Match          Match;
 typedef struct Grammar {
 	ParsingElement*  axiom;       // The axiom
 	ParsingElement*  skip;        // The skipped element
+	int              axiomCount;  // The count of parsing elemetns in axiom
+	int              skipCount;   // The count of parsing elements in skip
 } Grammar;
 
 
@@ -288,6 +290,16 @@ typedef struct Match {
 #define TYPE_PROCEDURE  'p'
 // @define
 #define TYPE_REFERENCE  '#'
+
+// @define
+// A parsing element that is not bound to a grammar will have ID_UNBOUND
+// by default.
+#define ID_UNBOUND      -10
+
+// @define
+// A parsing element that being bound to a grammar (see `Grammar_prepare`)
+// will have an id of `ID_BINDING` temporarily.
+#define ID_BINDING       -1
 
 // @singleton FAILURE_S
 // A specific match that indicates a failure

@@ -161,6 +161,8 @@ Match*          Condition_recognize(ParsingElement* this, ParsingContext* contex
 typedef struct Grammar {
 	ParsingElement*  axiom;       // The axiom
 	ParsingElement*  skip;        // The skipped element
+	int              axiomCount;  // The count of parsing elemetns in axiom
+	int              skipCount;   // The count of parsing elements in skip
 } Grammar;
 
 
