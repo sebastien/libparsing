@@ -33,7 +33,7 @@ info:
 	@echo libparsing: $(VERSION)
 
 release: $(PRODUCT)
-	git commit -a -m "Release $(VERSION)"
+	git commit -a -m "Release $(VERSION)" ; true
 	git tag $(VERSION) ; true
 	git push --all ; true
 	python setup.py clean sdist bdist register upload
