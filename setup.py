@@ -83,7 +83,7 @@ setup(
 		"libparsing":["*.ffi"]
 	},
 	data_files = [
-		("libparsing", ("src/cdoclib.py", "src/parsing.c", "src/parsing.h", "src/oo.h"))
+		("libparsing", ("python/cdoclib.py", "src/parsing.c", "src/parsing.h", "src/oo.h"))
 	],
 	ext_modules = [libparsing],
 )
