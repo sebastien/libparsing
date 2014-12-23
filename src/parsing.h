@@ -242,7 +242,7 @@ typedef struct Grammar {
 
 
 // @constructor
-Grammar* Grammar_new();
+Grammar* Grammar_new(void);
 
 // @destructor
 void Grammar_free(Grammar* this);
@@ -536,7 +536,7 @@ Reference* Reference_New(ParsingElement *);
 
 // @constructor
 // References are typically owned by their single parent composite element.
-Reference* Reference_new();
+Reference* Reference_new(void);
 
 // @method
 // Sets the cardinality of this reference, returning it transprently.

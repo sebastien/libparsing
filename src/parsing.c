@@ -275,7 +275,7 @@ bool FileInput_move   ( Iterator* this, int n ) {
 //
 // ----------------------------------------------------------------------------
 
-Grammar* Grammar_new() {
+Grammar* Grammar_new(void) {
 	__ALLOC(Grammar, this);
 	this->axiom      = NULL;
 	this->skip       = NULL;
@@ -306,7 +306,7 @@ Match* Match_Success(size_t length, Element* element, ParsingContext* context) {
 	return this;
 }
 
-Match* Match_new() {
+Match* Match_new(void) {
 	__ALLOC(Match,this);
 	this->status    = STATUS_INIT;
 	this->element   = NULL;
@@ -481,7 +481,7 @@ Reference* Reference_New(ParsingElement* element){
 	return this;
 }
 
-Reference* Reference_new() {
+Reference* Reference_new(void) {
 	__ALLOC(Reference, this);
 	this->type        = TYPE_REFERENCE;
 	this->cardinality = CARDINALITY_ONE;
