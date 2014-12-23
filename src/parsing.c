@@ -1019,12 +1019,12 @@ Match* Grammar_parseFromIterator( Grammar* this, Iterator* iterator ) {
 	Match* match = this->axiom->recognize(this->axiom, &context);
 	if (match != FAILURE) {
 		if (Iterator_hasMore(context.iterator) && Iterator_remaining(context.iterator) > 0) {
-			LOG("Partial success, parsed %zd bytes, %zd remaining", context.iterator->offset, Iterator_remaining(context.iterator));
+			DEBUG("Partial success, parsed %zd bytes, %zd remaining", context.iterator->offset, Iterator_remaining(context.iterator));
 		} else {
-			LOG("Succeeded, parsed %zd bytes", context.iterator->offset);
+			DEBUG("Succeeded, parsed %zd bytes", context.iterator->offset);
 		}
 	} else {
-		LOG("Failed, parsed %zd bytes, %zd remaining", context.iterator->offset, Iterator_remaining(context.iterator))
+		DEBUG("Failed, parsed %zd bytes, %zd remaining", context.iterator->offset, Iterator_remaining(context.iterator))
 	}
 	return match;
 }

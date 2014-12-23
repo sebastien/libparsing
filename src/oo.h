@@ -83,10 +83,10 @@ typedef char  bool;
  * define.
 */
 
-#define DEBUG_STREAM   stdout
-#define WARNING_STREAM stdout
-#define ERROR_STREAM   stdout
-#define LOG_STREAM     stdout
+#define DEBUG_STREAM   stderr
+#define WARNING_STREAM stderr
+#define ERROR_STREAM   stderr
+#define LOG_STREAM     stderr
 
 #define PUBLIC /* @public */
 
