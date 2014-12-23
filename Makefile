@@ -5,7 +5,7 @@ SOURCES  = $(wildcard src/*.c)
 TESTS    = $(wildcard tests/test-*.c)
 OBJECTS  = $(SOURCES:src/%.c=build/%.o)
 OBJECTS += $(TESTS:tests/%.c=build/%.o)
-PRODUCTS = lib$(PROJECT).so.$(VERSION) README.html
+PRODUCTS = lib$(PROJECT) lib$(PROJECT).so.$(VERSION) README.html
 TEST_PRODUCTS = $(TESTS:tests/%.c=%)
 CC       = colorgcc
 LIBS    := libpcre
@@ -18,8 +18,7 @@ LDFLAGS := $(shell pkg-config --cflags --libs $(LIBS))
 # =============================================================================
 
 all: $(PRODUCTS)
-	echo $(TESTS)
-
+	
 clean:
 	@find . -name __pycache__ -exec rm -rf '{}' ';'
 	@rm -rf dist *.egg-info $(OBJECTS) $(PRODUCTS) $(TEST_PRODUCTS); true
@@ -46,13 +45,16 @@ tests: $(TEST_PRODUCTS)
 # PRODUCTS
 # =============================================================================
 
-libparsing: lib$(PROJECT).so.$(VERSION)
+libparsing: lib$(PROJECT).so lib$(PROJECT).so.$(VERSION)
 	
+lib$(PROJECT).so: build/parsing.o
+	$(LD) -shared -lpcre $< -o $@
+
 lib$(PROJECT).so.$(VERSION): build/parsing.o
 	$(LD) -shared -lpcre $< -o $@
 
 README.html:
-	@python src/cdoclib.py src/parsing.h > $@
+	@python python/cdoclib.py src/parsing.h > $@
 
 experiment/%: build/%.o build/parsing.o
 	$(CC) $? $(LDFLAGS) -o $@

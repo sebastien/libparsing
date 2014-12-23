@@ -30,7 +30,7 @@ Reference* Reference_Ensure(void* elementOrReference);
 
 Reference* Reference_New(ParsingElement *);
 
-Reference* Reference_new();
+Reference* Reference_new(void);
 
 Reference* Reference_cardinality(Reference* this, char cardinality);
 
@@ -57,6 +57,8 @@ Match* Match_Success(size_t length, Element* element, ParsingContext* context);
 
 Match* Match_new(void);
 
+void Match_free(Match* this);
+
 bool Match_isSuccess(Match* this);
 
 int Match__walk(Match* this, WalkingCallback callback, int step );
@@ -79,6 +81,8 @@ Iterator* Iterator_Open(const char* path);
 Iterator* Iterator_FromString(const char* text);
 
 Iterator* Iterator_new(void);
+
+void      Iterator_free(Iterator* this);
 
 bool Iterator_open( Iterator* this, const char *path );
 
@@ -110,6 +114,8 @@ typedef struct ParsingElement {
 bool         ParsingElement_Is(void *);
 
 ParsingElement* ParsingElement_new(Reference* children[]);
+
+void ParsingElement_free(ParsingElement* this);
 
 ParsingElement* ParsingElement_add(ParsingElement *this, Reference *child);
 
@@ -144,6 +150,8 @@ typedef struct TokenMatch {
 
 ParsingElement* Token_new(const char* expr);
 
+void Token_free(ParsingElement*);
+
 Match*          Token_recognize(ParsingElement* this, ParsingContext* context);
 
 void TokenMatch_free(Match* match);
@@ -166,7 +174,9 @@ typedef struct Grammar {
 } Grammar;
 
 
-Grammar* Grammar_new();
+Grammar* Grammar_new(void);
+
+void Grammar_free(Grammar* this);
 
 void Grammar_prepare ( Grammar* this );
 
