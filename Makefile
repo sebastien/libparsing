@@ -5,7 +5,8 @@ SOURCES  = $(wildcard src/*.c)
 TESTS    = $(wildcard tests/test-*.c)
 OBJECTS  = $(SOURCES:src/%.c=build/%.o)
 OBJECTS += $(TESTS:tests/%.c=build/%.o)
-PRODUCTS = lib$(PROJECT).so.$(VERSION) $(TESTS:tests/%.c=%) README.html
+PRODUCTS = lib$(PROJECT).so.$(VERSION) README.html
+TEST_PRODUCTS = $(TESTS:tests/%.c=%)
 CC       = colorgcc
 LIBS    := libpcre
 CFLAGS  += -Isrc -std=c11 -g -O9 -Wall -fPIC 
@@ -20,11 +21,14 @@ all: $(PRODUCTS)
 	echo $(TESTS)
 
 clean:
-	find . -name __pycache__ -exec rm -rf '{}' ';'
-	rm $(OBJECTS) $(PRODUCTS) ; true
+	@find . -name __pycache__ -exec rm -rf '{}' ';'
+	@rm -f $(OBJECTS) $(PRODUCTS) $(TEST_PRODUCTS); true
 
 build:
 	mkdir build
+
+tests: $(TEST_PRODUCTS)
+
 
 # =============================================================================
 # PRODUCTS

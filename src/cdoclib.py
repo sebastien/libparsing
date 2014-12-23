@@ -131,23 +131,15 @@ HTML_PAGE = """
 	<head>
 		<meta charset="utf-8" />
 		<title>${library} &mdash; API</title>
+		<!--
 		<link rel="stylesheet" href="http://cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/styles/default.min.css">
-		<link rel="stylesheet" href="http://sebastienpierre.ca/lib/css/base.css">
 		<script src="http://cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/highlight.min.js"></script>
-		<script src="http://sebastienpierre.ca/lib/js/jquery-2.0.3.js"></script>
-		<script src="http://sebastienpierre.ca/lib/js/extend-2.5.0.js"></script>
-		<script src="http://sebastienpierre.ca/lib/js/html-5.0.3.js"></script>
-		<script src="http://sebastienpierre.ca/lib/js/texto.js"></script>
+		-->
 		<style>${css}</style>
+		<script>${js}</script>
+
 	<body>
 		<div class="API use-texto use-base">
-			<div class="index to-w expand-h" style="position:fixed;overflow:auto;width:250px;">
-				<ol>
-				${for:groups}
-				<li class="${this.classifier}"><a href="#${this.name}_${this.classifier}">${this.name}</a></li>
-				${end}
-				</ol>
-			</div>
 			<div class="documentation" style="margin-left:250px;">
 				<div class="document">
 				${body}
@@ -324,7 +316,6 @@ def parse( *paths ):
 	return lib
 
 if __name__ == "__main__":
-	import ipdb
 	args = sys.argv[1:]
 	# reporter.install(reporter.StderrReporter)
 	lib  = Library()
@@ -334,11 +325,17 @@ if __name__ == "__main__":
 			groups = Parser.Groups(Parser.Lines(text))
 			lib.addGroups(groups)
 	body = Formatter().format(lib)
-	css  = os.popen("clevercss texto.ccss").read()
-	open("README.txt","w").write(body)
+	# NOTE: This cannot be replicated as-is
+	base = os.path.expanduser("~/Workspace/FF-Experiments/build")
+	assert os.path.exists(base)
+	CSS  = ("lib/css/base.css", "lib/css/texto.css")
+	JS   = ("lib/js/jquery-2.1.1.js", "lib/js/extend-2.6.5.js", "lib/js/html-5.0.3.js", "lib/js/texto.js")
+	css  = "\n".join(file(os.path.join(base, _)).read() for _ in CSS)
+	js   = "\n".join(file(os.path.join(base, _)).read() for _ in JS)
 	print templating.Template(HTML_PAGE).apply(dict(
-		css  = css,
-		body = texto.toHTML(body),
+		css    = css,
+		js     = js,
+		body   = texto.toHTML(body),
 		groups = [_ for _ in lib.groups if _.type == TYPE_SYMBOL]
 	))
 
