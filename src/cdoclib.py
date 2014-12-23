@@ -6,9 +6,9 @@
 # License           : BSD License
 # -----------------------------------------------------------------------------
 # Creation date     : 2014-12-18
-# Last modification : 2014-12-22
+# Last modification : 2014-12-23
 # -----------------------------------------------------------------------------
-import sys, re, fnmatch
+import os, sys, re, fnmatch
 import reporter, texto, templating
 from pygments            import highlight
 from pygments.lexers     import CLexer
@@ -121,7 +121,7 @@ SYMBOL_EXTRACTORS = dict(
 	typedef     = RE_TYPEDEF,
 	operation   = RE_FUNCTION,
 	constructor = RE_RETURN,
-	destructor  = RE_RETURN,
+	destructor  = RE_FUNCTION,
 	method      = RE_FUNCTION,
 )
 
@@ -141,7 +141,7 @@ HTML_PAGE = """
 		<style>${css}</style>
 	<body>
 		<div class="API use-texto use-base">
-			<div class="hidden index to-w expand-h" style="position:fixed;overflow:auto;width:250px;">
+			<div class="index to-w expand-h" style="position:fixed;overflow:auto;width:250px;">
 				<ol>
 				${for:groups}
 				<li class="${this.classifier}"><a href="#${this.name}_${this.classifier}">${this.name}</a></li>
@@ -236,6 +236,8 @@ class Parser:
 						t,l = None, None
 			else:
 				t,l = TYPE_CODE, line
+			if t == TYPE_DOC and l == "[END]":
+				break
 			counter += 1
 			if t != None and l != None:
 				yield counter, t, l
@@ -290,15 +292,18 @@ class Formatter:
 		body  = []
 		# The .h file usually starts with a preamble that we'd like to skip
 		has_doc = 0
+		indent_doc = ""
 		for group in library.groups:
 			d = []
 			if group.name:
-				l  = '\n[#%s_%s]`%s`' % (group.name, group.classifier, group.name)
+				l  = '\n[#%s_%s]<span class="classifier">%s</span> `%s`::' % (group.name, group.classifier, group.classifier, group.name)
 				d.append(l)
-				d.append("-" * len(l))
 				d.append("")
+				indent_doc = "\t"
+			else:
+				indent_doc = ""
 			if group.doc:
-				if has_doc > 0: d.append(u"\n".join(group.doc))
+				if has_doc > 0: d.append((u"\n" + indent_doc).join(group.doc))
 				has_doc += 1
 			if group.code and has_doc > 1:
 				code = strip([] + group.code)
@@ -320,33 +325,21 @@ def parse( *paths ):
 
 if __name__ == "__main__":
 	import ipdb
-	args = sys.argv[1:] or ["src/parsing.h"]
+	args = sys.argv[1:]
 	# reporter.install(reporter.StderrReporter)
 	lib  = Library()
 	for p in args:
 		with open(p) as f:
 			text   = f.read()
-			for line in Parser.Lines(text):
-				print line
 			groups = Parser.Groups(Parser.Lines(text))
 			lib.addGroups(groups)
 	body = Formatter().format(lib)
-	# if False:
-	# 	print templating.Template(HTML_PAGE).apply(dict(
-	# 		css  = open("texto.css").read(),
-	# 		body = texto.toHTML(body),
-	# 		groups = [_ for _ in lib.groups if _.type == TYPE_SYMBOL]
-	# 	))
-	# else:
-	# 	print body
-	# print lib.getSymbolCode("Iterator", "type")
-	# with file("src/parsing.ffi", "w") as f:
-	# 	f.write(lib.getSymbolCode("Reference",      "type"))
-	# 	f.write(lib.getSymbolCode("Match",          "type"))
-	# 	f.write(lib.getSymbolCode("ParsingElement", "type"))
-	# 	f.write(lib.getSymbolCode("Grammar",        "type"))
-	# 	# f.write(lib.getCode("Token",          "constructor"))
-	# 	# f.write(lib.getCode("Word",           "constructor"))
-	# 	# f.write(lib.getCode("Grammar",        "constructor"))
+	css  = os.popen("clevercss texto.ccss").read()
+	open("README.txt","w").write(body)
+	print templating.Template(HTML_PAGE).apply(dict(
+		css  = css,
+		body = texto.toHTML(body),
+		groups = [_ for _ in lib.groups if _.type == TYPE_SYMBOL]
+	))
 
 # EOF - vim: ts=4 sw=4 noet

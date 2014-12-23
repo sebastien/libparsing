@@ -24,7 +24,8 @@
 
 /**
  * == libparsing
- * -- Parsing Elements Library
+ * == C & Python Parsing Element Grammar Library
+ * -- Version: 0.3.0
  * -- URL: http://github.com/sebastien/parsing
  *
  * `libparsing` is a parsing element grammar (PEG) library written in C with
@@ -90,8 +91,11 @@
  *
  * %include tests/test-expr.py
  *
+ * C API
+ * =====
+*
  * Input data
- * ==========
+ * ----------
  *
  * The parsing library is configured at compile-time to iterate on
  * specific elements of input, typically `char`. You can redefine
@@ -210,7 +214,7 @@ bool FileInput_move   ( Iterator* this, int n );
 
 /**
  * Grammar
- * =======
+ * -------
  *
  * The `Grammar` is the concrete definition of the language you're going to
  * parse. It is defined by an `axiom` and input data that can be skipped,
@@ -250,7 +254,7 @@ Match* Grammar_parseFromPath( Grammar* this, const char* path );
 
 /**
  * Elements
- * ========
+ * --------
 */
 
 // @typedef
@@ -266,8 +270,8 @@ int Element_walk( Element* this, WalkingCallback callback );
 int Element__walk( Element* this, WalkingCallback callback, int step );
 
 /**
- * Parsing Elements
- * ----------------
+ * 1. Parsing Elements
+ * -------------------
  *
  * Parsing elements are the core elements that recognize and process input
  * data. There are 4 basic types: `Work`, `Token`, `Group` and `Rule`.
@@ -412,8 +416,8 @@ Match* ParsingElement_process( ParsingElement* this, Match* match );
 ParsingElement* ParsingElement_name( ParsingElement* this, const char* name );
 
 /**
- * Word
- * ----
+ * 2. Word
+ * -------
  *
  * Words recognize a static string at the current iterator location.
  *
@@ -435,8 +439,8 @@ ParsingElement* Word_new(const char* word);
 Match*          Word_recognize(ParsingElement* this, ParsingContext* context);
 
 /**
- * Tokens
- * ------
+ * 3. Tokens
+ * ---------
  *
  * Tokens are regular expression based parsing elements. They do not have
  * any children and test if the regular expression matches exactly at the
@@ -479,8 +483,8 @@ void TokenMatch_free(Match* match);
 const char* TokenMatch_group(Match* match, int index);
 
 /**
- * References
- * ----------
+ * 4. References
+ * -------------
  *
  * We've seen that parsing elements can have `children`. However, a parsing
  * element's children are not directly parsing elements but rather
@@ -548,8 +552,8 @@ int Reference__walk( Reference* this, WalkingCallback callback, int step );
 Match* Reference_recognize(Reference* this, ParsingContext* context);
 
 /**
- * Groups
- * ------
+ * 5. Groups
+ * ---------
  *
  * Groups are composite parsing elements that will return the first matching reference's
  * match. Think of it as a logical `or`.
@@ -562,8 +566,8 @@ ParsingElement* Group_new(Reference* children[]);
 Match*          Group_recognize(ParsingElement* this, ParsingContext* context);
 
 /**
- * Rules
- * -----
+ * 6. Rules
+ * --------
  *
  * Groups are composite parsing elements that only succeed if all their
  * matching reference's.
@@ -576,8 +580,8 @@ ParsingElement* Rule_new(Reference* children[]);
 Match*          Rule_recognize(ParsingElement* this, ParsingContext* context);
 
 /**
- * Procedures
- * ----------
+ * 7. Procedures
+ * -------------
  *
  * Procedures are parsing elements that do not consume any input, always
  * succeed and usually have a side effect, such as setting a variable
@@ -597,8 +601,8 @@ ParsingElement* Procedure_new(ProcedureCallback c);
 Match*          Procedure_recognize(ParsingElement* this, ParsingContext* context);
 
 /*
- * Conditions
- * ----------
+ * 8. Conditions
+ * -------------
  *
  * Conditions, like procedures, execute arbitrary code when executed, but
  * they might return a FAILURE.
@@ -615,7 +619,7 @@ Match*          Condition_recognize(ParsingElement* this, ParsingContext* contex
 
 /**
  * The parsing process
- * ===================
+ * -------------------
  *
  * The parsing itself is the process of taking a `grammar` and applying it
  * to an input stream of data, represented by the `iterator`.
@@ -689,7 +693,7 @@ void ParsingStep_free( ParsingStep* this );
 
 /**
  * Utilities
- * =========
+ * ---------
 */
 
 // @method
@@ -703,7 +707,7 @@ Match* Utilites_checkIndent( ParsingElement *this, ParsingContext* context );
 
 /**
  * Syntax Sugar
- * ============
+ * ------------
  *
  * The parsing library provides a set of macros that make defining grammars
  * a much easier task. A grammar is usually defined in the following way:
@@ -866,6 +870,39 @@ Match* Utilites_checkIndent( ParsingElement *this, ParsingContext* context );
  * ParsingGrammar* g = Grammar_new();
  * g->axiom = s_Expr;
  * ```
+ *
+ * License
+ * =======
+ *
+ * Revised BSD License Copyright (c) 2014, FFunction inc (1165373771 Quebec
+ * inc) All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * Redistributions of source code must retain the above copyright notice, this
+ * list of conditions and the following disclaimer. Redistributions in binary
+ * form must reproduce the above copyright notice, this list of conditions and
+ * the following disclaimer in the documentation and/or other materials
+ * provided with the distribution. Neither the name of the FFunction inc
+ * (CANADA) nor the names of its contributors may be used to endorse or promote
+ * products derived from this software without specific prior written
+ * permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ * [END]
 */
+
 #endif
-// EOa
+// EOF
