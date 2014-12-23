@@ -223,13 +223,18 @@ class Match(CObject):
 		return self.children()
 
 	def __getitem__( self, index ):
-		assert type(index) is int
-		i = 0
-		for c in self.children():
-			if i == index:
-				return c
-			i += 1
-		return None
+		if type(index) == int:
+			i = 0
+			for c in self.children():
+				if i == index:
+					return c
+				i += 1
+		else:
+			for c in self.children():
+				if c.element().name() == index:
+					return c
+			raise KeyError
+			return None
 
 	def __repr__(self):
 		element = self.element()
@@ -258,10 +263,8 @@ class Match(CObject):
 class WordMatch(Match):
 
 	def group( self ):
-		return "FIXME:WORD"
-		# FIXME: The following causes a segfault
-		element = ffi.cast("ParsingElement*", self._cobject)
-		config = ffi.cast("WordConfig*", element.config)
+		element = ffi.cast("ParsingElement*", self._cobject.element)
+		config  = ffi.cast("WordConfig*", element.config)
 		return ffi.string(config.word)
 
 # -----------------------------------------------------------------------------
@@ -651,10 +654,13 @@ class AbstractProcessor:
 		# print "[PROCESS]", eid, match.element().name()
 		if handler:
 			kwargs = {}
+			# We only bind the arguments listed
+			varnames = handler.func_code.co_varnames
 			for m in match.children():
 				e = m.element()
 				n = e.name()
-				if n: kwargs[n] = self.process(m)
+				if n and n in varnames:
+					kwargs[n] = self.process(m)
 			if match.isFromReference():
 				return handler(match, **kwargs)
 			else:

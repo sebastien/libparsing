@@ -23,36 +23,73 @@
 #define __PARSING_VERSION__ "0.3.0"
 
 /**
- * == parsing.h
+ * == libparsing
  * -- Parsing Elements Library
  * -- URL: http://github.com/sebastien/parsing
  *
- * `parsing.h` is a library to create grammars based on parsing elements.
+ * `libparsing` is a parsing element grammar (PEG) library written in C with
+ * Python bindings. It offers a fairly good performance while allowing for a
+ * lot of flexibility. It mainly intended to be used to create programming
+ * languages and software engineering tools.
+ *
  * As opposed to more traditional parsing techniques, the grammar is not compiled
  * but constructed using an API that allows dynamic update of the grammar.
  *
- * Instead, an input stream is consumed and parsing elements are dynamically
- * run on the input stream. Once parsing elements match, the resulting matched
- * input is processed and an action is triggered.
+ * The parser does not do any tokeninzation, the instead input stream is
+ * consumed and parsing elements are dynamically asked to match the next
+ * element of it. Once parsing elements match, the resulting matched input is
+ * processed and an action is triggered.
  *
- * This process allows for fine-grain control over the parsing process, as
- * parsing elements can execute arbitrary code. One notable difference with
- * traditional techniques is that there is no preliminary tokenization phase.
+ * Parsing elements support:
  *
- * Parsing elements support backtracking, cherry-picking (skipping unrecognized
- * input), context-based rules (a rule that will match or not depending on the
- * current parsing state) and dynamic grammar update (you can change the grammar
- * on the fly).
+ * - backtracking, ie. going back in the input stream if a match is not found
+ * - cherry-picking, ie. skipping unrecognized input
+ * - contextual rules, ie. a rule that will match or not depending on external
+ *   variables
+ *  - dynamic grammar update, where you can change the grammar on the fly
  *
  * Parsing elements are usually slower than compiled or FSM-based parsers as
  * they trade performance for flexibility. It's probably not a great idea to
- * use them if parsing has to happen in as fast as possible (ie. a protocol),
- * but it is a great use for programming languages, as it opens up the door
- * to dynamic syntax plug-ins and multiple language embedding.
-*/
-
-
-/**
+ * use them if parsing has to happen as fast as possible (ie. a protocol
+ * implementation), but it is a great use for programming languages, as it
+ * opens up the door to dynamic syntax plug-ins and multiple language
+ * embedding.
+ *
+ * If you're interested in PEG, you can start reading Brian Ford's original
+ * article. Projects such as PEG/LEG by Ian Piumarta <http://piumarta.com/software/peg/>
+ * ,OMeta by Alessandro Warth <http://www.tinlizzie.org/ometa/>
+ * or Haskell's Parsec library <https://www.haskell.org/haskellwiki/Parsec>
+ * are of particular interest in the field.
+ *
+ * Installing
+ * ==========
+ *
+ * To install the Python parsing module:
+ *
+ * >	easy_install libparsing    # From Setuptools
+ * >	pip install libparsing     # From PIP
+ *
+ * To compile the C parsing module:
+ *
+ * >	git clone http://github.com/sebastien/libparsing
+ * >	cd libparsing
+ * >	make
+ * >	make install               # You can set PREFIX
+ *
+ * `libparsing` works with GCC4 and Clang and is written following the `c11`
+ * standard.
+ *
+ * Examples
+ * ========
+ *
+ * Here is what a simple calculator grammar looks like in C code
+ *
+ * %include tests/test-references.c
+ *
+ * And the equivalent implementation in python
+ *
+ * %include tests/test-expr.py
+ *
  * Input data
  * ==========
  *

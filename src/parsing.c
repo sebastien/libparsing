@@ -590,6 +590,7 @@ ParsingElement* Word_new(const char* word) {
 	config->length       = strlen(word);
 	assert(config->length>0);
 	this->config         = config;
+	assert(this->config != NULL);
 	return this;
 }
 

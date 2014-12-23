@@ -8,7 +8,7 @@ OBJECTS += $(TESTS:tests/%.c=build/%.o)
 PRODUCTS = lib$(PROJECT).so.$(VERSION) $(TESTS:tests/%.c=%)
 CC       = colorgcc
 LIBS    := libpcre
-CFLAGS  += -Isrc -std=c11 -g -Wall -fPIC -DDEBUG_ENABLED
+CFLAGS  += -Isrc -std=c11 -g -O3 -Wall -fPIC -DDEBUG_ENABLED
 LDFLAGS := $(shell pkg-config --cflags --libs $(LIBS))
 
 all: $(PRODUCTS)

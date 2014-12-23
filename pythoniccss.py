@@ -6,9 +6,8 @@
 # License           : BSD License
 # -----------------------------------------------------------------------------
 # Creation date     : 2013-07-15
-# Last modification : 2014-12-22
+# Last modification : 2014-12-23
 # -----------------------------------------------------------------------------
-
 
 import re, reporter, sys
 sys.path.insert(0, "src")
@@ -173,8 +172,8 @@ def grammar(g=Grammar("PythonicCSS")):
 	# of the failures. A good idea would be to append the indentation value to
 	# the caching key.
 	# .processMemoizationKey(lambda _,c:_ + ":" + c.getVariables().get("requiredIndent", 0))
-	g.rule("Statement",     s.CheckIndent, g.agroup(s.Assignment, s.MacroInvocation, s.COMMENT), s.EOL).disableFailMemoize()
-	g.rule("Block",         s.CheckIndent, g.agroup(s.PERCENTAGE, s.SelectionList)._as("selector"), s.COLON.optional(), s.EOL, s.Indent, s.Code.zeroOrMore()._as("code"), s.Dedent).disableFailMemoize()
+	g.rule("Statement",     s.CheckIndent._as("indent"), g.agroup(s.Assignment, s.MacroInvocation, s.COMMENT), s.EOL).disableFailMemoize()
+	g.rule("Block",         s.CheckIndent._as("indent"), g.agroup(s.PERCENTAGE, s.SelectionList)._as("selector"), s.COLON.optional(), s.EOL, s.Indent, s.Code.zeroOrMore()._as("code"), s.Dedent).disableFailMemoize()
 	s.Code.set(s.Block, s.Statement).disableFailMemoize()
 
 	g.rule    ("SpecialDeclaration",   s.CheckIndent, s.SPECIAL_NAME, s.SPECIAL_FILTER.optional(), s.Parameters.optional(), s.COLON)
@@ -312,6 +311,8 @@ class Processor(AbstractProcessor):
 		self.variables  = {}
 		self._evaluated = {}
 		self.scopes     = []
+		self._header    = None
+		self._footer    = None
 
 	# ==========================================================================
 	# EVALUATION
@@ -413,6 +414,9 @@ class Processor(AbstractProcessor):
 	def onSTRING_UQ(self, match ):
 		return match.group()
 
+	def onCheckIndent(self, match, tabs):
+		return len(tabs) if tabs else 0
+
 	def onString( self, match ):
 		return (self.process(match.group()), "S")
 
@@ -432,10 +436,10 @@ class Processor(AbstractProcessor):
 	def onInfixOperation( self, match ):
 		op   = self.process(match[0])
 		expr = self.process(match[1])
-		return ["O", op.group(), None, expr]
+		return ["O", op, None, expr]
 
 	def onSuffixes( self, match ):
-		return match.group()
+		return self.process(match.group())
 
 	def onPrefix( self, match ):
 		result = self.defaultProcess(match)
@@ -456,18 +460,19 @@ class Processor(AbstractProcessor):
 		return res
 
 	def onAttribute( self, match, name, value ):
-		return "[{0}={1}]".format(name.group(), value[1].data.group())
+		return "[{0}{1}{2}]".format(name, value[0], value[1])
 
 	def onAttributes( self, match, head, tail ):
-		tail = [_.data[1].data for _ in tail]
-		return "".join([head] + tail)
+		assert not tail
+		result = "".join([head] + (tail or []))
+		return  result
 
 	def onSelector( self, match, scope, nid,  nclass, attributes, suffix ):
 		"""Selectors are returned as tuples `(scope, id, class, attributes, suffix)`.
 		We need to keep this structure as we need to be able to expand the `&`
 		reference."""
 		scope  = scope[0] if scope else ""
-		nid    = nid[0] if nid else ""
+		nid    = nid if nid else ""
 		suffix = "".join(suffix) if suffix else ""
 		nclass = "".join(nclass) if nclass else ""
 		if (scope or nid or nclass or attributes or suffix):
@@ -485,26 +490,35 @@ class Processor(AbstractProcessor):
 		>   [[('div', '', '', '', ''), '> ', ('label', '', '', '', '')]]
 		>   ---SELECTOR------------   OP   --SELECTOR---------------
 		"""
-		res = [head]
-		for _ in tail or []:
-			_ = _[1]
-			res.append(_)
-		return res
+		if head:
+			res = head
+			if tail:
+				for narrower in tail:
+					res.extend(narrower)
+			return res
+		else:
+			res = []
+			for i, v in enumerate(tail):
+				if i == 0:
+					res.append(v[1])
+				else:
+					res.extend(v)
+			return res
 
 	def onSelectionList( self, match, head, tail ):
 		"""Updates the current scope and writes the scope selection line."""
 		# tail is [[s.COMMA, s.Selection], ...]
-		tail   = [_[1][1][1] for _ in tail or []]
-		print "HEAD",head
-		print "TAIL", tail
-		scopes = head + tail
+		tail   = [_[1] for _ in tail or [] if _[1]]
+		scopes = [head] + tail if tail else [head]
+		# print "onSelectionList: head=", head
+		# print "onSelectionList: tail=", tail
+		# print "onSelectionList: scopes=", scopes
 		# We want to epxand the `&` in the scopes
 		scopes = self._expandScopes(scopes)
-		# And output the full current scope
-		if len(self.scopes) > 0: self._write("}")
 		# We push the expanded scopes in the scopes stack
 		self.scopes.append(scopes)
-		self._write(",\n".join((self._selectionAsString(_) for _ in self.scopes[-1])) + " {")
+		self._header = ",\n".join((self._selectionAsString(_) for _ in self.scopes[-1])) + " {"
+		return self._header
 
 	def onNumber( self, match, value, unit ):
 		value = float(value) if "." in value else int(value)
@@ -517,6 +531,10 @@ class Processor(AbstractProcessor):
 		return None
 
 	def onAssignment( self, match, name, values, important ):
+		if self._header:
+			self._write(self._header)
+			self._header = None
+			self._footer = "}"
 		suffix = "!important" if important else ""
 		try:
 			evalues = [self._valueAsString(self.evaluate(_, name=name)) for _ in values]
@@ -526,22 +544,31 @@ class Processor(AbstractProcessor):
 		if name in self.PREFIXABLE_PROPERTIES:
 			res = []
 			for prefix in self.PREFIXES:
+				# FIXME: Optimize this
 				# It's a bit slower to re-evaluate here but it would otherwise
 				# lead to complex machinery.
-				evalues = [self._valueAsString(self.evaluate(_.data, name=name, prefix=prefix)) for _ in values]
+				evalues = [self._valueAsString(self.evaluate(_, name=name, prefix=prefix)) for _ in values]
 				l       = self._write("{3}{0}: {1}{2};".format(name, " ".join(evalues), suffix, prefix), indent=1)
 				res.append(l)
 			return res
 		else:
 			return self._write("{0}: {1}{2};".format(name, " ".join(evalues), suffix), indent=1)
 
-	def onBlock( self, match, selector, code ):
-		if len(self.scopes) == 1:
-			self._write("}")
-		self.scopes.pop()
+	def onBlock( self, match, indent ):
+		if self._footer:
+			self._write(self._footer)
+			self._footer = None
+		while len(self.scopes) > indent:
+			self.scopes.pop()
+		self.process(match["selector"])
+		self.process(match["code"])
 
 	def onSource( self, match ):
-		return self.defaultProcess(match)
+		result = self.defaultProcess(match)
+		if self._footer:
+			self._write(self._footer)
+			self._footer = None
+		return result
 
 	# ==========================================================================
 	# OUTPUT
@@ -562,7 +589,6 @@ class Processor(AbstractProcessor):
 
 	def _expandScopes( self, scopes ):
 		"""Expands the `&` in the list of given scopes."""
-		print ("EXPAND", scopes)
 		res = []
 		parent_scopes = self._listCurrentScopes()
 		for scope in scopes:
@@ -586,7 +612,6 @@ class Processor(AbstractProcessor):
 						res.append(full_scope[0:-1] + [merged])
 				else:
 					for full_scope in parent_scopes:
-						print ("F", full_scope, "/", scope)
 						res.append(full_scope + [" "] + scope)
 			else:
 				res.append(scope)
