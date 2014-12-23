@@ -5,24 +5,25 @@
 # Author            : Sébastien Pierre
 # License           : BSD License
 # -----------------------------------------------------------------------------
-# Creation date     : 2014-12-18
-# Last modification : 2014-12-19
+# Creation date     : 2014-DEC-18
+# Last modification : 2014-DEC-23
 # -----------------------------------------------------------------------------
 
-from cffi import FFI
-import re, os
-import cdoclib
+import re
+from   cffi    import FFI
+from   os.path import dirname, join, abspath
 
 try:
 	import reporter as logging
 except ImportError:
 	import logging
 
-VERSION  = "0.0.0"
-LICENSE  = "http://ffctn.com/doc/licenses/bsd"
-FFI_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "parsing.ffi")
-H_PATH   = os.path.join(os.path.dirname(os.path.abspath(__file__)), "parsing.h")
-NOTHING  = re
+VERSION            = "0.3.0"
+LIBPARSING_VERSION = "0.3.0"
+LICENSE            = "http://ffctn.com/doc/licenses/bsd"
+FFI_PATH           = join(dirname(abspath(__file__)),                 "libparsing.ffi")
+H_PATH             = join(dirname(dirname(dirname(abspath(__file__)), "src/parsing.h")))
+NOTHING            = re
 
 # -----------------------------------------------------------------------------
 #
@@ -33,6 +34,9 @@ NOTHING  = re
 # Creates the .ffi file from the header or loads it directly from the
 # previously generated one.
 if os.path.exists(H_PATH):
+	import sys
+	sys.insert(0, dirname(dirname(abspath(__file__))))
+	import cdoclib
 	clib = cdoclib.Library(H_PATH)
 	O    = ("type", "constructor", "operation", "method", "destructor")
 	# NOTE: We need to generate a little bit of preample before outputting
@@ -74,7 +78,7 @@ else:
 
 ffi = FFI()
 ffi.cdef(cdef)
-lib = ffi.dlopen("libparsing.so.0.3.0")
+lib = ffi.dlopen("libparsing.so")
 
 CARDINALITY_OPTIONAL      = '?'
 CARDINALITY_ONE           = '1'
@@ -685,52 +689,5 @@ class AbstractProcessor:
 				return m
 		else:
 			return m
-
-# -----------------------------------------------------------------------------
-#
-# MAIN
-#
-# -----------------------------------------------------------------------------
-
-if __name__ == "__main__":
-	g  = Grammar()
-	s  = g.symbols
-	g.token("NUMBER",   "\d+(\.\d+)?")
-	g.token("VARIABLE", "\w[\w_\d]*")
-	g.token("OPERATOR", "[\-\+\*/\^]")
-	g.group("Value",      s.NUMBER, s.VARIABLE)
-	g.rule("Suffix",      s.OPERATOR, s.Value)
-	g.rule("Expression")
-	s.Expression.set(s.Value, s.Suffix.zeroOrMore(), s.Expression)
-	g.axiom(s.Expression)
-	# lib.Grammar_prepare(g._cobject)
-
-	visited = []
-	def gw(e, step):
-		# The following is an exit condition for recursion
-		if step > e.id(): return -1
-		print "[%5d] %s%s:%d" % (step, "*" if isinstance(e, Reference) else " ", e.name(), e.id())
-		return step
-	g.walk(gw)
-
-
-	# print lib.Reference_New(
-	# 	lib.Word_new("POUET")
-	# ).element
-	# print Word("a")._as("name")
-	# assert Word("a")._cobject
-	# a  = Word("a")._as("a")
-	# b  = Word("b")._as("b")
-	# ws = Token("\\s+")
-	# e  = Group(a, b)._as("e")
-	# g.axiom(e).skip(ws)
-	# match = g.parsePath("pouet.txt")
-	# def mw(m, step):
-	# 	print "MATCH", step, m.offset(), m.length()
-	# def gw(e, step):
-	# 	print "ELEMENT", e
-	# match.walk(mw)
-	# NOTE: The following does not work
-	# g.walk(gw)
 
 # EOF - vim: ts=4 sw=4 noet

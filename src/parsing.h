@@ -28,6 +28,8 @@
  * -- Version: 0.3.0
  * -- URL: http://github.com/sebastien/parsing
  *
+ * #START:INTRO
+ *
  * `libparsing` is a parsing element grammar (PEG) library written in C with
  * Python bindings. It offers a fairly good performance while allowing for a
  * lot of flexibility. It mainly intended to be used to create programming
@@ -61,6 +63,8 @@
  * ,OMeta by Alessandro Warth <http://www.tinlizzie.org/ometa/>
  * or Haskell's Parsec library <https://www.haskell.org/haskellwiki/Parsec>
  * are of particular interest in the field.
+ *
+ * #END:INTRO
  *
  * Installing
  * ==========

@@ -22,10 +22,22 @@ all: $(PRODUCTS)
 
 clean:
 	@find . -name __pycache__ -exec rm -rf '{}' ';'
-	@rm -f $(OBJECTS) $(PRODUCTS) $(TEST_PRODUCTS); true
+	@rm -rf dist *.egg-info $(OBJECTS) $(PRODUCTS) $(TEST_PRODUCTS); true
 
 build:
 	mkdir build
+
+dist: libparsing
+	python setup.py sdist bdist
+
+info:
+	@echo libparsing: $(VERSION)
+
+release: $(PRODUCT)
+	git commit -a -m "Release $(VERSION)"
+	git tag $(VERSION) ; true
+	git push --all ; true
+	python setup.py clean sdist bdist register upload
 
 tests: $(TEST_PRODUCTS)
 
