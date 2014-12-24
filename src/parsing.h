@@ -29,6 +29,7 @@
  * ```
  * Version :  0.3.0
  * URL     :  http://github.com/sebastien/parsing
+ * README  :  https://cdn.rawgit.com/sebastien/libparsing/master/README.html
  * ```
  *
  * [START:INTRO]
