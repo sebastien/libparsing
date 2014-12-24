@@ -21,7 +21,7 @@
 
 #ifndef __PARSING_H__
 #define __PARSING_H__
-#define __PARSING_VERSION__ "0.4.0"
+#define __PARSING_VERSION__ "0.4.1"
 
 /**
  * #  libparsing

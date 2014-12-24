@@ -18,7 +18,7 @@ try:
 except ImportError:
 	import logging
 
-VERSION            = "0.4.0"
+VERSION            = "0.4.1"
 LICENSE            = "http://ffctn.com/doc/licenses/bsd"
 PACKAGE_PATH       = dirname(abspath(__file__))
 LIB_PATH           = dirname(PACKAGE_PATH)
@@ -85,7 +85,7 @@ else:
 ffi = FFI()
 ffi.cdef(cdef)
 lib = None
-for p in (LIB_PATH, LIB_ALT_PATH, "."):
+for p in (LIB_PATH, LIB_ALT_PATH, PACKAGE_PATH):
 	p = join(p, "libparsing.so")
 	if os.path.exists(p):
 		lib = ffi.dlopen(p)
@@ -122,10 +122,14 @@ class CObject(object):
 	_TYPE = None
 
 	@classmethod
-	def Wrap( cls, cobject, ocls=None ):
+	def Wrap( cls, cobject ):
+		return cls(cobject, wrap=cls.TYPE())
+
+	@classmethod
+	def TYPE( cls ):
 		if not cls._TYPE:
 			cls._TYPE = cls.__name__.rsplit(".")[-1] + "*"
-		return cls(cobject, wrap=cls._TYPE)
+		return cls._TYPE
 
 	def __init__(self, *args, **kwargs):
 		self._cobject = None
@@ -135,7 +139,7 @@ class CObject(object):
 			self._wrap(ffi.cast(kwargs["wrap"], args[0]))
 		else:
 			o = self._new(*args, **kwargs)
-			if o is not None: self._cobject = o
+			if o is not None: self._cobject = ffi.cast(self.TYPE(), o)
 			assert self._cobject
 
 	def _new( self ):
@@ -556,12 +560,25 @@ class ParsingResult(CObject):
 
 class Grammar(CObject):
 
+	_TYPE = "Grammar*"
+
 	def _new(self, name=None, verbose=True ):
 		self.name    = name
 		self.symbols = Symbols()
-		g =  lib.Grammar_new()
+		g = lib.Grammar_new()
 		g.isVerbose = 1 if verbose else 0
 		return g
+
+	# def setVerbose( self, verbose ):
+	# 	# FIXME: That cast should not be necessary
+	# 	e = ffi.cast("Grammar*", self._cobject)
+	# 	e.verbose = 1 if verbose else 0
+	# 	return self
+
+	# def isVerbose( self, verbose ):
+	# 	# FIXME: That cast should not be necessary
+	# 	e = ffi.cast("Grammar*", self._cobject)
+	# 	return e.verbose == 1
 
 	def list( self ):
 		res = []
