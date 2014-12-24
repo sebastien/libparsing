@@ -228,6 +228,8 @@ class Parser:
 						t,l = None, None
 			else:
 				t,l = TYPE_CODE, line
+			if t == TYPE_DOC and l.strip().startswith("#"):
+				t = l = None
 			if t == TYPE_DOC and l == "[END]":
 				break
 			counter += 1
@@ -316,7 +318,7 @@ def parse( *paths ):
 	return lib
 
 if __name__ == "__main__":
-	args = sys.argv[1:]
+	args = sys.argv[1:] or ["src/parsing.h"]
 	# reporter.install(reporter.StderrReporter)
 	lib  = Library()
 	for p in args:
@@ -332,11 +334,13 @@ if __name__ == "__main__":
 	JS   = ("lib/js/jquery-2.1.1.js", "lib/js/extend-2.6.5.js", "lib/js/html-5.0.3.js", "lib/js/texto.js")
 	css  = "\n".join(file(os.path.join(base, _)).read() for _ in CSS)
 	js   = "\n".join(file(os.path.join(base, _)).read() for _ in JS)
-	print templating.Template(HTML_PAGE).apply(dict(
+	body = body.decode("utf-8")
+	file("README","w").write(body)
+	file("README.html","w").write(templating.Template(HTML_PAGE).apply(dict(
 		css    = css,
 		js     = js,
 		body   = texto.toHTML(body),
 		groups = [_ for _ in lib.groups if _.type == TYPE_SYMBOL]
-	))
+	)))
 
 # EOF - vim: ts=4 sw=4 noet
