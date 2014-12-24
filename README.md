@@ -1,6 +1,6 @@
 
 #  libparsing
-## Python Parsing Element Grammar Library
+## C & Python Parsing Elements Grammar Library
 
 ```
 Version :  0.3.6
