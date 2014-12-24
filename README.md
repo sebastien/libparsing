@@ -3,8 +3,9 @@
 ## Python Parsing Element Grammar Library
 
 ```
-Version :  0.3.0
+Version :  0.3.6
 URL     :  http://github.com/sebastien/parsing
+README  :  https://cdn.rawgit.com/sebastien/libparsing/master/README.html
 ```
 
 
@@ -321,6 +322,7 @@ The `axiom` and `skip` properties are both references to _parsing elements_.
 ```c
 typedef struct ParsingContext ParsingContext;
 typedef struct ParsingElement ParsingElement;
+typedef struct ParsingResult  ParsingResult;
 typedef struct Reference      Reference;
 typedef struct Match          Match;
 ```
@@ -335,6 +337,7 @@ typedef struct Grammar {
 	ParsingElement*  skip;        // The skipped element
 	int              axiomCount;  // The count of parsing elemetns in axiom
 	int              skipCount;   // The count of parsing elements in skip
+	bool             isVerbose;
 } Grammar;
 ```
 
@@ -367,7 +370,7 @@ void Grammar_prepare ( Grammar* this );
 
 
 ```c
-Match* Grammar_parseFromIterator( Grammar* this, Iterator* iterator );
+ParsingResult* Grammar_parseFromIterator( Grammar* this, Iterator* iterator );
 ```
 
 
@@ -375,7 +378,7 @@ Match* Grammar_parseFromIterator( Grammar* this, Iterator* iterator );
 
 
 ```c
-Match* Grammar_parseFromPath( Grammar* this, const char* path );
+ParsingResult* Grammar_parseFromPath( Grammar* this, const char* path );
 ```
 
 
@@ -469,6 +472,22 @@ typedef struct Match {
 
 ```c
 #define STATUS_MATCHED     'M'
+```
+
+
+#### <a name="STATUS_SUCCESS_define"><span class="classifier">define</span> `STATUS_SUCCESS`</a>
+
+
+```c
+#define STATUS_SUCCESS     'S'
+```
+
+
+#### <a name="STATUS_PARTIAL_define"><span class="classifier">define</span> `STATUS_PARTIAL`</a>
+
+
+```c
+#define STATUS_PARTIAL     's'
 ```
 
 
@@ -1097,6 +1116,43 @@ typedef struct ParsingOffset  ParsingOffset;
 ```
 
 
+#### <a name="ParsingStats_type"><span class="classifier">type</span> `ParsingStats`</a>
+
+
+```c
+typedef struct ParsingStats {
+	size_t  bytesRead;
+	double  parseTime;
+	size_t* successBySymbol;
+	size_t* failureBySymbol;
+} ParsingStats;
+```
+
+
+#### <a name="ParsingStats_constructor"><span class="classifier">constructor</span> `ParsingStats`</a>
+
+
+```c
+ParsingStats* ParsingStats_new(void);
+```
+
+
+#### <a name="ParsingStats_free_destructor"><span class="classifier">destructor</span> `ParsingStats_free`</a>
+
+
+```c
+void ParsingStats_free(ParsingStats* this);
+```
+
+
+#### <a name="ParsingStats_setSymbolsCount_method"><span class="classifier">method</span> `ParsingStats_setSymbolsCount`</a>
+
+
+```c
+void ParsingStats_setSymbolsCount(ParsingStats* this, size_t t);
+```
+
+
 #### <a name="ParsingContext_type"><span class="classifier">type</span> `ParsingContext`</a>
 
 
@@ -1106,7 +1162,52 @@ typedef struct ParsingContext {
 	struct Iterator*             iterator;     // Iterator on the input data
 	struct ParsingOffset* offsets;      // The parsing offsets, starting at 0
 	struct ParsingOffset* current;      // The current parsing offset
+	struct ParsingStats*  stats;
 } ParsingContext;
+```
+
+
+#### <a name="ParsingContext_constructor"><span class="classifier">constructor</span> `ParsingContext`</a>
+
+
+```c
+ParsingContext* ParsingContext_new( Grammar* g, Iterator* iterator );
+```
+
+
+#### <a name="ParsingContext_free_destructor"><span class="classifier">destructor</span> `ParsingContext_free`</a>
+
+
+```c
+void ParsingContext_free( ParsingContext* this );
+```
+
+
+#### <a name="ParsingResult_type"><span class="classifier">type</span> `ParsingResult`</a>
+
+
+```c
+typedef struct ParsingResult {
+	char            status;
+	Match*          match;
+	ParsingContext* context;
+} ParsingResult;
+```
+
+
+#### <a name="ParsingResult_constructor"><span class="classifier">constructor</span> `ParsingResult`</a>
+
+
+```c
+ParsingResult* ParsingResult_new(Match* match, ParsingContext* context);
+```
+
+
+#### <a name="ParsingResult_free_method"><span class="classifier">method</span> `ParsingResult_free`</a>
+
+
+```c
+void ParsingResult_free(ParsingResult* this);
 ```
 
 

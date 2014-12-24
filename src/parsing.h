@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <errno.h>
+#include <time.h>
 #include <string.h>
 #include <assert.h>
 #include <sys/types.h>
@@ -20,14 +21,14 @@
 
 #ifndef __PARSING_H__
 #define __PARSING_H__
-#define __PARSING_VERSION__ "0.3.6"
+#define __PARSING_VERSION__ "0.4.0"
 
 /**
  * #  libparsing
  * ## Python Parsing Element Grammar Library
  *
  * ```
- * Version :  0.3.0
+ * Version :  0.3.6
  * URL     :  http://github.com/sebastien/parsing
  * README  :  https://cdn.rawgit.com/sebastien/libparsing/master/README.html
  * ```
@@ -265,6 +266,7 @@ bool FileInput_move   ( Iterator* this, int n );
 
 typedef struct ParsingContext ParsingContext;
 typedef struct ParsingElement ParsingElement;
+typedef struct ParsingResult  ParsingResult;
 typedef struct Reference      Reference;
 typedef struct Match          Match;
 
@@ -274,6 +276,7 @@ typedef struct Grammar {
 	ParsingElement*  skip;        // The skipped element
 	int              axiomCount;  // The count of parsing elemetns in axiom
 	int              skipCount;   // The count of parsing elements in skip
+	bool             isVerbose;
 } Grammar;
 
 
@@ -287,10 +290,10 @@ void Grammar_free(Grammar* this);
 void Grammar_prepare ( Grammar* this );
 
 // @method
-Match* Grammar_parseFromIterator( Grammar* this, Iterator* iterator );
+ParsingResult* Grammar_parseFromIterator( Grammar* this, Iterator* iterator );
 
 // @method
-Match* Grammar_parseFromPath( Grammar* this, const char* path );
+ParsingResult* Grammar_parseFromPath( Grammar* this, const char* path );
 
 /**
  * Elements
@@ -347,6 +350,10 @@ typedef struct Match {
 #define STATUS_PROCESSING  '~'
 // @define
 #define STATUS_MATCHED     'M'
+// @define
+#define STATUS_SUCCESS     'S'
+// @define
+#define STATUS_PARTIAL     's'
 // @define
 #define STATUS_FAILED      'X'
 // @define
@@ -664,13 +671,50 @@ Match*          Condition_recognize(ParsingElement* this, ParsingContext* contex
 typedef struct ParsingStep    ParsingStep;
 typedef struct ParsingOffset  ParsingOffset;
 
-// @type ParsingContext
+// @type
+typedef struct ParsingStats {
+	size_t  bytesRead;
+	double  parseTime;
+	size_t* successBySymbol;
+	size_t* failureBySymbol;
+} ParsingStats;
+
+// @constructor
+ParsingStats* ParsingStats_new(void);
+
+// @destructor
+void ParsingStats_free(ParsingStats* this);
+
+// @method
+void ParsingStats_setSymbolsCount(ParsingStats* this, size_t t);
+
+// @type
 typedef struct ParsingContext {
 	struct Grammar*              grammar;      // The grammar used to parse
 	struct Iterator*             iterator;     // Iterator on the input data
 	struct ParsingOffset* offsets;      // The parsing offsets, starting at 0
 	struct ParsingOffset* current;      // The current parsing offset
+	struct ParsingStats*  stats;
 } ParsingContext;
+
+// @constructor
+ParsingContext* ParsingContext_new( Grammar* g, Iterator* iterator );
+
+// @destructor
+void ParsingContext_free( ParsingContext* this );
+
+// @type
+typedef struct ParsingResult {
+	char            status;
+	Match*          match;
+	ParsingContext* context;
+} ParsingResult;
+
+// @constructor
+ParsingResult* ParsingResult_new(Match* match, ParsingContext* context);
+
+// @method
+void ParsingResult_free(ParsingResult* this);
 
 /*
  * The result of _recognizing_ parsing elements at given offsets within the

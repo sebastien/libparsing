@@ -38,8 +38,9 @@ var texto=extend&&extend.Module&&extend.Module("texto")||texto||{};(function(tex
 <h1>libparsing</h1>
 <div id="python-parsing-element-grammar-library" class="section level2">
 <h2>Python Parsing Element Grammar Library</h2>
-<pre><code>Version :  0.3.0
-URL     :  http://github.com/sebastien/parsing</code></pre>
+<pre><code>Version :  0.3.6
+URL     :  http://github.com/sebastien/parsing
+README  :  https://cdn.rawgit.com/sebastien/libparsing/master/README.html</code></pre>
 <p><code>libparsing</code> is a parsing element grammar (PEG) library written in C with Python bindings. It offers decent performance while allowing for a lot of flexibility. It is mainly intended to be used to create programming languages and software engineering tools.</p>
 <p>As opposed to more traditional parsing techniques, the grammar is not compiled but constructed using an API that allows dynamic update of the grammar.</p>
 <p>The parser does not do any tokeninzation, the instead input stream is consumed and parsing elements are dynamically asked to match the next element of it. Once parsing elements match, the resulting matched input is processed and an action is triggered.</p>
@@ -206,6 +207,7 @@ make install               # You can set PREFIX</code></pre>
 <p>The <code>axiom</code> and <code>skip</code> properties are both references to <em>parsing elements</em>.</p>
 <pre class="sourceCode c"><code class="sourceCode c"><span class="kw">typedef</span> <span class="kw">struct</span> ParsingContext ParsingContext;
 <span class="kw">typedef</span> <span class="kw">struct</span> ParsingElement ParsingElement;
+<span class="kw">typedef</span> <span class="kw">struct</span> ParsingResult  ParsingResult;
 <span class="kw">typedef</span> <span class="kw">struct</span> Reference      Reference;
 <span class="kw">typedef</span> <span class="kw">struct</span> Match          Match;</code></pre>
 <div id="type-grammar" class="section level4">
@@ -215,6 +217,7 @@ make install               # You can set PREFIX</code></pre>
     ParsingElement*  skip;        <span class="co">// The skipped element</span>
     <span class="dt">int</span>              axiomCount;  <span class="co">// The count of parsing elemetns in axiom</span>
     <span class="dt">int</span>              skipCount;   <span class="co">// The count of parsing elements in skip</span>
+    bool             isVerbose;
 } Grammar;</code></pre>
 </div>
 <div id="constructor-grammar" class="section level4">
@@ -231,11 +234,11 @@ make install               # You can set PREFIX</code></pre>
 </div>
 <div id="method-grammar_parsefromiterator" class="section level4">
 <h4><a name="Grammar_parseFromIterator_method"><span class="classifier">method</span> <code>Grammar_parseFromIterator</code></a></h4>
-<pre class="sourceCode c"><code class="sourceCode c">Match* Grammar_parseFromIterator( Grammar* this, Iterator* iterator );</code></pre>
+<pre class="sourceCode c"><code class="sourceCode c">ParsingResult* Grammar_parseFromIterator( Grammar* this, Iterator* iterator );</code></pre>
 </div>
 <div id="method-grammar_parsefrompath" class="section level4">
 <h4><a name="Grammar_parseFromPath_method"><span class="classifier">method</span> <code>Grammar_parseFromPath</code></a></h4>
-<pre class="sourceCode c"><code class="sourceCode c">Match* Grammar_parseFromPath( Grammar* this, <span class="dt">const</span> <span class="dt">char</span>* path );</code></pre>
+<pre class="sourceCode c"><code class="sourceCode c">ParsingResult* Grammar_parseFromPath( Grammar* this, <span class="dt">const</span> <span class="dt">char</span>* path );</code></pre>
 </div>
 </div>
 <div id="elements" class="section level2">
@@ -286,6 +289,14 @@ make install               # You can set PREFIX</code></pre>
 <div id="define-status_matched" class="section level4">
 <h4><a name="STATUS_MATCHED_define"><span class="classifier">define</span> <code>STATUS_MATCHED</code></a></h4>
 <pre class="sourceCode c"><code class="sourceCode c"><span class="ot">#define STATUS_MATCHED     &#39;M&#39;</span></code></pre>
+</div>
+<div id="define-status_success" class="section level4">
+<h4><a name="STATUS_SUCCESS_define"><span class="classifier">define</span> <code>STATUS_SUCCESS</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="ot">#define STATUS_SUCCESS     &#39;S&#39;</span></code></pre>
+</div>
+<div id="define-status_partial" class="section level4">
+<h4><a name="STATUS_PARTIAL_define"><span class="classifier">define</span> <code>STATUS_PARTIAL</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="ot">#define STATUS_PARTIAL     &#39;s&#39;</span></code></pre>
 </div>
 <div id="define-status_failed" class="section level4">
 <h4><a name="STATUS_FAILED_define"><span class="classifier">define</span> <code>STATUS_FAILED</code></a></h4>
@@ -625,6 +636,27 @@ make install               # You can set PREFIX</code></pre>
 <p>The grammar's <code>axiom</code> will be matched against the <code>iterator</code>'s current position, and if necessary, the grammar's <code>skip</code> parsing element will be applied to advance the iterator.</p>
 <pre class="sourceCode c"><code class="sourceCode c"><span class="kw">typedef</span> <span class="kw">struct</span> ParsingStep    ParsingStep;
 <span class="kw">typedef</span> <span class="kw">struct</span> ParsingOffset  ParsingOffset;</code></pre>
+<div id="type-parsingstats" class="section level4">
+<h4><a name="ParsingStats_type"><span class="classifier">type</span> <code>ParsingStats</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="kw">typedef</span> <span class="kw">struct</span> ParsingStats {
+    size_t  bytesRead;
+    <span class="dt">double</span>  parseTime;
+    size_t* successBySymbol;
+    size_t* failureBySymbol;
+} ParsingStats;</code></pre>
+</div>
+<div id="constructor-parsingstats" class="section level4">
+<h4><a name="ParsingStats_constructor"><span class="classifier">constructor</span> <code>ParsingStats</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c">ParsingStats* ParsingStats_new(<span class="dt">void</span>);</code></pre>
+</div>
+<div id="destructor-parsingstats_free" class="section level4">
+<h4><a name="ParsingStats_free_destructor"><span class="classifier">destructor</span> <code>ParsingStats_free</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="dt">void</span> ParsingStats_free(ParsingStats* this);</code></pre>
+</div>
+<div id="method-parsingstats_setsymbolscount" class="section level4">
+<h4><a name="ParsingStats_setSymbolsCount_method"><span class="classifier">method</span> <code>ParsingStats_setSymbolsCount</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="dt">void</span> ParsingStats_setSymbolsCount(ParsingStats* this, size_t t);</code></pre>
+</div>
 <div id="type-parsingcontext" class="section level4">
 <h4><a name="ParsingContext_type"><span class="classifier">type</span> <code>ParsingContext</code></a></h4>
 <pre class="sourceCode c"><code class="sourceCode c"><span class="kw">typedef</span> <span class="kw">struct</span> ParsingContext {
@@ -632,7 +664,32 @@ make install               # You can set PREFIX</code></pre>
     <span class="kw">struct</span> Iterator*             iterator;     <span class="co">// Iterator on the input data</span>
     <span class="kw">struct</span> ParsingOffset* offsets;      <span class="co">// The parsing offsets, starting at 0</span>
     <span class="kw">struct</span> ParsingOffset* current;      <span class="co">// The current parsing offset</span>
+    <span class="kw">struct</span> ParsingStats*  stats;
 } ParsingContext;</code></pre>
+</div>
+<div id="constructor-parsingcontext" class="section level4">
+<h4><a name="ParsingContext_constructor"><span class="classifier">constructor</span> <code>ParsingContext</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c">ParsingContext* ParsingContext_new( Grammar* g, Iterator* iterator );</code></pre>
+</div>
+<div id="destructor-parsingcontext_free" class="section level4">
+<h4><a name="ParsingContext_free_destructor"><span class="classifier">destructor</span> <code>ParsingContext_free</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="dt">void</span> ParsingContext_free( ParsingContext* this );</code></pre>
+</div>
+<div id="type-parsingresult" class="section level4">
+<h4><a name="ParsingResult_type"><span class="classifier">type</span> <code>ParsingResult</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="kw">typedef</span> <span class="kw">struct</span> ParsingResult {
+    <span class="dt">char</span>            status;
+    Match*          match;
+    ParsingContext* context;
+} ParsingResult;</code></pre>
+</div>
+<div id="constructor-parsingresult" class="section level4">
+<h4><a name="ParsingResult_constructor"><span class="classifier">constructor</span> <code>ParsingResult</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c">ParsingResult* ParsingResult_new(Match* match, ParsingContext* context);</code></pre>
+</div>
+<div id="method-parsingresult_free" class="section level4">
+<h4><a name="ParsingResult_free_method"><span class="classifier">method</span> <code>ParsingResult_free</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="dt">void</span> ParsingResult_free(ParsingResult* this);</code></pre>
 <p>The result of <em>recognizing</em> parsing elements at given offsets within the input stream is stored in <code>ParsingOffset</code>. Each parsing offset is a stack of <code>ParsingStep</code>, corresponding to successive attempts at matching parsing elements at the current position.</p>
 <p>The parsing offset is a stack of parsing steps, where the tail is the most specific parsing step. By following the tail's previous parsing step, you can unwind the stack.</p>
 <p>The parsing steps each have an offset within the iterated stream. Offsets where data has been fully extracted (ie, a leaf parsing element has matched and processing returned a NOTHING) can be freed as they are not necessary any more.</p>

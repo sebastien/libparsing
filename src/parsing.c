@@ -5,7 +5,7 @@
 // License           : BSD License
 // ----------------------------------------------------------------------------
 // Creation date     : 12-Dec-2014
-// Last modification : 22-Dec-2014
+// Last modification : 24-Dec-2014
 // ----------------------------------------------------------------------------
 
 #include "parsing.h"
@@ -282,6 +282,17 @@ Grammar* Grammar_new(void) {
 	this->axiomCount = 0;
 	this->skipCount  = 0;
 	return this;
+}
+
+void Grammar_free(Grammar* this) {
+	// FIXME: Implement me. We should get a list of all the parsing elements
+	// and free them.
+	/*
+	Element*[] symbols = Grammar_listSymbols();
+	for (int i = 0; i < (this->axiomCount + this->skipCount); i++ ) {
+	}
+	*/
+	__DEALLOC(this);
 }
 
 // ----------------------------------------------------------------------------
@@ -602,10 +613,10 @@ Match* Word_recognize(ParsingElement* this, ParsingContext* context) {
 		// NOTE: You can see here that the word actually consumes input
 		// and moves the iterator.
 		context->iterator->move(context->iterator, config->length);
-		DEBUG("[✓] %s:%s matched at %zd", this->name, ((WordConfig*)this->config)->word, context->iterator->offset);
+		LOG_IF(context->grammar->isVerbose, "[✓] %s:%s matched at %zd", this->name, ((WordConfig*)this->config)->word, context->iterator->offset);
 		return Match_Success(config->length, this, context);
 	} else {
-		DEBUG("    %s:%s failed at %zd", this->name, ((WordConfig*)this->config)->word, context->iterator->offset);
+		LOG_IF(context->grammar->isVerbose, "    %s:%s failed at %zd", this->name, ((WordConfig*)this->config)->word, context->iterator->offset);
 		return FAILURE;
 	}
 }
@@ -683,7 +694,7 @@ Match* Token_recognize(ParsingElement* this, ParsingContext* context) {
 			case PCRE_ERROR_NOMEMORY     : ERROR("Token:%s Ran out of memory", config->expr);                       break;
 			default                      : ERROR("Token:%s Unknown error", config->expr);                           break;
 		};
-		DEBUG("    %s:%s failed at %zd", this->name, config->expr, context->iterator->offset);
+		LOG_IF(context->grammar->isVerbose, "    %s:%s failed at %zd", this->name, config->expr, context->iterator->offset);
 	} else {
 		if(r == 0) {
 			ERROR("Token: %s many substrings matched\n", config->expr);
@@ -696,7 +707,7 @@ Match* Token_recognize(ParsingElement* this, ParsingContext* context) {
 		}
 		// FIXME: Make sure it is the length and not the end offset
 		result           = Match_Success(vector[1], this, context);
-		DEBUG("[✓] %s:%s matched at %zd", this->name, config->expr, context->iterator->offset);
+		LOG_IF(context->grammar->isVerbose, "[✓] %s:%s matched at %zd", this->name, config->expr, context->iterator->offset);
 
 		// We create the token match
 		__ALLOC(TokenMatch, data);
@@ -754,7 +765,7 @@ ParsingElement* Group_new(Reference* children[]) {
 }
 
 Match* Group_recognize(ParsingElement* this, ParsingContext* context){
-	DEBUGIF(strcmp(this->name, "_") != 0,"--- Group:%s at %zd", this->name, context->iterator->offset);
+	LOG_IF(context->grammar->isVerbose && strcmp(this->name, "_") != 0,"--- Group:%s at %zd", this->name, context->iterator->offset);
 	Reference* child = this->children;
 	Match*     match = NULL;
 	size_t     offset = context->iterator->offset;
@@ -772,7 +783,7 @@ Match* Group_recognize(ParsingElement* this, ParsingContext* context){
 	}
 	// If no child has succeeded, the whole group fails
 	if (context->iterator->offset != offset ) {
-		DEBUGIF(strcmp(this->name, "_") != 0,"[!] %s failed backtracking to %zd", this->name, offset);
+		LOG_IF(context->grammar->isVerbose && strcmp(this->name, "_") != 0,"[!] %s failed backtracking to %zd", this->name, offset);
 		Iterator_moveTo(context->iterator, offset);
 		assert( context->iterator->offset == offset );
 	}
@@ -793,7 +804,7 @@ ParsingElement* Rule_new(Reference* children[]) {
 }
 
 Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
-	DEBUGIF(strcmp(this->name, "_") != 0, "--- Rule:%s at %zd", this->name, context->iterator->offset);
+	LOG_IF(context->grammar->isVerbose && strcmp(this->name, "_") != 0, "--- Rule:%s at %zd", this->name, context->iterator->offset);
 	Reference* child  = this->children;
 	Match*     result = NULL;
 	Match*     last   = NULL;
@@ -827,8 +838,8 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 		child = child->next;
 		step++;
 	}
-	DEBUGIF( offset != context->iterator->offset && strcmp(this->name, "_") != 0 && !Match_isSuccess(result), "[!] %s[%d] failed at %zd", this->name, step, context->iterator->offset)
-	DEBUGIF( strcmp(this->name, "_") != 0 &&  Match_isSuccess(result), "[✓] %s[%d] matched at %zd", this->name, step, context->iterator->offset)
+	LOG_IF( context->grammar->isVerbose && offset != context->iterator->offset && strcmp(this->name, "_") != 0 && !Match_isSuccess(result), "[!] %s[%d] failed at %zd", this->name, step, context->iterator->offset)
+	LOG_IF( context->grammar->isVerbose && strcmp(this->name, "_") != 0 &&  Match_isSuccess(result), "[✓] %s[%d] matched at %zd", this->name, step, context->iterator->offset)
 	if (!Match_isSuccess(result)) {
 		// Match_free(result);
 		// If we had a failure, then we backtrack the iterator
@@ -883,11 +894,11 @@ ParsingElement* Condition_new(ConditionCallback c) {
 Match*  Condition_recognize(ParsingElement* this, ParsingContext* context) {
 	if (this->config != NULL) {
 		Match* result = ((ConditionCallback)this->config)(this, context);
-		DEBUGIF(Match_isSuccess(result),  "[✓] Condition %s matched at %zd", this->name, context->iterator->offset)
-		DEBUGIF(!Match_isSuccess(result), "[1] Condition %s failed at %zd",  this->name, context->iterator->offset)
+		LOG_IF(context->grammar->isVerbose &&  Match_isSuccess(result),  "[✓] Condition %s matched at %zd", this->name, context->iterator->offset)
+		LOG_IF(context->grammar->isVerbose && !Match_isSuccess(result), "[1] Condition %s failed at %zd",  this->name, context->iterator->offset)
 		return  result;
 	} else {
-		DEBUGIF("[✓] Condition %s matched by default at %zd", this->name, context->iterator->offset)
+		LOG_IF(context->grammar->isVerbose, "[✓] Condition %s matched by default at %zd", this->name, context->iterator->offset)
 		Match* result = Match_Success(0, this, context);
 		assert(Match_isSuccess(result));
 		return  result;
@@ -922,7 +933,6 @@ void ParsingStep_free( ParsingStep* this ) {
 //
 // ----------------------------------------------------------------------------
 
-
 ParsingOffset* ParsingOffset_new( size_t offset ) {
 	__ALLOC(ParsingOffset, this);
 	this->offset = offset;
@@ -938,6 +948,96 @@ void ParsingOffset_free( ParsingOffset* this ) {
 		previous   = step->previous;
 		ParsingStep_free(step);
 		step       = previous;
+	}
+	__DEALLOC(this);
+}
+
+// ----------------------------------------------------------------------------
+//
+// PARSING CONTEXT
+//
+// ----------------------------------------------------------------------------
+
+ParsingContext* ParsingContext_new( Grammar* g, Iterator* iterator ) {
+	__ALLOC(ParsingContext, this);
+	assert(g);
+	assert(iterator);
+	this->grammar  = g;
+	this->iterator = iterator;
+	this->stats    = ParsingStats_new();
+	this->offsets  = NULL;
+	this->current  = NULL;
+	return this;
+}
+
+void ParsingContext_free( ParsingContext* this ) {
+	if (this) {
+		Iterator_free(this->iterator);
+		ParsingStats_free(this->stats);
+		__DEALLOC(this);
+	}
+}
+
+// ----------------------------------------------------------------------------
+//
+// PARSING STATS
+//
+// ----------------------------------------------------------------------------
+
+ParsingStats* ParsingStats_new(void) {
+	__ALLOC(ParsingStats,this);
+	this->bytesRead = 0;
+	this->parseTime = 0;
+	this->successBySymbol = NULL;
+	this->failureBySymbol = NULL;
+}
+
+void ParsingStats_free(ParsingStats* this) {
+	if (this != NULL) {
+		__DEALLOC(this->successBySymbol);
+		__DEALLOC(this->failureBySymbol);
+	}
+	__DEALLOC(this);
+}
+
+void ParsingStats_setSymbolsCount(ParsingStats* this, size_t t) {
+	__DEALLOC(this->successBySymbol);
+	__DEALLOC(this->failureBySymbol);
+	this->successBySymbol = calloc(sizeof(size_t), t + 1);
+	this->failureBySymbol = calloc(sizeof(size_t), t + 1);
+}
+
+
+// ----------------------------------------------------------------------------
+//
+// PARSING RESULT
+//
+// ----------------------------------------------------------------------------
+
+ParsingResult* ParsingResult_new(Match* match, ParsingContext* context) {
+	__ALLOC(ParsingResult,this);
+	assert(match);
+	assert(context);
+	this->match   = match;
+	this->context = context;
+	if (match != FAILURE) {
+		if (Iterator_hasMore(context->iterator) && Iterator_remaining(context->iterator) > 0) {
+			LOG_IF(context->grammar->isVerbose, "Partial success, parsed %zd bytes, %zd remaining", context->iterator->offset, Iterator_remaining(context->iterator));
+			this->status = STATUS_PARTIAL;
+		} else {
+			LOG_IF(context->grammar->isVerbose, "Succeeded, parsed %zd bytes", context->iterator->offset);
+			this->status = STATUS_SUCCESS;
+		}
+	} else {
+		LOG_IF(context->grammar->isVerbose, "Failed, parsed %zd bytes, %zd remaining", context->iterator->offset, Iterator_remaining(context->iterator))
+		this->status = STATUS_FAILED;
+	}
+}
+
+void ParsingResult_free(ParsingResult* this) {
+	if (this != NULL) {
+		Match_free(this->match);
+		ParsingContext_free(this->context);
 	}
 	__DEALLOC(this);
 }
@@ -973,7 +1073,7 @@ int Grammar__assignElementIDs(Element* e, int step) {
 		Reference* r = (Reference*)e;
 		if (r->id == -1) {
 			r->id = step;
-			DEBUGIF(r->name != NULL, "[%03d] [%c] %s", r->id, r->type, r->name);
+			DEBUG_IF(r->name != NULL, "[%03d] [%c] %s", r->id, r->type, r->name);
 			return step;
 		} else {
 			return -1;
@@ -982,7 +1082,7 @@ int Grammar__assignElementIDs(Element* e, int step) {
 		ParsingElement * r = (ParsingElement*)e;
 		if (r->id == -1) {
 			r->id = step;
-			DEBUGIF(r->name != NULL, "[%03d] [%c] %s", r->id, r->type, r->name);
+			DEBUG_IF(r->name != NULL, "[%03d] [%c] %s", r->id, r->type, r->name);
 			return step;
 		} else {
 			return -1;
@@ -1007,46 +1107,29 @@ void Grammar_prepare ( Grammar* this ) {
 	}
 }
 
-Match* Grammar_parseFromIterator( Grammar* this, Iterator* iterator ) {
+ParsingResult* Grammar_parseFromIterator( Grammar* this, Iterator* iterator ) {
 	assert(this->axiom != NULL);
-	ParsingOffset* offset  = ParsingOffset_new(iterator->offset);
-	ParsingContext context = (ParsingContext){
-		.grammar  = this,
-		.iterator = iterator,
-		.offsets  = offset,
-		.offsets  = offset,
-	};
-	Match* match = this->axiom->recognize(this->axiom, &context);
-	if (match != FAILURE) {
-		if (Iterator_hasMore(context.iterator) && Iterator_remaining(context.iterator) > 0) {
-			DEBUG("Partial success, parsed %zd bytes, %zd remaining", context.iterator->offset, Iterator_remaining(context.iterator));
-		} else {
-			DEBUG("Succeeded, parsed %zd bytes", context.iterator->offset);
-		}
-	} else {
-		DEBUG("Failed, parsed %zd bytes, %zd remaining", context.iterator->offset, Iterator_remaining(context.iterator))
-	}
-	return match;
+	// ParsingOffset*  offset  = ParsingOffset_new(iterator->offset);
+	ParsingContext* context = ParsingContext_new(this, iterator);
+	Match* match = this->axiom->recognize(this->axiom, context);
+	char status  = STATUS_FAILED;
+	return ParsingResult_new(match, context);
 }
 
-Match* Grammar_parseFromPath( Grammar* this, const char* path ) {
+ParsingResult* Grammar_parseFromPath( Grammar* this, const char* path ) {
 	Iterator* iterator = Iterator_Open(path);
 	if (iterator != NULL) {
-		Match*    result   = Grammar_parseFromIterator(this, iterator);
-		Iterator_free(iterator);
-		return result;
+		return Grammar_parseFromIterator(this, iterator);
 	} else {
 		errno = ENOENT;
 		return NULL;
 	}
 }
 
-Match* Grammar_parseFromString( Grammar* this, const char* text ) {
+ParsingResult* Grammar_parseFromString( Grammar* this, const char* text ) {
 	Iterator* iterator = Iterator_FromString(text);
 	if (iterator != NULL) {
-		Match*    result   = Grammar_parseFromIterator(this, iterator);
-		Iterator_free(iterator);
-		return result;
+		return Grammar_parseFromIterator(this, iterator);
 	} else {
 		errno = ENOENT;
 		return NULL;

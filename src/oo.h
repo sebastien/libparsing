@@ -98,10 +98,10 @@ typedef char  bool;
 
 #ifdef DEBUG_ENABLED
 #define DEBUG(msg,...)   fprintf(DEBUG_STREAM,   "--- ");fprintf(DEBUG_STREAM,   msg, __VA_ARGS__);fprintf(DEBUG_STREAM,   "\n");
-#define DEBUGIF(cond,msg,...)   if (cond) {DEBUG(msg, __VA_ARGS__);}
+#define DEBUG_IF(cond,msg,...)   if (cond) {DEBUG(msg, __VA_ARGS__);}
 #else
 #define DEBUG(msg,...)          ;
-#define DEBUGIF(cond,msg,...)   ;
+#define DEBUG_IF(cond,msg,...)   ;
 #endif
 
 
@@ -109,6 +109,7 @@ typedef char  bool;
 #define WARNING(msg,...) fprintf(WARNING_STREAM, "WRN ");fprintf(WARNING_STREAM, msg, __VA_ARGS__);fprintf(WARNING_STREAM, "\n");
 #define ERROR(msg,...)   fprintf(WARNING_STREAM, "ERR ");fprintf(ERROR_STREAM,   msg, __VA_ARGS__);fprintf(ERROR_STREAM,   "\n");
 #define LOG(msg,...)     fprintf(LOG_STREAM,     "--- ");fprintf(LOG_STREAM,     msg, __VA_ARGS__);fprintf(LOG_STREAM,     "\n");
+#define LOG_IF(cond,msg,...)     if(cond){LOG(msg, __VA_ARGS__);}
 
 #ifdef DEBUG_ENABLED
 #define ASSERT(v,msg,...) if(!v){DEBUG(msg,__VA_ARGS__);abort();}

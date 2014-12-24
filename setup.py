@@ -30,7 +30,6 @@ if os.popen("which pandoc").read():
 	p = tempfile.mktemp()
 	with file(p,"w") as f: f.write(LONG_DESCRIPTION)
 	LONG_DESCRIPTION = os.popen("pandoc -f markdown -t rst %s" % (p)).read()
-	print LONG_DESCRIPTION
 	os.unlink(p)
 
 setup(

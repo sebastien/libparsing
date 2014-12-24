@@ -1,9 +1,11 @@
 typedef char* iterated_t;
 typedef void Element;
 typedef struct ParsingElement ParsingElement;
-typedef struct ParsingElement ParsingElement;
+typedef struct ParsingResult  ParsingResult;
+typedef struct ParsingStats   ParsingStats;
 typedef struct ParsingContext ParsingContext;
 typedef struct Match Match;
+typedef struct Grammar Grammar;
 typedef struct TokenMatchGroup TokenMatchGroup;
 typedef Match* (*ConditionCallback)(ParsingElement*, ParsingContext*);
 
@@ -97,7 +99,12 @@ typedef struct ParsingContext {
 	struct Iterator*             iterator;     // Iterator on the input data
 	struct ParsingOffset* offsets;      // The parsing offsets, starting at 0
 	struct ParsingOffset* current;      // The current parsing offset
+	struct ParsingStats*  stats;
 } ParsingContext;
+
+ParsingContext* ParsingContext_new( Grammar* g, Iterator* iterator );
+
+void ParsingContext_free( ParsingContext* this );
 
 typedef struct ParsingElement {
 	char           type;       // Type is used du differentiate ParsingElement from Reference
@@ -133,6 +140,29 @@ ParsingElement* Rule_new(Reference* children[]);
 ParsingElement* Procedure_new(ProcedureCallback c);
 
 ParsingElement* Condition_new(ConditionCallback c);
+
+typedef struct ParsingResult {
+	char            status;
+	Match*          match;
+	ParsingContext* context;
+} ParsingResult;
+
+ParsingResult* ParsingResult_new(Match* match, ParsingContext* context);
+
+void ParsingResult_free(ParsingResult* this);
+
+typedef struct ParsingStats {
+	size_t  bytesRead;
+	double  parseTime;
+	size_t* successBySymbol;
+	size_t* failureBySymbol;
+} ParsingStats;
+
+ParsingStats* ParsingStats_new(void);
+
+void ParsingStats_free(ParsingStats* this);
+
+void ParsingStats_setSymbolsCount(ParsingStats* this, size_t t);
 
 typedef struct WordConfig {
 	const char* word;
@@ -171,6 +201,7 @@ typedef struct Grammar {
 	ParsingElement*  skip;        // The skipped element
 	int              axiomCount;  // The count of parsing elemetns in axiom
 	int              skipCount;   // The count of parsing elements in skip
+	bool             isVerbose;
 } Grammar;
 
 
@@ -180,6 +211,6 @@ void Grammar_free(Grammar* this);
 
 void Grammar_prepare ( Grammar* this );
 
-Match* Grammar_parseFromIterator( Grammar* this, Iterator* iterator );
+ParsingResult* Grammar_parseFromIterator( Grammar* this, Iterator* iterator );
 
-Match* Grammar_parseFromPath( Grammar* this, const char* path );
+ParsingResult* Grammar_parseFromPath( Grammar* this, const char* path );

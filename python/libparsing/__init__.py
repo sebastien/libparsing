@@ -5,8 +5,8 @@
 # Author            : Sébastien Pierre
 # License           : BSD License
 # -----------------------------------------------------------------------------
-# Creation date     : 2014-DEC-18
-# Last modification : 2014-DEC-23
+# Creation date     : 18-Dec-2014
+# Last modification : 24-Dec-2014
 # -----------------------------------------------------------------------------
 
 import sys, os, re
@@ -47,9 +47,11 @@ if os.path.exists(H_PATH):
 		"typedef char* iterated_t;\n"
 		"typedef void Element;\n"
 		"typedef struct ParsingElement ParsingElement;\n"
-		"typedef struct ParsingElement ParsingElement;\n"
+		"typedef struct ParsingResult  ParsingResult;\n"
+		"typedef struct ParsingStats   ParsingStats;\n"
 		"typedef struct ParsingContext ParsingContext;\n"
 		"typedef struct Match Match;\n"
+		"typedef struct Grammar Grammar;\n"
 		"typedef struct TokenMatchGroup TokenMatchGroup;\n"
 	) + clib.getCode(
 		("ConditionCallback",    None),
@@ -61,6 +63,8 @@ if os.path.exists(H_PATH):
 		("Iterator*",            O),
 		("ParsingContext*",      O),
 		("ParsingElement*",      O),
+		("ParsingResult*",       O),
+		("ParsingStats*",        O),
 		("Word*" ,               O),
 		("Token",                O),
 		("TokenMatch",           O),
@@ -519,6 +523,30 @@ class Symbols:
 
 # -----------------------------------------------------------------------------
 #
+# PARSING RESULT
+#
+# -----------------------------------------------------------------------------
+
+class ParsingResult(CObject):
+
+	_TYPE = "ParsingResult*"
+
+	def match( self ):
+		return Match.Wrap(self._cobject.match)
+
+	def status( self ):
+		return ffi.string(self._cobject.status)
+
+	def text( self ):
+		return ffi.string(self._cobject.iterator.buffer)
+
+	def __del__( self ):
+		# The parsing result is the only one we really need to free
+		# along with the grammar
+		lib.ParsingResult_free(self.cobject)
+
+# -----------------------------------------------------------------------------
+#
 # GRAMMAR
 #
 # -----------------------------------------------------------------------------
@@ -603,7 +631,10 @@ class Grammar(CObject):
 		return self
 
 	def parsePath( self, path ):
-		return Match(lib.Grammar_parseFromPath(self._cobject, path))
+		return ParsingResult(lib.Grammar_parseFromPath(self._cobject, path))
+
+	def parseString( self, text ):
+		return ParsingResult(lib.Grammar_parseFromString(self._cobject, text))
 
 	def walk( self, callback ):
 		def c(o,s):
@@ -616,6 +647,11 @@ class Grammar(CObject):
 			return callback(o, s)
 		c = ffi.callback("int(*)(void *, int)", c)
 		return lib.Element__walk(self._cobject.axiom, c, 0)
+
+	def __del__( self ):
+		# The parsing result is the only one we really need to free
+		# along with the grammar
+		lib.Grammar_free(self.cobject)
 
 # -----------------------------------------------------------------------------
 #
