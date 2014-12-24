@@ -1116,7 +1116,6 @@ ParsingResult* Grammar_parseFromIterator( Grammar* this, Iterator* iterator ) {
 	// ParsingOffset*  offset  = ParsingOffset_new(iterator->offset);
 	ParsingContext* context = ParsingContext_new(this, iterator);
 	Match* match = this->axiom->recognize(this->axiom, context);
-	char status  = STATUS_FAILED;
 	return ParsingResult_new(match, context);
 }
 
