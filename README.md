@@ -1,8 +1,11 @@
 
-== libparsing
-== C & Python Parsing Element Grammar Library
--- Version: 0.3.0
--- URL: http://github.com/sebastien/parsing
+#  libparsing
+## Python Parsing Element Grammar Library
+
+```
+Version :  0.3.0
+URL     :  http://github.com/sebastien/parsing
+```
 
 
 `libparsing` is a parsing element grammar (PEG) library written in C with
@@ -79,18 +82,22 @@ Installing
 
 To install the Python parsing module:
 
->	easy_install libparsing    # From Setuptools
->	pip install  libparsing     # From PIP
+```shell
+easy_install libparsing    # From Setuptools
+pip install  libparsing     # From PIP
+```
 
 Note that for the above to work, you'll need a C compiler and libpcre-dev.
 On Ubuntu, do `sudo apt install build-essential libprcre-dev`.
 
 To compile the C parsing module:
 
->	git clone http://github.com/sebastien/libparsing
->	cd libparsing
->	make
->	make install               # You can set PREFIX
+```shell
+git clone http://github.com/sebastien/libparsing
+cd libparsing
+make
+make install               # You can set PREFIX
+```
 
 `libparsing` works with GCC4 and Clang and is written following the `c11`
 standard.
@@ -126,10 +133,12 @@ the input stream.
 
 You can get an iterator on a file by doing:
 
->	Iterator* iterator = Iterator_Open("example.txt");
+```c
+Iterator* iterator = Iterator_Open("example.txt");
+```
 
 
-[#Iterator_type]<span class="classifier">type</span> `Iterator`::
+#### <a name="Iterator_type"><span class="classifier">type</span> `Iterator`</a>
 
 
 ```c
@@ -148,7 +157,7 @@ typedef struct Iterator {
 ```
 
 
-[#FileInput_type]<span class="classifier">type</span> `FileInput`::
+#### <a name="FileInput_type"><span class="classifier">type</span> `FileInput`</a>
 
  The file input wraps information about the input file, such
 	 as the `FILE` object and the `path`.
@@ -161,7 +170,7 @@ typedef struct FileInput {
 ```
 
 
-[#EOL_shared]<span class="classifier">shared</span> `EOL`::
+#### <a name="EOL_shared"><span class="classifier">shared</span> `EOL`</a>
 
  The EOL character used to count lines in an iterator context.
 
@@ -170,7 +179,7 @@ extern iterated_t         EOL;
 ```
 
 
-[#Iterator_Open_operation]<span class="classifier">operation</span> `Iterator_Open`::
+#### <a name="Iterator_Open_operation"><span class="classifier">operation</span> `Iterator_Open`</a>
 
  Returns a new iterator instance with the given open file as input
 
@@ -179,7 +188,7 @@ Iterator* Iterator_Open(const char* path);
 ```
 
 
-[#Iterator_FromString_operation]<span class="classifier">operation</span> `Iterator_FromString`::
+#### <a name="Iterator_FromString_operation"><span class="classifier">operation</span> `Iterator_FromString`</a>
 
  Returns a new iterator instance with the text
 
@@ -188,7 +197,7 @@ Iterator* Iterator_FromString(const char* text);
 ```
 
 
-[#Iterator_constructor]<span class="classifier">constructor</span> `Iterator`::
+#### <a name="Iterator_constructor"><span class="classifier">constructor</span> `Iterator`</a>
 
 
 ```c
@@ -196,7 +205,7 @@ Iterator* Iterator_new(void);
 ```
 
 
-[#Iterator_free_destructor]<span class="classifier">destructor</span> `Iterator_free`::
+#### <a name="Iterator_free_destructor"><span class="classifier">destructor</span> `Iterator_free`</a>
 
 
 ```c
@@ -204,7 +213,7 @@ void      Iterator_free(Iterator* this);
 ```
 
 
-[#Iterator_open_method]<span class="classifier">method</span> `Iterator_open`::
+#### <a name="Iterator_open_method"><span class="classifier">method</span> `Iterator_open`</a>
 
  Makes the given iterator open the file at the given path.
 	 This will automatically assign a `FileInput` to the iterator
@@ -215,7 +224,7 @@ bool Iterator_open( Iterator* this, const char *path );
 ```
 
 
-[#Iterator_hasMore_method]<span class="classifier">method</span> `Iterator_hasMore`::
+#### <a name="Iterator_hasMore_method"><span class="classifier">method</span> `Iterator_hasMore`</a>
 
  Tells if the iterator has more available data
 
@@ -224,7 +233,7 @@ bool Iterator_hasMore( Iterator* this );
 ```
 
 
-[#Iterator_remaining_method]<span class="classifier">method</span> `Iterator_remaining`::
+#### <a name="Iterator_remaining_method"><span class="classifier">method</span> `Iterator_remaining`</a>
 
  Returns the number of bytes available from the current iterator's position.
 	 This should be at least `ITERATOR_BUFFER_AHEAD` until end of input stream
@@ -235,7 +244,7 @@ size_t Iterator_remaining( Iterator* this );
 ```
 
 
-[#Iterator_moveTo_method]<span class="classifier">method</span> `Iterator_moveTo`::
+#### <a name="Iterator_moveTo_method"><span class="classifier">method</span> `Iterator_moveTo`</a>
 
  Moves the iterator to the given offset
 
@@ -244,7 +253,7 @@ bool Iterator_moveTo ( Iterator* this, size_t offset );
 ```
 
 
-[#String_move_method]<span class="classifier">method</span> `String_move`::
+#### <a name="String_move_method"><span class="classifier">method</span> `String_move`</a>
 
 
 ```c
@@ -252,7 +261,7 @@ bool String_move ( Iterator* this, int offset );
 ```
 
 
-[#ITERATOR_BUFFER_AHEAD_define]<span class="classifier">define</span> `ITERATOR_BUFFER_AHEAD`::
+#### <a name="ITERATOR_BUFFER_AHEAD_define"><span class="classifier">define</span> `ITERATOR_BUFFER_AHEAD`</a>
 
  The number of `iterated_t` that should be loaded after the iterator's
 	 current position. This limits the numbers of `iterated_t` that a `Token`
@@ -263,7 +272,7 @@ bool String_move ( Iterator* this, int offset );
 ```
 
 
-[#FileInput_constructor]<span class="classifier">constructor</span> `FileInput`::
+#### <a name="FileInput_constructor"><span class="classifier">constructor</span> `FileInput`</a>
 
 
 ```c
@@ -271,7 +280,7 @@ FileInput* FileInput_new(const char* path );
 ```
 
 
-[#FileInput_free_destructor]<span class="classifier">destructor</span> `FileInput_free`::
+#### <a name="FileInput_free_destructor"><span class="classifier">destructor</span> `FileInput_free`</a>
 
 
 ```c
@@ -279,7 +288,7 @@ void       FileInput_free(FileInput* this);
 ```
 
 
-[#FileInput_preload_method]<span class="classifier">method</span> `FileInput_preload`::
+#### <a name="FileInput_preload_method"><span class="classifier">method</span> `FileInput_preload`</a>
 
  Preloads data from the input source so that the buffer
 	 has ITERATOR_BUFFER_AHEAD characters ahead.
@@ -289,7 +298,7 @@ size_t FileInput_preload( Iterator* this );
 ```
 
 
-[#FileInput_move_method]<span class="classifier">method</span> `FileInput_move`::
+#### <a name="FileInput_move_method"><span class="classifier">method</span> `FileInput_move`</a>
 
  Advances/rewinds the given iterator, loading new data from the file input
 	 whenever there is not `ITERATOR_BUFFER_AHEAD` data elements
@@ -317,7 +326,7 @@ typedef struct Match          Match;
 ```
 
 
-[#Grammar_type]<span class="classifier">type</span> `Grammar`::
+#### <a name="Grammar_type"><span class="classifier">type</span> `Grammar`</a>
 
 
 ```c
@@ -330,7 +339,7 @@ typedef struct Grammar {
 ```
 
 
-[#Grammar_constructor]<span class="classifier">constructor</span> `Grammar`::
+#### <a name="Grammar_constructor"><span class="classifier">constructor</span> `Grammar`</a>
 
 
 ```c
@@ -338,7 +347,7 @@ Grammar* Grammar_new(void);
 ```
 
 
-[#Grammar_free_destructor]<span class="classifier">destructor</span> `Grammar_free`::
+#### <a name="Grammar_free_destructor"><span class="classifier">destructor</span> `Grammar_free`</a>
 
 
 ```c
@@ -346,7 +355,7 @@ void Grammar_free(Grammar* this);
 ```
 
 
-[#Grammar_prepare_method]<span class="classifier">method</span> `Grammar_prepare`::
+#### <a name="Grammar_prepare_method"><span class="classifier">method</span> `Grammar_prepare`</a>
 
 
 ```c
@@ -354,7 +363,7 @@ void Grammar_prepare ( Grammar* this );
 ```
 
 
-[#Grammar_parseFromIterator_method]<span class="classifier">method</span> `Grammar_parseFromIterator`::
+#### <a name="Grammar_parseFromIterator_method"><span class="classifier">method</span> `Grammar_parseFromIterator`</a>
 
 
 ```c
@@ -362,7 +371,7 @@ Match* Grammar_parseFromIterator( Grammar* this, Iterator* iterator );
 ```
 
 
-[#Grammar_parseFromPath_method]<span class="classifier">method</span> `Grammar_parseFromPath`::
+#### <a name="Grammar_parseFromPath_method"><span class="classifier">method</span> `Grammar_parseFromPath`</a>
 
 
 ```c
@@ -373,7 +382,7 @@ Match* Grammar_parseFromPath( Grammar* this, const char* path );
 Elements
 --------
 
-[#Element_typedef]<span class="classifier">typedef</span> `Element`::
+#### <a name="Element_typedef"><span class="classifier">typedef</span> `Element`</a>
 
 
 ```c
@@ -381,7 +390,7 @@ typedef void Element;
 ```
 
 
-[#WalkingCallback_callback]<span class="classifier">callback</span> `WalkingCallback`::
+#### <a name="WalkingCallback_callback"><span class="classifier">callback</span> `WalkingCallback`</a>
 
 
 ```c
@@ -389,7 +398,7 @@ typedef int (*WalkingCallback)(Element* this, int step);
 ```
 
 
-[#Element_walk_method]<span class="classifier">method</span> `Element_walk`::
+#### <a name="Element_walk_method"><span class="classifier">method</span> `Element_walk`</a>
 
 
 ```c
@@ -397,7 +406,7 @@ int Element_walk( Element* this, WalkingCallback callback );
 ```
 
 
-[#Element__walk_method]<span class="classifier">method</span> `Element__walk`::
+#### <a name="Element__walk_method"><span class="classifier">method</span> `Element__walk`</a>
 
 
 ```c
@@ -405,8 +414,7 @@ int Element__walk( Element* this, WalkingCallback callback, int step );
 ```
 
 
-1. Parsing Elements
--------------------
+### Parsing Elements
 
 Parsing elements are the core elements that recognize and process input
 data. There are 4 basic types: `Work`, `Token`, `Group` and `Rule`.
@@ -422,7 +430,7 @@ to the axiom. Before parsing, the grammar will re-assign the parsing element's
 id accordingly.
 
 
-[#Match_type]<span class="classifier">type</span> `Match`::
+#### <a name="Match_type"><span class="classifier">type</span> `Match`</a>
 
 
 ```c
@@ -439,7 +447,7 @@ typedef struct Match {
 ```
 
 
-[#STATUS_INIT_define]<span class="classifier">define</span> `STATUS_INIT`::
+#### <a name="STATUS_INIT_define"><span class="classifier">define</span> `STATUS_INIT`</a>
 
  The different values for a match (or iterator)'s status
 
@@ -448,7 +456,7 @@ typedef struct Match {
 ```
 
 
-[#STATUS_PROCESSING_define]<span class="classifier">define</span> `STATUS_PROCESSING`::
+#### <a name="STATUS_PROCESSING_define"><span class="classifier">define</span> `STATUS_PROCESSING`</a>
 
 
 ```c
@@ -456,7 +464,7 @@ typedef struct Match {
 ```
 
 
-[#STATUS_MATCHED_define]<span class="classifier">define</span> `STATUS_MATCHED`::
+#### <a name="STATUS_MATCHED_define"><span class="classifier">define</span> `STATUS_MATCHED`</a>
 
 
 ```c
@@ -464,7 +472,7 @@ typedef struct Match {
 ```
 
 
-[#STATUS_FAILED_define]<span class="classifier">define</span> `STATUS_FAILED`::
+#### <a name="STATUS_FAILED_define"><span class="classifier">define</span> `STATUS_FAILED`</a>
 
 
 ```c
@@ -472,7 +480,7 @@ typedef struct Match {
 ```
 
 
-[#STATUS_INPUT_ENDED_define]<span class="classifier">define</span> `STATUS_INPUT_ENDED`::
+#### <a name="STATUS_INPUT_ENDED_define"><span class="classifier">define</span> `STATUS_INPUT_ENDED`</a>
 
 
 ```c
@@ -480,7 +488,7 @@ typedef struct Match {
 ```
 
 
-[#STATUS_ENDED_define]<span class="classifier">define</span> `STATUS_ENDED`::
+#### <a name="STATUS_ENDED_define"><span class="classifier">define</span> `STATUS_ENDED`</a>
 
 
 ```c
@@ -488,7 +496,7 @@ typedef struct Match {
 ```
 
 
-[#TYPE_ELEMENT_define]<span class="classifier">define</span> `TYPE_ELEMENT`::
+#### <a name="TYPE_ELEMENT_define"><span class="classifier">define</span> `TYPE_ELEMENT`</a>
 
 
 ```c
@@ -496,7 +504,7 @@ typedef struct Match {
 ```
 
 
-[#TYPE_WORD_define]<span class="classifier">define</span> `TYPE_WORD`::
+#### <a name="TYPE_WORD_define"><span class="classifier">define</span> `TYPE_WORD`</a>
 
 
 ```c
@@ -504,7 +512,7 @@ typedef struct Match {
 ```
 
 
-[#TYPE_TOKEN_define]<span class="classifier">define</span> `TYPE_TOKEN`::
+#### <a name="TYPE_TOKEN_define"><span class="classifier">define</span> `TYPE_TOKEN`</a>
 
 
 ```c
@@ -512,7 +520,7 @@ typedef struct Match {
 ```
 
 
-[#TYPE_GROUP_define]<span class="classifier">define</span> `TYPE_GROUP`::
+#### <a name="TYPE_GROUP_define"><span class="classifier">define</span> `TYPE_GROUP`</a>
 
 
 ```c
@@ -520,7 +528,7 @@ typedef struct Match {
 ```
 
 
-[#TYPE_RULE_define]<span class="classifier">define</span> `TYPE_RULE`::
+#### <a name="TYPE_RULE_define"><span class="classifier">define</span> `TYPE_RULE`</a>
 
 
 ```c
@@ -528,7 +536,7 @@ typedef struct Match {
 ```
 
 
-[#TYPE_CONDITION_define]<span class="classifier">define</span> `TYPE_CONDITION`::
+#### <a name="TYPE_CONDITION_define"><span class="classifier">define</span> `TYPE_CONDITION`</a>
 
 
 ```c
@@ -536,7 +544,7 @@ typedef struct Match {
 ```
 
 
-[#TYPE_PROCEDURE_define]<span class="classifier">define</span> `TYPE_PROCEDURE`::
+#### <a name="TYPE_PROCEDURE_define"><span class="classifier">define</span> `TYPE_PROCEDURE`</a>
 
 
 ```c
@@ -544,7 +552,7 @@ typedef struct Match {
 ```
 
 
-[#TYPE_REFERENCE_define]<span class="classifier">define</span> `TYPE_REFERENCE`::
+#### <a name="TYPE_REFERENCE_define"><span class="classifier">define</span> `TYPE_REFERENCE`</a>
 
 
 ```c
@@ -552,7 +560,7 @@ typedef struct Match {
 ```
 
 
-[#ID_UNBOUND_define]<span class="classifier">define</span> `ID_UNBOUND`::
+#### <a name="ID_UNBOUND_define"><span class="classifier">define</span> `ID_UNBOUND`</a>
 
  A parsing element that is not bound to a grammar will have ID_UNBOUND
 	 by default.
@@ -562,7 +570,7 @@ typedef struct Match {
 ```
 
 
-[#ID_BINDING_define]<span class="classifier">define</span> `ID_BINDING`::
+#### <a name="ID_BINDING_define"><span class="classifier">define</span> `ID_BINDING`</a>
 
  A parsing element that being bound to a grammar (see `Grammar_prepare`)
 	 will have an id of `ID_BINDING` temporarily.
@@ -572,7 +580,7 @@ typedef struct Match {
 ```
 
 
-[#FAILURE_S_singleton]<span class="classifier">singleton</span> `FAILURE_S`::
+#### <a name="FAILURE_S_singleton"><span class="classifier">singleton</span> `FAILURE_S`</a>
 
  A specific match that indicates a failure
 
@@ -581,7 +589,7 @@ extern Match FAILURE_S;
 ```
 
 
-[#FAILURE_shared]<span class="classifier">shared</span> `FAILURE`::
+#### <a name="FAILURE_shared"><span class="classifier">shared</span> `FAILURE`</a>
 
 
 ```c
@@ -589,7 +597,7 @@ extern Match* FAILURE;
 ```
 
 
-[#Match_Empty_operation]<span class="classifier">operation</span> `Match_Empty`::
+#### <a name="Match_Empty_operation"><span class="classifier">operation</span> `Match_Empty`</a>
 
  Creates new empty (successful) match
 
@@ -598,7 +606,7 @@ Match* Match_Empty(Element* element, ParsingContext* context);
 ```
 
 
-[#Match_Success_operation]<span class="classifier">operation</span> `Match_Success`::
+#### <a name="Match_Success_operation"><span class="classifier">operation</span> `Match_Success`</a>
 
  Creates a new successful match of the given length
 
@@ -607,7 +615,7 @@ Match* Match_Success(size_t length, Element* element, ParsingContext* context);
 ```
 
 
-[#Match_constructor]<span class="classifier">constructor</span> `Match`::
+#### <a name="Match_constructor"><span class="classifier">constructor</span> `Match`</a>
 
 
 ```c
@@ -615,7 +623,7 @@ Match* Match_new(void);
 ```
 
 
-[#Match_free_destructor]<span class="classifier">destructor</span> `Match_free`::
+#### <a name="Match_free_destructor"><span class="classifier">destructor</span> `Match_free`</a>
 
 
 ```c
@@ -623,7 +631,7 @@ void Match_free(Match* this);
 ```
 
 
-[#Match_isSuccess_method]<span class="classifier">method</span> `Match_isSuccess`::
+#### <a name="Match_isSuccess_method"><span class="classifier">method</span> `Match_isSuccess`</a>
 
 
 ```c
@@ -631,7 +639,7 @@ bool Match_isSuccess(Match* this);
 ```
 
 
-[#Match__walk_method]<span class="classifier">method</span> `Match__walk`::
+#### <a name="Match__walk_method"><span class="classifier">method</span> `Match__walk`</a>
 
 
 ```c
@@ -639,7 +647,7 @@ int Match__walk(Match* this, WalkingCallback callback, int step );
 ```
 
 
-[#ParsingElement_type]<span class="classifier">type</span> `ParsingElement`::
+#### <a name="ParsingElement_type"><span class="classifier">type</span> `ParsingElement`</a>
 
 
 ```c
@@ -656,7 +664,7 @@ typedef struct ParsingElement {
 ```
 
 
-[#ParsingElement_Is_operation]<span class="classifier">operation</span> `ParsingElement_Is`::
+#### <a name="ParsingElement_Is_operation"><span class="classifier">operation</span> `ParsingElement_Is`</a>
 
  Tells if the given pointer is a pointer to a ParsingElement.
 
@@ -665,7 +673,7 @@ bool         ParsingElement_Is(void *);
 ```
 
 
-[#ParsingElement_constructor]<span class="classifier">constructor</span> `ParsingElement`::
+#### <a name="ParsingElement_constructor"><span class="classifier">constructor</span> `ParsingElement`</a>
 
  Creates a new parsing element and adds the given referenced
 	 parsing elements as children. Note that this is an internal
@@ -676,7 +684,7 @@ ParsingElement* ParsingElement_new(Reference* children[]);
 ```
 
 
-[#ParsingElement_free_destructor]<span class="classifier">destructor</span> `ParsingElement_free`::
+#### <a name="ParsingElement_free_destructor"><span class="classifier">destructor</span> `ParsingElement_free`</a>
 
 
 ```c
@@ -684,7 +692,7 @@ void ParsingElement_free(ParsingElement* this);
 ```
 
 
-[#ParsingElement_add_method]<span class="classifier">method</span> `ParsingElement_add`::
+#### <a name="ParsingElement_add_method"><span class="classifier">method</span> `ParsingElement_add`</a>
 
  Adds a new reference as child of this parsing element. This will only
 	 be effective for composite parsing elements such as `Rule` or `Token`.
@@ -694,12 +702,12 @@ ParsingElement* ParsingElement_add(ParsingElement *this, Reference *child);
 ```
 
 
-[#ParsingElement_add_method]<span class="classifier">method</span> `ParsingElement_add`::
+#### <a name="ParsingElement_add_method"><span class="classifier">method</span> `ParsingElement_add`</a>
 
  Returns the match for this parsing element for the given iterator's state.
 	 inline Match* ParsingElement_recognize( ParsingElement* this, ParsingContext* context );
 
-[#ParsingElement_process_method]<span class="classifier">method</span> `ParsingElement_process`::
+#### <a name="ParsingElement_process_method"><span class="classifier">method</span> `ParsingElement_process`</a>
 
  Processes the given match once the parsing element has fully succeeded. This
 	 is where user-bound actions will be applied, and where you're most likely
@@ -710,7 +718,7 @@ Match* ParsingElement_process( ParsingElement* this, Match* match );
 ```
 
 
-[#ParsingElement_name_method]<span class="classifier">method</span> `ParsingElement_name`::
+#### <a name="ParsingElement_name_method"><span class="classifier">method</span> `ParsingElement_name`</a>
 
  Transparently sets the name of the element
 
@@ -719,13 +727,12 @@ ParsingElement* ParsingElement_name( ParsingElement* this, const char* name );
 ```
 
 
-2. Word
--------
+### Word
 
 Words recognize a static string at the current iterator location.
 
 
-[#WordConfig_type]<span class="classifier">type</span> `WordConfig`::
+#### <a name="WordConfig_type"><span class="classifier">type</span> `WordConfig`</a>
 
  The parsing element configuration information that is used by the
 	 `Token` methods.
@@ -738,7 +745,7 @@ typedef struct WordConfig {
 ```
 
 
-[#ParsingElement_constructor]<span class="classifier">constructor</span> `ParsingElement`::
+#### <a name="ParsingElement_constructor"><span class="classifier">constructor</span> `ParsingElement`</a>
 
 
 ```c
@@ -746,7 +753,7 @@ ParsingElement* Word_new(const char* word);
 ```
 
 
-[#Word_recognize_method]<span class="classifier">method</span> `Word_recognize`::
+#### <a name="Word_recognize_method"><span class="classifier">method</span> `Word_recognize`</a>
 
  The specialized match function for token parsing elements.
 
@@ -755,15 +762,14 @@ Match*          Word_recognize(ParsingElement* this, ParsingContext* context);
 ```
 
 
-3. Tokens
----------
+### Tokens
 
 Tokens are regular expression based parsing elements. They do not have
 any children and test if the regular expression matches exactly at the
 iterator's current location.
 
 
-[#TokenConfig_type]<span class="classifier">type</span> `TokenConfig`::
+#### <a name="TokenConfig_type"><span class="classifier">type</span> `TokenConfig`</a>
 
  The parsing element configuration information that is used by the
 	 `Token` methods.
@@ -777,7 +783,7 @@ typedef struct TokenConfig {
 ```
 
 
-[#TokenMatch_type]<span class="classifier">type</span> `TokenMatch`::
+#### <a name="TokenMatch_type"><span class="classifier">type</span> `TokenMatch`</a>
 
 
 ```c
@@ -788,7 +794,7 @@ typedef struct TokenMatch {
 ```
 
 
-[#Token_new_method]<span class="classifier">method</span> `Token_new`::
+#### <a name="Token_new_method"><span class="classifier">method</span> `Token_new`</a>
 
  Creates a new token with the given POSIX extended regular expression
 
@@ -797,7 +803,7 @@ ParsingElement* Token_new(const char* expr);
 ```
 
 
-[#Token_free_destructor]<span class="classifier">destructor</span> `Token_free`::
+#### <a name="Token_free_destructor"><span class="classifier">destructor</span> `Token_free`</a>
 
 
 ```c
@@ -805,7 +811,7 @@ void Token_free(ParsingElement*);
 ```
 
 
-[#Token_recognize_method]<span class="classifier">method</span> `Token_recognize`::
+#### <a name="Token_recognize_method"><span class="classifier">method</span> `Token_recognize`</a>
 
  The specialized match function for token parsing elements.
 
@@ -814,7 +820,7 @@ Match*          Token_recognize(ParsingElement* this, ParsingContext* context);
 ```
 
 
-[#TokenMatch_free_method]<span class="classifier">method</span> `TokenMatch_free`::
+#### <a name="TokenMatch_free_method"><span class="classifier">method</span> `TokenMatch_free`</a>
 
  Frees the `TokenMatch` created in `Token_recognize`
 
@@ -823,7 +829,7 @@ void TokenMatch_free(Match* match);
 ```
 
 
-[#TokenMatch_group_method]<span class="classifier">method</span> `TokenMatch_group`::
+#### <a name="TokenMatch_group_method"><span class="classifier">method</span> `TokenMatch_group`</a>
 
 
 ```c
@@ -831,8 +837,7 @@ const char* TokenMatch_group(Match* match, int index);
 ```
 
 
-4. References
--------------
+### References
 
 We've seen that parsing elements can have `children`. However, a parsing
 element's children are not directly parsing elements but rather
@@ -845,7 +850,7 @@ such as their cardinality (`ONE`, `OPTIONAL`, `MANY` and `MANY_OPTIONAL`)
 and a `name` that will allow `process` actions to easily access specific
 parts of the parsing element.
 
-[#Reference_type]<span class="classifier">type</span> `Reference`::
+#### <a name="Reference_type"><span class="classifier">type</span> `Reference`</a>
 
 
 ```c
@@ -860,7 +865,7 @@ typedef struct Reference {
 ```
 
 
-[#CARDINALITY_OPTIONAL_define]<span class="classifier">define</span> `CARDINALITY_OPTIONAL`::
+#### <a name="CARDINALITY_OPTIONAL_define"><span class="classifier">define</span> `CARDINALITY_OPTIONAL`</a>
 
  The different values for the `Reference` cardinality.
 
@@ -869,7 +874,7 @@ typedef struct Reference {
 ```
 
 
-[#CARDINALITY_ONE_define]<span class="classifier">define</span> `CARDINALITY_ONE`::
+#### <a name="CARDINALITY_ONE_define"><span class="classifier">define</span> `CARDINALITY_ONE`</a>
 
 
 ```c
@@ -877,7 +882,7 @@ typedef struct Reference {
 ```
 
 
-[#CARDINALITY_MANY_OPTIONAL_define]<span class="classifier">define</span> `CARDINALITY_MANY_OPTIONAL`::
+#### <a name="CARDINALITY_MANY_OPTIONAL_define"><span class="classifier">define</span> `CARDINALITY_MANY_OPTIONAL`</a>
 
 
 ```c
@@ -885,7 +890,7 @@ typedef struct Reference {
 ```
 
 
-[#CARDINALITY_MANY_define]<span class="classifier">define</span> `CARDINALITY_MANY`::
+#### <a name="CARDINALITY_MANY_define"><span class="classifier">define</span> `CARDINALITY_MANY`</a>
 
 
 ```c
@@ -894,7 +899,7 @@ typedef struct Reference {
 
 
 
-[#Reference_Is_operation]<span class="classifier">operation</span> `Reference_Is`::
+#### <a name="Reference_Is_operation"><span class="classifier">operation</span> `Reference_Is`</a>
 
  Tells if the given pointer is a pointer to Reference
 
@@ -903,7 +908,7 @@ bool Reference_Is(void * this);
 ```
 
 
-[#Reference_Ensure_operation]<span class="classifier">operation</span> `Reference_Ensure`::
+#### <a name="Reference_Ensure_operation"><span class="classifier">operation</span> `Reference_Ensure`</a>
 
  Ensures that the given element (or reference) is a reference.
 
@@ -912,7 +917,7 @@ Reference* Reference_Ensure(void* elementOrReference);
 ```
 
 
-[#Reference_New_operation]<span class="classifier">operation</span> `Reference_New`::
+#### <a name="Reference_New_operation"><span class="classifier">operation</span> `Reference_New`</a>
 
  Returns a new reference wrapping the given parsing element
 
@@ -921,7 +926,7 @@ Reference* Reference_New(ParsingElement *);
 ```
 
 
-[#Reference_constructor]<span class="classifier">constructor</span> `Reference`::
+#### <a name="Reference_constructor"><span class="classifier">constructor</span> `Reference`</a>
 
  References are typically owned by their single parent composite element.
 
@@ -930,7 +935,7 @@ Reference* Reference_new(void);
 ```
 
 
-[#Reference_cardinality_method]<span class="classifier">method</span> `Reference_cardinality`::
+#### <a name="Reference_cardinality_method"><span class="classifier">method</span> `Reference_cardinality`</a>
 
  Sets the cardinality of this reference, returning it transprently.
 
@@ -939,7 +944,7 @@ Reference* Reference_cardinality(Reference* this, char cardinality);
 ```
 
 
-[#Reference_name_method]<span class="classifier">method</span> `Reference_name`::
+#### <a name="Reference_name_method"><span class="classifier">method</span> `Reference_name`</a>
 
 
 ```c
@@ -947,7 +952,7 @@ Reference* Reference_name(Reference* this, const char* name);
 ```
 
 
-[#Reference__walk_method]<span class="classifier">method</span> `Reference__walk`::
+#### <a name="Reference__walk_method"><span class="classifier">method</span> `Reference__walk`</a>
 
 
 ```c
@@ -955,7 +960,7 @@ int Reference__walk( Reference* this, WalkingCallback callback, int step );
 ```
 
 
-[#Reference_recognize_method]<span class="classifier">method</span> `Reference_recognize`::
+#### <a name="Reference_recognize_method"><span class="classifier">method</span> `Reference_recognize`</a>
 
  Returns the matched value corresponding to the first match of this reference.
 	 `OPTIONAL` references might return `EMPTY`, `ONE` references will return
@@ -967,13 +972,12 @@ Match* Reference_recognize(Reference* this, ParsingContext* context);
 ```
 
 
-5. Groups
----------
+### Groups
 
 Groups are composite parsing elements that will return the first matching reference's
 match. Think of it as a logical `or`.
 
-[#ParsingElement_constructor]<span class="classifier">constructor</span> `ParsingElement`::
+#### <a name="ParsingElement_constructor"><span class="classifier">constructor</span> `ParsingElement`</a>
 
 
 ```c
@@ -981,7 +985,7 @@ ParsingElement* Group_new(Reference* children[]);
 ```
 
 
-[#Group_recognize_method]<span class="classifier">method</span> `Group_recognize`::
+#### <a name="Group_recognize_method"><span class="classifier">method</span> `Group_recognize`</a>
 
 
 ```c
@@ -989,13 +993,12 @@ Match*          Group_recognize(ParsingElement* this, ParsingContext* context);
 ```
 
 
-6. Rules
---------
+### Rules
 
 Groups are composite parsing elements that only succeed if all their
 matching reference's.
 
-[#ParsingElement_constructor]<span class="classifier">constructor</span> `ParsingElement`::
+#### <a name="ParsingElement_constructor"><span class="classifier">constructor</span> `ParsingElement`</a>
 
 
 ```c
@@ -1003,7 +1006,7 @@ ParsingElement* Rule_new(Reference* children[]);
 ```
 
 
-[#Rule_recognize_method]<span class="classifier">method</span> `Rule_recognize`::
+#### <a name="Rule_recognize_method"><span class="classifier">method</span> `Rule_recognize`</a>
 
 
 ```c
@@ -1011,14 +1014,13 @@ Match*          Rule_recognize(ParsingElement* this, ParsingContext* context);
 ```
 
 
-7. Procedures
--------------
+### Procedures
 
 Procedures are parsing elements that do not consume any input, always
 succeed and usually have a side effect, such as setting a variable
 in the parsing context.
 
-[#ProcedureCallback_callback]<span class="classifier">callback</span> `ProcedureCallback`::
+#### <a name="ProcedureCallback_callback"><span class="classifier">callback</span> `ProcedureCallback`</a>
 
 
 ```c
@@ -1026,7 +1028,7 @@ typedef void (*ProcedureCallback)(ParsingElement* this, ParsingContext* context)
 ```
 
 
-[#MatchCallback_callback]<span class="classifier">callback</span> `MatchCallback`::
+#### <a name="MatchCallback_callback"><span class="classifier">callback</span> `MatchCallback`</a>
 
 
 ```c
@@ -1034,7 +1036,7 @@ typedef void (*MatchCallback)(Match* m);
 ```
 
 
-[#ParsingElement_constructor]<span class="classifier">constructor</span> `ParsingElement`::
+#### <a name="ParsingElement_constructor"><span class="classifier">constructor</span> `ParsingElement`</a>
 
 
 ```c
@@ -1042,7 +1044,7 @@ ParsingElement* Procedure_new(ProcedureCallback c);
 ```
 
 
-[#Procedure_recognize_method]<span class="classifier">method</span> `Procedure_recognize`::
+#### <a name="Procedure_recognize_method"><span class="classifier">method</span> `Procedure_recognize`</a>
 
 
 ```c
@@ -1050,13 +1052,12 @@ Match*          Procedure_recognize(ParsingElement* this, ParsingContext* contex
 ```
 
 
-8. Conditions
--------------
+### Conditions
 
 Conditions, like procedures, execute arbitrary code when executed, but
 they might return a FAILURE.
 
-[#ConditionCallback_callback]<span class="classifier">callback</span> `ConditionCallback`::
+#### <a name="ConditionCallback_callback"><span class="classifier">callback</span> `ConditionCallback`</a>
 
 
 ```c
@@ -1064,7 +1065,7 @@ typedef Match* (*ConditionCallback)(ParsingElement*, ParsingContext*);
 ```
 
 
-[#ParsingElement_constructor]<span class="classifier">constructor</span> `ParsingElement`::
+#### <a name="ParsingElement_constructor"><span class="classifier">constructor</span> `ParsingElement`</a>
 
 
 ```c
@@ -1072,7 +1073,7 @@ ParsingElement* Condition_new(ConditionCallback c);
 ```
 
 
-[#Condition_recognize_method]<span class="classifier">method</span> `Condition_recognize`::
+#### <a name="Condition_recognize_method"><span class="classifier">method</span> `Condition_recognize`</a>
 
 
 ```c
@@ -1096,7 +1097,7 @@ typedef struct ParsingOffset  ParsingOffset;
 ```
 
 
-[#ParsingContext_type]<span class="classifier">type</span> `ParsingContext`::
+#### <a name="ParsingContext_type"><span class="classifier">type</span> `ParsingContext`</a>
 
 
 ```c
@@ -1124,7 +1125,7 @@ where data has been fully extracted (ie, a leaf parsing element has matched
 and processing returned a NOTHING) can be freed as they are not necessary
 any more.
 
-[#ParsingOffset_type]<span class="classifier">type</span> `ParsingOffset`::
+#### <a name="ParsingOffset_type"><span class="classifier">type</span> `ParsingOffset`</a>
 
 
 ```c
@@ -1136,7 +1137,7 @@ typedef struct ParsingOffset {
 ```
 
 
-[#ParsingOffset_constructor]<span class="classifier">constructor</span> `ParsingOffset`::
+#### <a name="ParsingOffset_constructor"><span class="classifier">constructor</span> `ParsingOffset`</a>
 
 
 ```c
@@ -1144,7 +1145,7 @@ ParsingOffset* ParsingOffset_new( size_t offset );
 ```
 
 
-[#ParsingOffset_free_destructor]<span class="classifier">destructor</span> `ParsingOffset_free`::
+#### <a name="ParsingOffset_free_destructor"><span class="classifier">destructor</span> `ParsingOffset_free`</a>
 
 
 ```c
@@ -1168,7 +1169,7 @@ typedef struct ParsingStep {
 ```
 
 
-[#ParsingStep_constructor]<span class="classifier">constructor</span> `ParsingStep`::
+#### <a name="ParsingStep_constructor"><span class="classifier">constructor</span> `ParsingStep`</a>
 
 
 ```c
@@ -1176,7 +1177,7 @@ ParsingStep* ParsingStep_new( ParsingElement* element );
 ```
 
 
-[#ParsingStep_free_destructor]<span class="classifier">destructor</span> `ParsingStep_free`::
+#### <a name="ParsingStep_free_destructor"><span class="classifier">destructor</span> `ParsingStep_free`</a>
 
 
 ```c
@@ -1187,7 +1188,7 @@ void ParsingStep_free( ParsingStep* this );
 Utilities
 ---------
 
-[#Utilities_indent_method]<span class="classifier">method</span> `Utilities_indent`::
+#### <a name="Utilities_indent_method"><span class="classifier">method</span> `Utilities_indent`</a>
 
 
 ```c
@@ -1195,7 +1196,7 @@ void Utilities_indent( ParsingElement* this, ParsingContext* context );
 ```
 
 
-[#Utilities_dedent_method]<span class="classifier">method</span> `Utilities_dedent`::
+#### <a name="Utilities_dedent_method"><span class="classifier">method</span> `Utilities_dedent`</a>
 
 
 ```c
@@ -1203,7 +1204,7 @@ void Utilities_dedent( ParsingElement* this, ParsingContext* context );
 ```
 
 
-[#Utilites_checkIndent_method]<span class="classifier">method</span> `Utilites_checkIndent`::
+#### <a name="Utilites_checkIndent_method"><span class="classifier">method</span> `Utilites_checkIndent`</a>
 
 
 ```c
@@ -1263,7 +1264,7 @@ grammars much easier.
 Symbol declaration & creation
 -----------------------------
 
-[#SYMBOL_macro]<span class="classifier">macro</span> `SYMBOL`::
+#### <a name="SYMBOL_macro"><span class="classifier">macro</span> `SYMBOL`</a>
 
  Declares a symbol of name `n` as being parsing element `e`.
 
@@ -1272,7 +1273,7 @@ Symbol declaration & creation
 ```
 
 
-[#WORD_macro]<span class="classifier">macro</span> `WORD`::
+#### <a name="WORD_macro"><span class="classifier">macro</span> `WORD`</a>
 
  Creates a `Word` parsing element with the given regular expression
 
@@ -1281,7 +1282,7 @@ Symbol declaration & creation
 ```
 
 
-[#TOKEN_macro]<span class="classifier">macro</span> `TOKEN`::
+#### <a name="TOKEN_macro"><span class="classifier">macro</span> `TOKEN`</a>
 
  Creates a `Token` parsing element with the given regular expression
 
@@ -1290,7 +1291,7 @@ Symbol declaration & creation
 ```
 
 
-[#RULE_macro]<span class="classifier">macro</span> `RULE`::
+#### <a name="RULE_macro"><span class="classifier">macro</span> `RULE`</a>
 
  Creates a `Rule` parsing element with the references or parsing elements
 	 as children.
@@ -1300,7 +1301,7 @@ Symbol declaration & creation
 ```
 
 
-[#GROUP_macro]<span class="classifier">macro</span> `GROUP`::
+#### <a name="GROUP_macro"><span class="classifier">macro</span> `GROUP`</a>
 
  Creates a `Group` parsing element with the references or parsing elements
 	 as children.
@@ -1310,7 +1311,7 @@ Symbol declaration & creation
 ```
 
 
-[#PROCEDURE_macro]<span class="classifier">macro</span> `PROCEDURE`::
+#### <a name="PROCEDURE_macro"><span class="classifier">macro</span> `PROCEDURE`</a>
 
  Creates a `Procedure` parsing element
 
@@ -1319,7 +1320,7 @@ Symbol declaration & creation
 ```
 
 
-[#CONDITION_macro]<span class="classifier">macro</span> `CONDITION`::
+#### <a name="CONDITION_macro"><span class="classifier">macro</span> `CONDITION`</a>
 
  Creates a `Condition` parsing element
 
@@ -1331,7 +1332,7 @@ Symbol declaration & creation
 Symbol reference & cardinality
 ------------------------------
 
-[#_S_macro]<span class="classifier">macro</span> `_S`::
+#### <a name="_S_macro"><span class="classifier">macro</span> `_S`</a>
 
  Refers to symbol `n`, wrapping it in a `CARDINALITY_ONE` reference
 
@@ -1340,7 +1341,7 @@ Symbol reference & cardinality
 ```
 
 
-[#_O_macro]<span class="classifier">macro</span> `_O`::
+#### <a name="_O_macro"><span class="classifier">macro</span> `_O`</a>
 
  Refers to symbol `n`, wrapping it in a `CARDINALITY_OPTIONAL` reference
 
@@ -1349,7 +1350,7 @@ Symbol reference & cardinality
 ```
 
 
-[#_M_macro]<span class="classifier">macro</span> `_M`::
+#### <a name="_M_macro"><span class="classifier">macro</span> `_M`</a>
 
  Refers to symbol `n`, wrapping it in a `CARDINALITY_MANY` reference
 
@@ -1358,7 +1359,7 @@ Symbol reference & cardinality
 ```
 
 
-[#_MO_macro]<span class="classifier">macro</span> `_MO`::
+#### <a name="_MO_macro"><span class="classifier">macro</span> `_MO`</a>
 
  Refers to symbol `n`, wrapping it in a `CARDINALITY_MANY_OPTIONAL` reference
 
@@ -1367,7 +1368,7 @@ Symbol reference & cardinality
 ```
 
 
-[#_AS_macro]<span class="classifier">macro</span> `_AS`::
+#### <a name="_AS_macro"><span class="classifier">macro</span> `_AS`</a>
 
  Sets the name of reference `r` to be v
 
@@ -1382,7 +1383,7 @@ Supporting macros
 The following set of macros is mostly used by the set of macros above.
 You probably won't need to use them directly.
 
-[#NAME_macro]<span class="classifier">macro</span> `NAME`::
+#### <a name="NAME_macro"><span class="classifier">macro</span> `NAME`</a>
 
  Sets the name of the given parsing element `e` to be the name `n`.
 
@@ -1391,7 +1392,7 @@ You probably won't need to use them directly.
 ```
 
 
-[#ONE_macro]<span class="classifier">macro</span> `ONE`::
+#### <a name="ONE_macro"><span class="classifier">macro</span> `ONE`</a>
 
  Sets the given reference or parsing element's reference to CARDINALITY_ONE
 	 If a parsing element is given, it will be automatically wrapped in a reference.
@@ -1401,7 +1402,7 @@ You probably won't need to use them directly.
 ```
 
 
-[#OPTIONAL_macro]<span class="classifier">macro</span> `OPTIONAL`::
+#### <a name="OPTIONAL_macro"><span class="classifier">macro</span> `OPTIONAL`</a>
 
  Sets the given reference or parsing element's reference to CARDINALITY_OPTIONAL
 	 If a parsing element is given, it will be automatically wrapped in a reference.
@@ -1411,7 +1412,7 @@ You probably won't need to use them directly.
 ```
 
 
-[#MANY_macro]<span class="classifier">macro</span> `MANY`::
+#### <a name="MANY_macro"><span class="classifier">macro</span> `MANY`</a>
 
  Sets the given reference or parsing element's reference to CARDINALITY_MANY
 	 If a parsing element is given, it will be automatically wrapped in a reference.
@@ -1421,7 +1422,7 @@ You probably won't need to use them directly.
 ```
 
 
-[#MANY_OPTIONAL_macro]<span class="classifier">macro</span> `MANY_OPTIONAL`::
+#### <a name="MANY_OPTIONAL_macro"><span class="classifier">macro</span> `MANY_OPTIONAL`</a>
 
  Sets the given reference or parsing element's reference to CARDINALITY_MANY_OPTIONAL
 	 If a parsing element is given, it will be automatically wrapped in a reference.

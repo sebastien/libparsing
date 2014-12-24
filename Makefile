@@ -56,7 +56,7 @@ lib$(PROJECT).so: build/parsing.o
 lib$(PROJECT).so.$(VERSION): build/parsing.o
 	$(LD) -shared -lpcre $< -o $@
 
-README.html:
+README.html: python/cdoclib.py src/parsing.h
 	@python python/cdoclib.py src/parsing.h > $@
 
 experiment/%: build/%.o build/parsing.o

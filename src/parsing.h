@@ -23,12 +23,15 @@
 #define __PARSING_VERSION__ "0.3.6"
 
 /**
- * == libparsing
- * == C & Python Parsing Element Grammar Library
- * -- Version: 0.3.0
- * -- URL: http://github.com/sebastien/parsing
+ * #  libparsing
+ * ## Python Parsing Element Grammar Library
  *
- * #START:INTRO
+ * ```
+ * Version :  0.3.0
+ * URL     :  http://github.com/sebastien/parsing
+ * ```
+ *
+ * [START:INTRO]
  *
  * `libparsing` is a parsing element grammar (PEG) library written in C with
  * Python bindings. It offers decent performance while allowing for a
@@ -98,25 +101,29 @@
  * Match* match = Grammar_parseString(g, "10 + 20 / 5")
  * ```
  *
- * #END:INTRO
+ * [END:INTRO]
  *
  * Installing
  * ==========
  *
  * To install the Python parsing module:
  *
- * >	easy_install libparsing    # From Setuptools
- * >	pip install  libparsing     # From PIP
+ * ```shell
+ * easy_install libparsing    # From Setuptools
+ * pip install  libparsing     # From PIP
+ * ```
  *
  * Note that for the above to work, you'll need a C compiler and libpcre-dev.
  * On Ubuntu, do `sudo apt install build-essential libprcre-dev`.
  *
  * To compile the C parsing module:
  *
- * >	git clone http://github.com/sebastien/libparsing
- * >	cd libparsing
- * >	make
- * >	make install               # You can set PREFIX
+ * ```shell
+ * git clone http://github.com/sebastien/libparsing
+ * cd libparsing
+ * make
+ * make install               # You can set PREFIX
+ * ```
  *
  * `libparsing` works with GCC4 and Clang and is written following the `c11`
  * standard.
@@ -151,7 +158,9 @@ typedef ITERATION_UNIT iterated_t;
  *
  * You can get an iterator on a file by doing:
  *
- * >	Iterator* iterator = Iterator_Open("example.txt");
+ * ```c
+ * Iterator* iterator = Iterator_Open("example.txt");
+ * ```
  *
 */
 
@@ -300,8 +309,7 @@ int Element_walk( Element* this, WalkingCallback callback );
 int Element__walk( Element* this, WalkingCallback callback, int step );
 
 /**
- * 1. Parsing Elements
- * -------------------
+ * ### Parsing Elements
  *
  * Parsing elements are the core elements that recognize and process input
  * data. There are 4 basic types: `Work`, `Token`, `Group` and `Rule`.
@@ -446,8 +454,7 @@ Match* ParsingElement_process( ParsingElement* this, Match* match );
 ParsingElement* ParsingElement_name( ParsingElement* this, const char* name );
 
 /**
- * 2. Word
- * -------
+ * ### Word
  *
  * Words recognize a static string at the current iterator location.
  *
@@ -469,8 +476,7 @@ ParsingElement* Word_new(const char* word);
 Match*          Word_recognize(ParsingElement* this, ParsingContext* context);
 
 /**
- * 3. Tokens
- * ---------
+ * ### Tokens
  *
  * Tokens are regular expression based parsing elements. They do not have
  * any children and test if the regular expression matches exactly at the
@@ -513,8 +519,7 @@ void TokenMatch_free(Match* match);
 const char* TokenMatch_group(Match* match, int index);
 
 /**
- * 4. References
- * -------------
+ * ### References
  *
  * We've seen that parsing elements can have `children`. However, a parsing
  * element's children are not directly parsing elements but rather
@@ -582,8 +587,7 @@ int Reference__walk( Reference* this, WalkingCallback callback, int step );
 Match* Reference_recognize(Reference* this, ParsingContext* context);
 
 /**
- * 5. Groups
- * ---------
+ * ### Groups
  *
  * Groups are composite parsing elements that will return the first matching reference's
  * match. Think of it as a logical `or`.
@@ -596,8 +600,7 @@ ParsingElement* Group_new(Reference* children[]);
 Match*          Group_recognize(ParsingElement* this, ParsingContext* context);
 
 /**
- * 6. Rules
- * --------
+ * ### Rules
  *
  * Groups are composite parsing elements that only succeed if all their
  * matching reference's.
@@ -610,8 +613,7 @@ ParsingElement* Rule_new(Reference* children[]);
 Match*          Rule_recognize(ParsingElement* this, ParsingContext* context);
 
 /**
- * 7. Procedures
- * -------------
+ * ### Procedures
  *
  * Procedures are parsing elements that do not consume any input, always
  * succeed and usually have a side effect, such as setting a variable
@@ -631,8 +633,7 @@ ParsingElement* Procedure_new(ProcedureCallback c);
 Match*          Procedure_recognize(ParsingElement* this, ParsingContext* context);
 
 /*
- * 8. Conditions
- * -------------
+ * ### Conditions
  *
  * Conditions, like procedures, execute arbitrary code when executed, but
  * they might return a FAILURE.

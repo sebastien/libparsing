@@ -97,6 +97,7 @@ RE_DOC_END     = re.compile("\s*\*+/()")
 RE_STRUCTURE   = re.compile("\s*@(\w+)\s*")
 RE_EMPTY       = re.compile("^\s*$")
 RE_ANNOTATION  = re.compile("^\s*(TODO|FIXME|SEE|NOTE).+")
+RE_DELIMITER   = re.compile("^\s*\[(START|END)\:[A-Z]+\]\s*$")
 
 RE_MACRO       = re.compile("#define\s+(\w+)")
 RE_RETURN      = re.compile("\s*(\w+)")
@@ -228,7 +229,7 @@ class Parser:
 						t,l = None, None
 			else:
 				t,l = TYPE_CODE, line
-			if t == TYPE_DOC and l.strip().startswith("#"):
+			if t == TYPE_DOC and RE_DELIMITER.match(l):
 				t = l = None
 			if t == TYPE_DOC and l == "[END]":
 				break
@@ -290,7 +291,8 @@ class Formatter:
 		for group in library.groups:
 			d = []
 			if group.name:
-				l  = '\n[#%s_%s]<span class="classifier">%s</span> `%s`::' % (group.name, group.classifier, group.classifier, group.name)
+				# l  = '\n[#%s_%s]<span class="classifier">%s</span> `%s`::' % (group.name, group.classifier, group.classifier, group.name)
+				l  = '\n#### <a name="%s_%s"><span class="classifier">%s</span> `%s`</a>' % (group.name, group.classifier, group.classifier, group.name)
 				d.append(l)
 				d.append("")
 				indent_doc = "\t"
@@ -335,11 +337,12 @@ if __name__ == "__main__":
 	css  = "\n".join(file(os.path.join(base, _)).read() for _ in CSS)
 	js   = "\n".join(file(os.path.join(base, _)).read() for _ in JS)
 	body = body.decode("utf-8")
-	file("README","w").write(body)
+	file("README.md","w").write(body)
+	body = os.popen("pandoc --section-divs README.md").read()
 	file("README.html","w").write(templating.Template(HTML_PAGE).apply(dict(
 		css    = css,
 		js     = js,
-		body   = texto.toHTML(body),
+		body   = body,
 		groups = [_ for _ in lib.groups if _.type == TYPE_SYMBOL]
 	)))
 

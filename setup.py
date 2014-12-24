@@ -9,6 +9,7 @@ try:
 	from setuptools import setup, Extension
 except ImportError:
 	from distutils.core import setup, Extension
+import os, tempfile
 
 grep = lambda f,e:(l for l in file(f).readlines() if l.startswith(e)).next()
 
@@ -22,7 +23,16 @@ libparsing = Extension("libparsing",
 	sources             = ["src/parsing.c"]
 )
 
-LONG_DESCRIPTION = "\n".join(_[2:].strip() for _ in file("src/parsing.h").read().decode("utf-8").split("#START:INTRO",1)[1].split("#END:INTRO")[0].split("\n"))
+LONG_DESCRIPTION = "\n".join(_[2:].strip() for _ in file("src/parsing.h").read().decode("utf-8").split("[START:INTRO]",1)[1].split("[END:INTRO]")[0].split("\n"))
+
+# If pandoc is installed, we translate the documentation to RST
+if os.popen("which pandoc").read():
+	p = tempfile.mktemp()
+	with file(p,"w") as f: f.write(LONG_DESCRIPTION)
+	LONG_DESCRIPTION = os.popen("pandoc -f markdown -t rst %s" % (p)).read()
+	print LONG_DESCRIPTION
+	os.unlink(p)
+
 setup(
 	name             = "libparsing",
 	version          = (l.split('"')[1] for l in file("src/parsing.h").readlines() if l.startswith("#define __PARSING_VERSION__")).next(),
