@@ -18,7 +18,7 @@ try:
 except ImportError:
 	import logging
 
-VERSION            = "0.3.3"
+VERSION            = "0.3.4"
 LICENSE            = "http://ffctn.com/doc/licenses/bsd"
 PACKAGE_PATH       = dirname(abspath(__file__))
 LIB_PATH           = dirname(PACKAGE_PATH)
