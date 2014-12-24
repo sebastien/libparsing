@@ -23,12 +23,6 @@ libparsing = Extension("libparsing",
 )
 
 LONG_DESCRIPTION = "\n".join(_[2:].strip() for _ in file("src/parsing.h").read().decode("utf-8").split("#START:INTRO",1)[1].split("#END:INTRO")[0].split("\n"))
-try:
-	import texto
-	LONG_DESCRIPTION = ".. raw:: html\n\t%s" % ("\n\t".join(texto.toHTML(LONG_DESCRIPTION).split("\n")))
-except ImportError:
-	pass
-
 setup(
 	name             = "libparsing",
 	version          = (l.split('"')[1] for l in file("src/parsing.h").readlines() if l.startswith("#define __PARSING_VERSION__")).next(),
