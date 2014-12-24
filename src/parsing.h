@@ -5,7 +5,7 @@
 // License           : BSD License
 // ----------------------------------------------------------------------------
 // Creation date     : 12-Dec-2014
-// Last modification : 22-Dec-2014
+// Last modification : 24-Dec-2014
 // ----------------------------------------------------------------------------
 
 #include <stdlib.h>
@@ -20,7 +20,7 @@
 
 #ifndef __PARSING_H__
 #define __PARSING_H__
-#define __PARSING_VERSION__ "0.3.2"
+#define __PARSING_VERSION__ "0.3.3"
 
 /**
  * == libparsing
@@ -31,8 +31,8 @@
  * #START:INTRO
  *
  * `libparsing` is a parsing element grammar (PEG) library written in C with
- * Python bindings. It offers a fairly good performance while allowing for a
- * lot of flexibility. It mainly intended to be used to create programming
+ * Python bindings. It offers decent performance while allowing for a
+ * lot of flexibility. It is mainly intended to be used to create programming
  * languages and software engineering tools.
  *
  * As opposed to more traditional parsing techniques, the grammar is not compiled
@@ -43,17 +43,16 @@
  * element of it. Once parsing elements match, the resulting matched input is
  * processed and an action is triggered.
  *
- * Parsing elements support:
+ * `libparsing` supports the following features:
  *
- * - backtracking, ie. going back in the input stream if a match is not found
- * - cherry-picking, ie. skipping unrecognized input
- * - contextual rules, ie. a rule that will match or not depending on external
+ * - _backtracking_, ie. going back in the input stream if a match is not found
+ * - _cherry-picking_, ie. skipping unrecognized input
+ * - _contextual rules_, ie. a rule that will match or not depending on external
  *   variables
- *  - dynamic grammar update, where you can change the grammar on the fly
  *
  * Parsing elements are usually slower than compiled or FSM-based parsers as
  * they trade performance for flexibility. It's probably not a great idea to
- * use them if parsing has to happen as fast as possible (ie. a protocol
+ * use `libparsing` if the parsing has to happen as fast as possible (ie. a protocol
  * implementation), but it is a great use for programming languages, as it
  * opens up the door to dynamic syntax plug-ins and multiple language
  * embedding.
@@ -64,6 +63,41 @@
  * or Haskell's Parsec library <https://www.haskell.org/haskellwiki/Parsec>
  * are of particular interest in the field.
  *
+ * Here is a short example of what creating a simple grammar looks like
+ * in Python:
+ *
+ * ```
+ * g = Grammar()
+ * s = g.symbols
+ * g.token("WS",       "\s+")
+ * g.token("NUMBER",   "\d+(\.\d+)?")
+ * g.token("VARIABLE", "\w+")
+ * g.token("OPERATOR", "[\/\+\-\*]")
+ * g.group("Value",     s.NUMBER, s.VARIABLE)
+ * g.rule("Suffix",     s.OPERATOR._as("operator"), s.Value._as("value"))
+ * g.rule("Expression", s.Value, s.Suffix.zeroOrMore())
+ * g.axiom(s.Expression)
+ * g.skip(s.WS)
+ * match = g.parseString("10 + 20 / 5")
+ * ```
+ *
+ * and the equivalent code in C
+ *
+ * ```
+ * Grammar* g = Grammar_new()
+ * SYMBOL(WS,         TOKEN("\\s+"))
+ * SYMBOL(NUMBER,     TOKEN("\\d+(\\.\\d+)?"))
+ * SYMBOL(VARIABLE,   TOKEN("\\w+"))
+ * SYMBOL(OPERATOR,   GROUP("[\\/\\+\\-\\*]"))
+ * SYMBOL(Value,      GOUP(_S(NUMBER), _S(VARIABLE)))
+ * SYMBOL(Suffix,     RULE(_AS(_S(OPERATOR), "operator"), _AS(_S(Value), "value")))
+ * SYMBOL(Expression, RULE(_S(Value), _MO(Suffix))
+ * g->axiom = s_Expression;
+ * g->skip(s_WS);
+ * Grammar_prepare(g);
+ * Match* match = Grammar_parseString(g, "10 + 20 / 5")
+ * ```
+ *
  * #END:INTRO
  *
  * Installing
@@ -72,7 +106,10 @@
  * To install the Python parsing module:
  *
  * >	easy_install libparsing    # From Setuptools
- * >	pip install libparsing     # From PIP
+ * >	pip install  libparsing     # From PIP
+ *
+ * Note that for the above to work, you'll need a C compiler and libpcre-dev.
+ * On Ubuntu, do `sudo apt install build-essential libprcre-dev`.
  *
  * To compile the C parsing module:
  *
@@ -84,20 +121,9 @@
  * `libparsing` works with GCC4 and Clang and is written following the `c11`
  * standard.
  *
- * Examples
- * ========
- *
- * Here is what a simple calculator grammar looks like in C code
- *
- * %include tests/test-references.c
- *
- * And the equivalent implementation in python
- *
- * %include tests/test-expr.py
- *
  * C API
  * =====
-*
+ *
  * Input data
  * ----------
  *

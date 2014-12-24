@@ -26,20 +26,22 @@ clean:
 build:
 	mkdir build
 
-dist: libparsing
-	python setup.py sdist bdist
+dist: libparsing update-python-version python/libparsing/libparsing.ffi
+	python setup.py sdist bdist bdist_wheel
 
 info:
 	@echo libparsing: $(VERSION)
 
-release: $(PRODUCT)
+release: $(PRODUCT) update-python-version python/libparsing/libparsing.ffi
 	git commit -a -m "Release $(VERSION)" ; true
 	git tag $(VERSION) ; true
 	git push --all ; true
-	python setup.py clean sdist bdist register upload
+	python setup.py clean sdist bdist bdist_wheel register upload
 
 tests: $(TEST_PRODUCTS)
 
+update-python-version: src/parsing.h
+	sed -i 's/VERSION \+= *"[^"]\+"/VERSION            = "$(VERSION)"/' python/libparsing/__init__.py 
 
 # =============================================================================
 # PRODUCTS
@@ -63,6 +65,10 @@ experiment/%: build/%.o build/parsing.o
 test-%: build/test-%.o build/parsing.o
 	$(CC) $? $(LDFLAGS) -o $@
 	chmod +x $@
+
+python/libparsing/libparsing.ffi: src/parsing.h
+	rm -f $@
+	cd python && python libparsing/__init__.py
 
 # =============================================================================
 # OBJECTS
