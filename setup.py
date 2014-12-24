@@ -25,7 +25,7 @@ libparsing = Extension("libparsing",
 LONG_DESCRIPTION = "\n".join(_[2:].strip() for _ in file("src/parsing.h").read().decode("utf-8").split("#START:INTRO",1)[1].split("#END:INTRO")[0].split("\n"))
 try:
 	import texto
-	LONG_DESCRIPTION = texto.toHTML(LONG_DESCRIPTION)
+	LONG_DESCRIPTION = ".. raw:: html\n\t%s" % ("\n\t".join(texto.toHTML(LONG_DESCRIPTION).split("\n")))
 except ImportError:
 	pass
 
@@ -35,6 +35,7 @@ setup(
 	url              = "https://github.com/sebastien/libparsing",
 	# download_url     = "",
 	author           = 'Sébastien Pierre',
+	author_email     = 'sebastien.pierre@gmail.com',
 	license          = 'BSD',
 	description      = "Python wrapper for libparsing, a PEG-based parsing library written in C",
 	keywords         = "parsing PEG grammar libparsing",

@@ -27,16 +27,17 @@ build:
 	mkdir build
 
 dist: libparsing update-python-version python/libparsing/libparsing.ffi
-	python setup.py sdist bdist 
+	python setup.py check clean sdist bdist 
 
 info:
 	@echo libparsing: $(VERSION)
 
 release: $(PRODUCT) update-python-version python/libparsing/libparsing.ffi
+	python setup.py check clean
 	git commit -a -m "Release $(VERSION)" ; true
 	git tag $(VERSION) ; true
 	git push --all ; true
-	python setup.py clean sdist bdist register upload
+	python setup.py sdist bdist register upload
 
 tests: $(TEST_PRODUCTS)
 
