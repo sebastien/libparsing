@@ -1,8 +1,8 @@
 import sys, os, reporter
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + "/src")
-from  parsing import Grammar, Token, Word, Rule, Group, Condition, Procedure, AbstractProcessor, NOTHING
+from  libparsing import Grammar, Token, Word, Rule, Group, Condition, Procedure, AbstractProcessor, NOTHING
 
-g = Grammar()
+g = Grammar(verbose=False)
 s = g.symbols
 
 g.token("WS",       "\s+")
@@ -40,8 +40,8 @@ class EP(AbstractProcessor):
 
 if __name__ == "__main__":
 	reporter.install()
-	match = g.parsePath(__file__.replace(".py", ".txt"))
-	p     = EP(g)
-	p.process(match)
+	result = g.parsePath(__file__.replace(".py", ".txt"))
+	p      = EP(g)
+	p.process(result)
 
 # EOF

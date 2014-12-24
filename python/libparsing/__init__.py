@@ -85,7 +85,7 @@ else:
 ffi = FFI()
 ffi.cdef(cdef)
 lib = None
-for p in (LIB_PATH, LIB_ALT_PATH):
+for p in (LIB_PATH, LIB_ALT_PATH, "."):
 	p = join(p, "libparsing.so")
 	if os.path.exists(p):
 		lib = ffi.dlopen(p)
@@ -535,7 +535,10 @@ class ParsingResult(CObject):
 		return Match.Wrap(self._cobject.match)
 
 	def status( self ):
-		return ffi.string(self._cobject.status)
+		return self._cobject.status
+
+	def offset( self ):
+		return self._cobject.context.iterator.offset
 
 	def text( self ):
 		return ffi.string(self._cobject.iterator.buffer)
@@ -543,7 +546,7 @@ class ParsingResult(CObject):
 	def __del__( self ):
 		# The parsing result is the only one we really need to free
 		# along with the grammar
-		lib.ParsingResult_free(self.cobject)
+		lib.ParsingResult_free(self._cobject)
 
 # -----------------------------------------------------------------------------
 #
@@ -553,10 +556,12 @@ class ParsingResult(CObject):
 
 class Grammar(CObject):
 
-	def _new(self, name=None ):
+	def _new(self, name=None, verbose=True ):
 		self.name    = name
 		self.symbols = Symbols()
-		return lib.Grammar_new()
+		g =  lib.Grammar_new()
+		g.isVerbose = 1 if verbose else 0
+		return g
 
 	def list( self ):
 		res = []
@@ -631,10 +636,10 @@ class Grammar(CObject):
 		return self
 
 	def parsePath( self, path ):
-		return ParsingResult(lib.Grammar_parseFromPath(self._cobject, path))
+		return ParsingResult.Wrap(lib.Grammar_parseFromPath(self._cobject, path))
 
 	def parseString( self, text ):
-		return ParsingResult(lib.Grammar_parseFromString(self._cobject, text))
+		return ParsingResult.Wrap(lib.Grammar_parseFromString(self._cobject, text))
 
 	def walk( self, callback ):
 		def c(o,s):
@@ -651,7 +656,7 @@ class Grammar(CObject):
 	def __del__( self ):
 		# The parsing result is the only one we really need to free
 		# along with the grammar
-		lib.Grammar_free(self.cobject)
+		lib.Grammar_free(self._cobject)
 
 # -----------------------------------------------------------------------------
 #
@@ -693,6 +698,7 @@ class AbstractProcessor:
 	def process( self, match ):
 		# res = [self.walk(_) for _ in match.children()]
 		#print "MATCH", match.element().name(), ":", res, self._process(match)
+		if isinstance(match, ParsingResult): match = match.match()
 		return self._process(match)
 
 	def _process( self, match ):

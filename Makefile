@@ -9,8 +9,8 @@ PRODUCTS = lib$(PROJECT) lib$(PROJECT).so.$(VERSION) README.html
 TEST_PRODUCTS = $(TESTS:tests/%.c=%)
 CC       = colorgcc
 LIBS    := libpcre
-CFLAGS  += -Isrc -std=c11 -g -O9 -Wall -fPIC 
-#-DDEBUG_ENABLED
+CFLAGS  += -Isrc -std=c11 -g -O3 -Wall -fPIC
+# -DDEBUG_ENABLED
 LDFLAGS := $(shell pkg-config --cflags --libs $(LIBS))
 
 # =============================================================================

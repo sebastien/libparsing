@@ -110,10 +110,11 @@ bool Iterator_moveTo ( Iterator* this, size_t offset ) {
 	return this->move(this, offset - this->offset );
 }
 
-
 void Iterator_free( Iterator* this ) {
-	// TODO: Take care of input
+	// FIXME: Should close input file
+	__DEALLOC(this->buffer);
 	__DEALLOC(this);
+
 }
 
 // ----------------------------------------------------------------------------
@@ -281,6 +282,7 @@ Grammar* Grammar_new(void) {
 	this->skip       = NULL;
 	this->axiomCount = 0;
 	this->skipCount  = 0;
+	this->isVerbose  = FALSE;
 	return this;
 }
 
@@ -971,7 +973,7 @@ ParsingContext* ParsingContext_new( Grammar* g, Iterator* iterator ) {
 }
 
 void ParsingContext_free( ParsingContext* this ) {
-	if (this) {
+	if (this!=NULL) {
 		Iterator_free(this->iterator);
 		ParsingStats_free(this->stats);
 		__DEALLOC(this);
@@ -990,6 +992,7 @@ ParsingStats* ParsingStats_new(void) {
 	this->parseTime = 0;
 	this->successBySymbol = NULL;
 	this->failureBySymbol = NULL;
+	return this;
 }
 
 void ParsingStats_free(ParsingStats* this) {
@@ -1007,7 +1010,6 @@ void ParsingStats_setSymbolsCount(ParsingStats* this, size_t t) {
 	this->failureBySymbol = calloc(sizeof(size_t), t + 1);
 }
 
-
 // ----------------------------------------------------------------------------
 //
 // PARSING RESULT
@@ -1016,8 +1018,9 @@ void ParsingStats_setSymbolsCount(ParsingStats* this, size_t t) {
 
 ParsingResult* ParsingResult_new(Match* match, ParsingContext* context) {
 	__ALLOC(ParsingResult,this);
-	assert(match);
-	assert(context);
+	assert(match != NULL);
+	assert(context != NULL);
+	assert(context->iterator != NULL);
 	this->match   = match;
 	this->context = context;
 	if (match != FAILURE) {
@@ -1032,6 +1035,7 @@ ParsingResult* ParsingResult_new(Match* match, ParsingContext* context) {
 		LOG_IF(context->grammar->isVerbose, "Failed, parsed %zd bytes, %zd remaining", context->iterator->offset, Iterator_remaining(context->iterator))
 		this->status = STATUS_FAILED;
 	}
+	return this;
 }
 
 void ParsingResult_free(ParsingResult* this) {
