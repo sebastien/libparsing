@@ -635,9 +635,10 @@ ParsingElement* Token_new(const char* expr) {
 	this->type           = TYPE_TOKEN;
 	this->recognize      = Token_recognize;
 	this->freeMatch      = TokenMatch_free;
+	config->expr   = expr;
+#ifdef WITH_PCRE
 	const char* pcre_error;
 	int         pcre_error_offset = -1;
-	config->expr   = expr;
 	config->regexp = pcre_compile(expr, PCRE_UTF8, &pcre_error, &pcre_error_offset, NULL);
 	if (pcre_error != NULL) {
 		ERROR("Token: cannot compile regular expression `%s` at %d: %s", expr, pcre_error_offset, pcre_error);
@@ -652,6 +653,7 @@ ParsingElement* Token_new(const char* expr) {
 		__DEALLOC(this);
 		return NULL;
 	}
+#endif
 	this->config = config;
 	return this;
 }
@@ -660,8 +662,10 @@ void Token_free(ParsingElement* this) {
 	TokenConfig* config = (TokenConfig*)this->config;
 	if (config != NULL) {
 		// FIXME: Not sure how to free a regexp
+#ifdef WITH_PCRE
 		if (config->regexp != NULL) {}
 		if (config->extra  != NULL) {pcre_free_study(config->extra);}
+#endif
 		__DEALLOC(config);
 	}
 	__DEALLOC(this);
@@ -671,6 +675,8 @@ Match* Token_recognize(ParsingElement* this, ParsingContext* context) {
 	assert(this->config);
 	if(this->config == NULL) {return FAILURE;}
 	TokenConfig* config     = (TokenConfig*)this->config;
+	Match* result           = NULL;
+#ifdef WITH_PCRE
 	// NOTE: This has to be a multiple of 3, according to `man pcre_exec`
 	int vector_length = 30;
 	int vector[vector_length];
@@ -684,7 +690,6 @@ Match* Token_recognize(ParsingElement* this, ParsingContext* context) {
 		PCRE_ANCHORED,                     // OPTIONS -- we do not skip position
 		vector,                            // Vector of matching offsets
 		vector_length);                    // Number of elements in the vector
-	Match* result = NULL;
 	if (r <= 0) {
 		// DEBUG("Token: %s FAILED on %s", config->expr, context->iterator->buffer);
 		switch(r) {
@@ -727,6 +732,7 @@ Match* Token_recognize(ParsingElement* this, ParsingContext* context) {
 		context->iterator->move(context->iterator,result->length);
 		assert(Match_isSuccess(result));
 	}
+#endif
 	return result;
 }
 
@@ -746,11 +752,13 @@ void TokenMatch_free(Match* match) {
 	assert (match->context       != NULL);
 	assert (((ParsingElement*)(match->element))->type == TYPE_TOKEN);
 	TokenMatch* m = (TokenMatch*)match->data;
+#ifdef WITH_PCRE
 	if (m != NULL ) {
 		for (int j=0 ; j<m->count ; j++) {
 			pcre_free_substring(m->groups[j]);
 		}
 	}
+#endif
 }
 
 // ----------------------------------------------------------------------------

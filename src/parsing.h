@@ -16,7 +16,9 @@
 #include <string.h>
 #include <assert.h>
 #include <sys/types.h>
+#ifdef WITH_PCRE
 #include <pcre.h>
+#endif
 #include "oo.h"
 
 #ifndef __PARSING_H__
@@ -497,8 +499,10 @@ Match*          Word_recognize(ParsingElement* this, ParsingContext* context);
 // `Token` methods.
 typedef struct TokenConfig {
 	const char* expr;
+#ifdef WITH_PCRE
 	pcre*       regexp;
 	pcre_extra* extra;
+#endif
 } TokenConfig;
 
 // @type
