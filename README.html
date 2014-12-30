@@ -209,7 +209,8 @@ make install               # You can set PREFIX</code></pre>
 <span class="kw">typedef</span> <span class="kw">struct</span> ParsingElement ParsingElement;
 <span class="kw">typedef</span> <span class="kw">struct</span> ParsingResult  ParsingResult;
 <span class="kw">typedef</span> <span class="kw">struct</span> Reference      Reference;
-<span class="kw">typedef</span> <span class="kw">struct</span> Match          Match;</code></pre>
+<span class="kw">typedef</span> <span class="kw">struct</span> Match          Match;
+<span class="kw">typedef</span> <span class="dt">void</span>                  Element;</code></pre>
 <div id="type-grammar" class="section level4">
 <h4><a name="Grammar_type"><span class="classifier">type</span> <code>Grammar</code></a></h4>
 <pre class="sourceCode c"><code class="sourceCode c"><span class="kw">typedef</span> <span class="kw">struct</span> Grammar {
@@ -217,6 +218,7 @@ make install               # You can set PREFIX</code></pre>
     ParsingElement*  skip;        <span class="co">// The skipped element</span>
     <span class="dt">int</span>              axiomCount;  <span class="co">// The count of parsing elemetns in axiom</span>
     <span class="dt">int</span>              skipCount;   <span class="co">// The count of parsing elements in skip</span>
+    Element**        elements;    <span class="co">// The set of all elements in the grammar</span>
     bool             isVerbose;
 } Grammar;</code></pre>
 </div>
@@ -243,21 +245,17 @@ make install               # You can set PREFIX</code></pre>
 </div>
 <div id="elements" class="section level2">
 <h2>Elements</h2>
-<div id="typedef-element" class="section level4">
-<h4><a name="Element_typedef"><span class="classifier">typedef</span> <code>Element</code></a></h4>
-<pre class="sourceCode c"><code class="sourceCode c"><span class="kw">typedef</span> <span class="dt">void</span> Element;</code></pre>
-</div>
 <div id="callback-walkingcallback" class="section level4">
 <h4><a name="WalkingCallback_callback"><span class="classifier">callback</span> <code>WalkingCallback</code></a></h4>
-<pre class="sourceCode c"><code class="sourceCode c"><span class="kw">typedef</span> <span class="dt">int</span> (*WalkingCallback)(Element* this, <span class="dt">int</span> step);</code></pre>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="kw">typedef</span> <span class="dt">int</span> (*WalkingCallback)(Element* this, <span class="dt">int</span> step, <span class="dt">void</span>* context);</code></pre>
 </div>
 <div id="method-element_walk" class="section level4">
 <h4><a name="Element_walk_method"><span class="classifier">method</span> <code>Element_walk</code></a></h4>
-<pre class="sourceCode c"><code class="sourceCode c"><span class="dt">int</span> Element_walk( Element* this, WalkingCallback callback );</code></pre>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="dt">int</span> Element_walk( Element* this, WalkingCallback callback, <span class="dt">void</span>* context);</code></pre>
 </div>
 <div id="method-element__walk" class="section level4">
 <h4><a name="Element__walk_method"><span class="classifier">method</span> <code>Element__walk</code></a></h4>
-<pre class="sourceCode c"><code class="sourceCode c"><span class="dt">int</span> Element__walk( Element* this, WalkingCallback callback, <span class="dt">int</span> step );</code></pre>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="dt">int</span> Element__walk( Element* this, WalkingCallback callback, <span class="dt">int</span> step, <span class="dt">void</span>* context);</code></pre>
 </div>
 <div id="parsing-elements" class="section level3">
 <h3>Parsing Elements</h3>
@@ -385,7 +383,7 @@ make install               # You can set PREFIX</code></pre>
 </div>
 <div id="method-match__walk" class="section level4">
 <h4><a name="Match__walk_method"><span class="classifier">method</span> <code>Match__walk</code></a></h4>
-<pre class="sourceCode c"><code class="sourceCode c"><span class="dt">int</span> Match__walk(Match* this, WalkingCallback callback, <span class="dt">int</span> step );</code></pre>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="dt">int</span> Match__walk(Match* this, WalkingCallback callback, <span class="dt">int</span> step, <span class="dt">void</span>* context );</code></pre>
 </div>
 <div id="type-parsingelement" class="section level4">
 <h4><a name="ParsingElement_type"><span class="classifier">type</span> <code>ParsingElement</code></a></h4>
@@ -463,8 +461,10 @@ make install               # You can set PREFIX</code></pre>
 <p>The parsing element configuration information that is used by the <code>Token</code> methods.</p>
 <pre class="sourceCode c"><code class="sourceCode c"><span class="kw">typedef</span> <span class="kw">struct</span> TokenConfig {
     <span class="dt">const</span> <span class="dt">char</span>* expr;
+<span class="ot">#ifdef WITH_PCRE</span>
     pcre*       regexp;
     pcre_extra* extra;
+<span class="ot">#endif</span>
 } TokenConfig;</code></pre>
 </div>
 <div id="type-tokenmatch" class="section level4">
@@ -561,7 +561,7 @@ make install               # You can set PREFIX</code></pre>
 </div>
 <div id="method-reference__walk" class="section level4">
 <h4><a name="Reference__walk_method"><span class="classifier">method</span> <code>Reference__walk</code></a></h4>
-<pre class="sourceCode c"><code class="sourceCode c"><span class="dt">int</span> Reference__walk( Reference* this, WalkingCallback callback, <span class="dt">int</span> step );</code></pre>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="dt">int</span> Reference__walk( Reference* this, WalkingCallback callback, <span class="dt">int</span> step, <span class="dt">void</span>* nothing );</code></pre>
 </div>
 <div id="method-reference_recognize" class="section level4">
 <h4><a name="Reference_recognize_method"><span class="classifier">method</span> <code>Reference_recognize</code></a></h4>
@@ -641,6 +641,7 @@ make install               # You can set PREFIX</code></pre>
 <pre class="sourceCode c"><code class="sourceCode c"><span class="kw">typedef</span> <span class="kw">struct</span> ParsingStats {
     size_t  bytesRead;
     <span class="dt">double</span>  parseTime;
+    size_t  symbolsCount;
     size_t* successBySymbol;
     size_t* failureBySymbol;
 } ParsingStats;</code></pre>
@@ -656,6 +657,10 @@ make install               # You can set PREFIX</code></pre>
 <div id="method-parsingstats_setsymbolscount" class="section level4">
 <h4><a name="ParsingStats_setSymbolsCount_method"><span class="classifier">method</span> <code>ParsingStats_setSymbolsCount</code></a></h4>
 <pre class="sourceCode c"><code class="sourceCode c"><span class="dt">void</span> ParsingStats_setSymbolsCount(ParsingStats* this, size_t t);</code></pre>
+</div>
+<div id="method-parsingstats_registermatch" class="section level4">
+<h4><a name="ParsingStats_registerMatch_method"><span class="classifier">method</span> <code>ParsingStats_registerMatch</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c">Match* ParsingStats_registerMatch(ParsingStats* this, Element* e, Match* m);</code></pre>
 </div>
 <div id="type-parsingcontext" class="section level4">
 <h4><a name="ParsingContext_type"><span class="classifier">type</span> <code>ParsingContext</code></a></h4>

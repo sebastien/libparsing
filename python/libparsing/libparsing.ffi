@@ -11,11 +11,11 @@ typedef Match* (*ConditionCallback)(ParsingElement*, ParsingContext*);
 
 typedef void (*ProcedureCallback)(ParsingElement* this, ParsingContext* context);
 
-typedef int (*WalkingCallback)(Element* this, int step);
+typedef int (*WalkingCallback)(Element* this, int step, void* context);
 
-int Element_walk( Element* this, WalkingCallback callback );
+int Element_walk( Element* this, WalkingCallback callback, void* context);
 
-int Element__walk( Element* this, WalkingCallback callback, int step );
+int Element__walk( Element* this, WalkingCallback callback, int step, void* context);
 
 typedef struct Reference {
 	char            type;            // Set to Reference_T, to disambiguate with ParsingElement
@@ -38,7 +38,7 @@ Reference* Reference_cardinality(Reference* this, char cardinality);
 
 Reference* Reference_name(Reference* this, const char* name);
 
-int Reference__walk( Reference* this, WalkingCallback callback, int step );
+int Reference__walk( Reference* this, WalkingCallback callback, int step, void* nothing );
 
 Match* Reference_recognize(Reference* this, ParsingContext* context);
 
@@ -63,7 +63,7 @@ void Match_free(Match* this);
 
 bool Match_isSuccess(Match* this);
 
-int Match__walk(Match* this, WalkingCallback callback, int step );
+int Match__walk(Match* this, WalkingCallback callback, int step, void* context );
 
 typedef struct Iterator {
 	char           status;    // The status of the iterator, one of STATUS_{INIT|PROCESSING|INPUT_ENDED|ENDED}
@@ -154,6 +154,7 @@ void ParsingResult_free(ParsingResult* this);
 typedef struct ParsingStats {
 	size_t  bytesRead;
 	double  parseTime;
+	size_t  symbolsCount;
 	size_t* successBySymbol;
 	size_t* failureBySymbol;
 } ParsingStats;
@@ -163,6 +164,8 @@ ParsingStats* ParsingStats_new(void);
 void ParsingStats_free(ParsingStats* this);
 
 void ParsingStats_setSymbolsCount(ParsingStats* this, size_t t);
+
+Match* ParsingStats_registerMatch(ParsingStats* this, Element* e, Match* m);
 
 typedef struct WordConfig {
 	const char* word;
@@ -201,6 +204,7 @@ typedef struct Grammar {
 	ParsingElement*  skip;        // The skipped element
 	int              axiomCount;  // The count of parsing elemetns in axiom
 	int              skipCount;   // The count of parsing elements in skip
+	Element**        elements;    // The set of all elements in the grammar
 	bool             isVerbose;
 } Grammar;
 

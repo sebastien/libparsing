@@ -5,7 +5,7 @@
 // License           : BSD License
 // ----------------------------------------------------------------------------
 // Creation date     : 12-Dec-2014
-// Last modification : 24-Dec-2014
+// Last modification : 30-Dec-2014
 // ----------------------------------------------------------------------------
 
 #include <stdlib.h>
@@ -23,7 +23,7 @@
 
 #ifndef __PARSING_H__
 #define __PARSING_H__
-#define __PARSING_VERSION__ "0.4.1"
+#define __PARSING_VERSION__ "0.4.2"
 
 /**
  * #  libparsing
@@ -266,11 +266,13 @@ bool FileInput_move   ( Iterator* this, int n );
  * The `axiom` and `skip` properties are both references to _parsing elements_.
 */
 
+
 typedef struct ParsingContext ParsingContext;
 typedef struct ParsingElement ParsingElement;
 typedef struct ParsingResult  ParsingResult;
 typedef struct Reference      Reference;
 typedef struct Match          Match;
+typedef void                  Element;
 
 // @type Grammar
 typedef struct Grammar {
@@ -278,6 +280,7 @@ typedef struct Grammar {
 	ParsingElement*  skip;        // The skipped element
 	int              axiomCount;  // The count of parsing elemetns in axiom
 	int              skipCount;   // The count of parsing elements in skip
+	Element**        elements;    // The set of all elements in the grammar
 	bool             isVerbose;
 } Grammar;
 
@@ -302,17 +305,15 @@ ParsingResult* Grammar_parseFromPath( Grammar* this, const char* path );
  * --------
 */
 
-// @typedef
-typedef void Element;
 
 // @callback
-typedef int (*WalkingCallback)(Element* this, int step);
+typedef int (*WalkingCallback)(Element* this, int step, void* context);
 
 // @method
-int Element_walk( Element* this, WalkingCallback callback );
+int Element_walk( Element* this, WalkingCallback callback, void* context);
 
 // @method
-int Element__walk( Element* this, WalkingCallback callback, int step );
+int Element__walk( Element* this, WalkingCallback callback, int step, void* context);
 
 /**
  * ### Parsing Elements
@@ -415,7 +416,7 @@ void Match_free(Match* this);
 bool Match_isSuccess(Match* this);
 
 // @method
-int Match__walk(Match* this, WalkingCallback callback, int step );
+int Match__walk(Match* this, WalkingCallback callback, int step, void* context );
 
 // @type ParsingElement
 typedef struct ParsingElement {
@@ -589,7 +590,7 @@ Reference* Reference_cardinality(Reference* this, char cardinality);
 Reference* Reference_name(Reference* this, const char* name);
 
 // @method
-int Reference__walk( Reference* this, WalkingCallback callback, int step );
+int Reference__walk( Reference* this, WalkingCallback callback, int step, void* nothing );
 
 // @method
 // Returns the matched value corresponding to the first match of this reference.
@@ -679,6 +680,7 @@ typedef struct ParsingOffset  ParsingOffset;
 typedef struct ParsingStats {
 	size_t  bytesRead;
 	double  parseTime;
+	size_t  symbolsCount;
 	size_t* successBySymbol;
 	size_t* failureBySymbol;
 } ParsingStats;
@@ -691,6 +693,9 @@ void ParsingStats_free(ParsingStats* this);
 
 // @method
 void ParsingStats_setSymbolsCount(ParsingStats* this, size_t t);
+
+// @method
+Match* ParsingStats_registerMatch(ParsingStats* this, Element* e, Match* m);
 
 // @type
 typedef struct ParsingContext {

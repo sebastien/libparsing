@@ -325,6 +325,7 @@ typedef struct ParsingElement ParsingElement;
 typedef struct ParsingResult  ParsingResult;
 typedef struct Reference      Reference;
 typedef struct Match          Match;
+typedef void                  Element;
 ```
 
 
@@ -337,6 +338,7 @@ typedef struct Grammar {
 	ParsingElement*  skip;        // The skipped element
 	int              axiomCount;  // The count of parsing elemetns in axiom
 	int              skipCount;   // The count of parsing elements in skip
+	Element**        elements;    // The set of all elements in the grammar
 	bool             isVerbose;
 } Grammar;
 ```
@@ -385,19 +387,11 @@ ParsingResult* Grammar_parseFromPath( Grammar* this, const char* path );
 Elements
 --------
 
-#### <a name="Element_typedef"><span class="classifier">typedef</span> `Element`</a>
-
-
-```c
-typedef void Element;
-```
-
-
 #### <a name="WalkingCallback_callback"><span class="classifier">callback</span> `WalkingCallback`</a>
 
 
 ```c
-typedef int (*WalkingCallback)(Element* this, int step);
+typedef int (*WalkingCallback)(Element* this, int step, void* context);
 ```
 
 
@@ -405,7 +399,7 @@ typedef int (*WalkingCallback)(Element* this, int step);
 
 
 ```c
-int Element_walk( Element* this, WalkingCallback callback );
+int Element_walk( Element* this, WalkingCallback callback, void* context);
 ```
 
 
@@ -413,7 +407,7 @@ int Element_walk( Element* this, WalkingCallback callback );
 
 
 ```c
-int Element__walk( Element* this, WalkingCallback callback, int step );
+int Element__walk( Element* this, WalkingCallback callback, int step, void* context);
 ```
 
 
@@ -662,7 +656,7 @@ bool Match_isSuccess(Match* this);
 
 
 ```c
-int Match__walk(Match* this, WalkingCallback callback, int step );
+int Match__walk(Match* this, WalkingCallback callback, int step, void* context );
 ```
 
 
@@ -796,8 +790,10 @@ iterator's current location.
 ```c
 typedef struct TokenConfig {
 	const char* expr;
+#ifdef WITH_PCRE
 	pcre*       regexp;
 	pcre_extra* extra;
+#endif
 } TokenConfig;
 ```
 
@@ -975,7 +971,7 @@ Reference* Reference_name(Reference* this, const char* name);
 
 
 ```c
-int Reference__walk( Reference* this, WalkingCallback callback, int step );
+int Reference__walk( Reference* this, WalkingCallback callback, int step, void* nothing );
 ```
 
 
@@ -1123,6 +1119,7 @@ typedef struct ParsingOffset  ParsingOffset;
 typedef struct ParsingStats {
 	size_t  bytesRead;
 	double  parseTime;
+	size_t  symbolsCount;
 	size_t* successBySymbol;
 	size_t* failureBySymbol;
 } ParsingStats;
@@ -1150,6 +1147,14 @@ void ParsingStats_free(ParsingStats* this);
 
 ```c
 void ParsingStats_setSymbolsCount(ParsingStats* this, size_t t);
+```
+
+
+#### <a name="ParsingStats_registerMatch_method"><span class="classifier">method</span> `ParsingStats_registerMatch`</a>
+
+
+```c
+Match* ParsingStats_registerMatch(ParsingStats* this, Element* e, Match* m);
 ```
 
 

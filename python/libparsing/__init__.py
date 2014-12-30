@@ -6,7 +6,7 @@
 # License           : BSD License
 # -----------------------------------------------------------------------------
 # Creation date     : 18-Dec-2014
-# Last modification : 24-Dec-2014
+# Last modification : 30-Dec-2014
 # -----------------------------------------------------------------------------
 
 import sys, os, re
@@ -328,6 +328,9 @@ class Reference(CObject):
 		lib.Reference_name(self._cobject, name)
 		return self
 
+	def element( self ):
+		return ParsingElement.Wrap(self._cobject.element)
+
 	def one( self ):
 		lib.Reference_cardinality(self._cobject, CARDINALITY_ONE)
 		return self
@@ -365,6 +368,9 @@ class Reference(CObject):
 	def disableFailMemoize( self ):
 		return self
 
+	def isReference( self ):
+		return True
+
 # -----------------------------------------------------------------------------
 #
 # PARSING ELEMENT
@@ -378,6 +384,9 @@ class ParsingElement(CObject):
 	@classmethod
 	def IsCType( self, element ):
 		return isinstance(element, FFI.CData) and lib.ParsingElement_Is(element)
+
+	def isReference( self ):
+		return False
 
 	def add( self, *children ):
 		for c in children:
@@ -541,16 +550,99 @@ class ParsingResult(CObject):
 	def status( self ):
 		return self._cobject.status
 
+	def stats( self ):
+		return ParsingStats.Wrap(self._cobject.context.stats)
+
+	def line( self ):
+		return self._cobject.context.iterator.lines
+
 	def offset( self ):
 		return self._cobject.context.iterator.offset
 
 	def text( self ):
-		return ffi.string(self._cobject.iterator.buffer)
+		return ffi.string(self._cobject.context.iterator.buffer)
+
+	def textaround( self, line=None ):
+		if line is None: line = self.line()
+		i = self.offset()
+		t = self.text()
+		while i > 1 and t[i] != "\n": i -= 1
+		if i != 0: i += 1
+		return t[i:(i+100)].split("\n")[0]
 
 	def __del__( self ):
 		# The parsing result is the only one we really need to free
 		# along with the grammar
 		lib.ParsingResult_free(self._cobject)
+
+# -----------------------------------------------------------------------------
+#
+# PARSING STATS
+#
+# -----------------------------------------------------------------------------
+
+class ParsingStats(CObject):
+
+	def bytesRead( self ):
+		return self._cobject.bytesRead
+
+	def parseTime( self ):
+		return self._cobject.parseTime
+
+	def totalSuccess( self ):
+		return sum(self._cobject.successBySymbol[i] for i in range(self._cobject.symbolsCount))
+
+	def totalFailures( self ):
+		return sum(self._cobject.failureBySymbol[i] for i in range(self._cobject.symbolsCount))
+
+	def symbolsCount( self ):
+		return self._cobject.symbolsCount
+
+	def symbols( self ):
+		return [
+			(i, self._cobject.successBySymbol[i], self._cobject.failureBySymbol[i]) for i in range(self.symbolsCount())
+		]
+
+	def report( self, grammar=None, output=sys.stdout ):
+		br    = self.bytesRead()
+		pt    = self.parseTime()
+		ts    = self.totalSuccess()
+		tf    = self.totalFailures()
+		def write(s):
+			output.write(s)
+			output.write("\n")
+		write("Bytes read :  {0}".format(br))
+		write("Parse time :  {0}s".format(pt))
+		write("Throughput :  {0}Mb/s".format(br/1024.0/1024.0/pt))
+		write("-" * 80)
+		write("Sucesses   :  {0}".format(ts))
+		write("Failures   :  {0}".format(tf))
+		write("Throughput :  {0}op/s".format((ts + tf) / pt))
+		write("Op time    : ~{0}/op".format(pt / (ts + tf)))
+		write("Op/byte    :  {0}".format((ts + tf) / br))
+		write("-" * 80)
+		write("   SYMBOL   NAME                               SUCCESSES       FAILURES")
+		s  = sorted(self.symbols(), lambda a,b:cmp(b[1] + b[2], a[1] + a[2]))
+		c  = 0
+		ct = 0
+		for sid, s, f in s:
+			ct += 1
+			if s == 0 and f == 0: continue
+			e = grammar.symbol(sid) if grammar else None
+			n = ""
+			if e:
+				if e.isReference():
+					n = "*" + e.element().name() + "(" + e.cardinality() + ")"
+					if e.name():
+						n += ":" + e.name()
+				else:
+					n = e.name()
+			write("{0:9d} {1:31s} {2:14d} {3:14d}".format(sid, n, s, f))
+			c += 1
+		write("-" * 80)
+		write("Activated  :  {0}/{1} ~{2}%".format(c, ct, int(100.0 * c / ct)))
+		return self
+
 
 # -----------------------------------------------------------------------------
 #
@@ -579,6 +671,16 @@ class Grammar(CObject):
 	# 	# FIXME: That cast should not be necessary
 	# 	e = ffi.cast("Grammar*", self._cobject)
 	# 	return e.verbose == 1
+
+	def symbol( self, id ):
+		if type(id) is int:
+			e = ffi.cast("Reference*", self._cobject.elements[id])
+			if e.type == TYPE_REFERENCE:
+				return Reference.Wrap(e)
+			else:
+				return ParsingElement.Wrap(e)
+		else:
+			return getattr(self.symbols, id)
 
 	def list( self ):
 		res = []
@@ -684,7 +786,7 @@ class Grammar(CObject):
 class AbstractProcessor:
 
 	def __init__( self, grammar ):
-		self.symbols = grammar.list()
+		self.symbols = grammar.list() if grammar else []
 		self.symbolByName = {}
 		self.symbolByID   = {}
 		self.handlerByID  = {}
@@ -720,7 +822,7 @@ class AbstractProcessor:
 
 	def _process( self, match ):
 		eid = match.element().id()
-		handler = self.handlerByID.get(eid)
+		handler = self.getHandler(eid)
 		# print "[PROCESS]", eid, match.element().name()
 		if handler:
 			kwargs = {}
@@ -739,6 +841,9 @@ class AbstractProcessor:
 			# If we don't have a handler, we recurse
 			return self.defaultProcess(match)
 
+	def getHandler( self, eid ):
+		return self.handlerByID.get(eid)
+
 	def defaultProcess( self, match ):
 		m = [self._process(m) for m in match.children()]
 		if not m:
@@ -755,5 +860,30 @@ class AbstractProcessor:
 				return m
 		else:
 			return m
+
+
+class TreeWriter(AbstractProcessor):
+	"""A special processor that outputs the named parsing elements
+	registered in the parse tree. It is quite useful for debugging grammars."""
+
+	def __init__( self, grammar=None, output=sys.stdout ):
+		AbstractProcessor.__init__(self, grammar)
+		self.output = output
+		self.reset()
+
+	def reset( self ):
+		self.indent = 0
+		self.count  = 0
+
+	def defaultProcess(self, match):
+		named = isinstance(match.element() , ParsingElement) and match.element().name() != "_"
+		if named:
+			self.output.write("{0:04d}|{1}{2}\n".format(self.count, self.indent * "    "  + "|---" , match.element().name()))
+			self.indent += 1
+		self.count  += 1
+		r = AbstractProcessor.defaultProcess(self, match)
+		if named:
+			self.indent -= 1
+		return r
 
 # EOF - vim: ts=4 sw=4 noet

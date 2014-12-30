@@ -5,7 +5,7 @@ SOURCES  = $(wildcard src/*.c)
 TESTS    = $(wildcard tests/test-*.c)
 OBJECTS  = $(SOURCES:src/%.c=build/%.o)
 OBJECTS += $(TESTS:tests/%.c=build/%.o)
-PRODUCTS = lib$(PROJECT) lib$(PROJECT).so.$(VERSION) README.html
+PRODUCTS = lib$(PROJECT) lib$(PROJECT).so.$(VERSION) python/libparsing/libparsing.ffi README.html
 TEST_PRODUCTS = $(TESTS:tests/%.c=%)
 CC       = colorgcc
 LIBS    := libpcre

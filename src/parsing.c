@@ -5,11 +5,13 @@
 // License           : BSD License
 // ----------------------------------------------------------------------------
 // Creation date     : 12-Dec-2014
-// Last modification : 24-Dec-2014
+// Last modification : 30-Dec-2014
 // ----------------------------------------------------------------------------
 
 #include "parsing.h"
 #include "oo.h"
+
+#define MATCH_STATS(m) ParsingStats_registerMatch(context->stats, this, m)
 
 // SEE: https://en.wikipedia.org/wiki/C_data_types
 // SEE: http://stackoverflow.com/questions/18329532/pcre-is-not-matching-utf8-characters
@@ -282,6 +284,7 @@ Grammar* Grammar_new(void) {
 	this->skip       = NULL;
 	this->axiomCount = 0;
 	this->skipCount  = 0;
+	this->elements   = NULL;
 	this->isVerbose  = FALSE;
 	return this;
 }
@@ -340,13 +343,13 @@ bool Match_isSuccess(Match* this) {
 	return (this != NULL && this != FAILURE && this->status == STATUS_MATCHED);
 }
 
-int Match__walk(Match* this, WalkingCallback callback, int step ){
-	step = callback(this, step);
+int Match__walk(Match* this, WalkingCallback callback, int step, void* context ){
+	step = callback(this, step, context);
 	if (this->child != NULL && step >= 0) {
-		step = Match__walk(this->child, callback, step + 1);
+		step = Match__walk(this->child, callback, step + 1, context);
 	}
 	if (this->next != NULL && step >= 0) {
-		step = Match__walk(this->next, callback, step + 1);
+		step = Match__walk(this->next, callback, step + 1, context);
 	}
 	return step;
 }
@@ -431,12 +434,12 @@ ParsingElement* ParsingElement_name( ParsingElement* this, const char* name ) {
 	return this;
 }
 
-int ParsingElement__walk( ParsingElement* this, WalkingCallback callback, int step ) {
+int ParsingElement__walk( ParsingElement* this, WalkingCallback callback, int step, void* context ) {
 	int i = step;
-	step  = callback((Element*)this, step);
+	step  = callback((Element*)this, step, context);
 	Reference* child = this->children;
 	while ( child != NULL && step >= 0) {
-		int j = Reference__walk(child, callback, ++i);
+		int j = Reference__walk(child, callback, ++i, context);
 		if (j > 0) { step = i = j; }
 		child = child->next;
 	}
@@ -449,20 +452,20 @@ int ParsingElement__walk( ParsingElement* this, WalkingCallback callback, int st
 //
 // ----------------------------------------------------------------------------
 
-int Element_walk( Element* this, WalkingCallback callback ) {
-	return Element__walk(this, callback, 0);
+int Element_walk( Element* this, WalkingCallback callback, void* context ) {
+	return Element__walk(this, callback, 0, context);
 }
 
-int Element__walk( Element* this, WalkingCallback callback, int step ) {
+int Element__walk( Element* this, WalkingCallback callback, int step, void* context ) {
 	assert (callback != NULL);
 	if (this!=NULL) {
 		if (Reference_Is(this)) {
-			step = Reference__walk((Reference*)this, callback, step);
+			step = Reference__walk((Reference*)this, callback, step, context);
 		} else if (ParsingElement_Is(this)) {
-			step = ParsingElement__walk((ParsingElement*)this, callback, step);
+			step = ParsingElement__walk((ParsingElement*)this, callback, step, context);
 		} else {
 			// If it is neither a reference or parsing element, it is a Match
-			step = Match__walk((Match*)this, callback, step);
+			step = Match__walk((Match*)this, callback, step, context);
 		}
 	}
 	return step;
@@ -516,10 +519,10 @@ Reference* Reference_name(Reference* this, const char* name) {
 	return this;
 }
 
-int Reference__walk( Reference* this, WalkingCallback callback, int step ) {
-	step = callback((Element*)this, step);
+int Reference__walk( Reference* this, WalkingCallback callback, int step, void* context ) {
+	step = callback((Element*)this, step, context);
 	if (step >= 0) {
-		step = ParsingElement__walk(this->element, callback, step + 1);
+		step = ParsingElement__walk(this->element, callback, step + 1, context);
 	}
 	return step;
 }
@@ -573,7 +576,7 @@ Match* Reference_recognize(Reference* this, ParsingContext* context) {
 		default:
 			// Unsuported cardinality
 			ERROR("Unsupported cardinality %c", this->cardinality);
-			return FAILURE;
+			return MATCH_STATS(FAILURE);
 	}
 	if (Match_isSuccess(result)) {
 		int    length   = context->iterator->offset - offset;
@@ -581,9 +584,9 @@ Match* Reference_recognize(Reference* this, ParsingContext* context) {
 		assert(result->element != NULL);
 		m->child        = result;
 		m->offset       = offset;
-		return m;
+		return MATCH_STATS(m);
 	} else {
-		return FAILURE;
+		return MATCH_STATS(FAILURE);
 	}
 }
 
@@ -616,10 +619,10 @@ Match* Word_recognize(ParsingElement* this, ParsingContext* context) {
 		// and moves the iterator.
 		context->iterator->move(context->iterator, config->length);
 		LOG_IF(context->grammar->isVerbose, "[✓] %s:%s matched at %zd", this->name, ((WordConfig*)this->config)->word, context->iterator->offset);
-		return Match_Success(config->length, this, context);
+		return MATCH_STATS(Match_Success(config->length, this, context));
 	} else {
 		LOG_IF(context->grammar->isVerbose, "    %s:%s failed at %zd", this->name, ((WordConfig*)this->config)->word, context->iterator->offset);
-		return FAILURE;
+		return MATCH_STATS(FAILURE);
 	}
 }
 
@@ -733,7 +736,7 @@ Match* Token_recognize(ParsingElement* this, ParsingContext* context) {
 		assert(Match_isSuccess(result));
 	}
 #endif
-	return result;
+	return MATCH_STATS(result);
 }
 
 const char* TokenMatch_group(Match* match, int index) {
@@ -785,7 +788,7 @@ Match* Group_recognize(ParsingElement* this, ParsingContext* context){
 			// The first succeding child wins
 			Match* result = Match_Success(match->length, this, context);
 			result->child = match;
-			return result;
+			return MATCH_STATS(result);
 		} else {
 			// Otherwise we skip to the next child
 			child = child->next;
@@ -797,7 +800,7 @@ Match* Group_recognize(ParsingElement* this, ParsingContext* context){
 		Iterator_moveTo(context->iterator, offset);
 		assert( context->iterator->offset == offset );
 	}
-	return FAILURE;
+	return MATCH_STATS(FAILURE);
 }
 
 // ----------------------------------------------------------------------------
@@ -863,7 +866,7 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 		// match.
 		result->length = last->offset - result->offset + last->length;
 	}
-	return result;
+	return MATCH_STATS(result);
 }
 
 // ----------------------------------------------------------------------------
@@ -884,7 +887,7 @@ Match*  Procedure_recognize(ParsingElement* this, ParsingContext* context) {
 	if (this->config != NULL) {
 		((ProcedureCallback)(this->config))(this, context);
 	}
-	return Match_Success(0, this, context);
+	return MATCH_STATS(Match_Success(0, this, context));
 }
 
 // ----------------------------------------------------------------------------
@@ -904,14 +907,14 @@ ParsingElement* Condition_new(ConditionCallback c) {
 Match*  Condition_recognize(ParsingElement* this, ParsingContext* context) {
 	if (this->config != NULL) {
 		Match* result = ((ConditionCallback)this->config)(this, context);
-		LOG_IF(context->grammar->isVerbose &&  Match_isSuccess(result),  "[✓] Condition %s matched at %zd", this->name, context->iterator->offset)
+		LOG_IF(context->grammar->isVerbose &&  Match_isSuccess(result), "[✓] Condition %s matched at %zd", this->name, context->iterator->offset)
 		LOG_IF(context->grammar->isVerbose && !Match_isSuccess(result), "[1] Condition %s failed at %zd",  this->name, context->iterator->offset)
-		return  result;
+		return  MATCH_STATS(result);
 	} else {
 		LOG_IF(context->grammar->isVerbose, "[✓] Condition %s matched by default at %zd", this->name, context->iterator->offset)
 		Match* result = Match_Success(0, this, context);
 		assert(Match_isSuccess(result));
-		return  result;
+		return  MATCH_STATS(result);
 	}
 }
 
@@ -975,6 +978,7 @@ ParsingContext* ParsingContext_new( Grammar* g, Iterator* iterator ) {
 	this->grammar  = g;
 	this->iterator = iterator;
 	this->stats    = ParsingStats_new();
+	ParsingStats_setSymbolsCount(this->stats, g->axiomCount + g->skipCount);
 	this->offsets  = NULL;
 	this->current  = NULL;
 	return this;
@@ -1014,8 +1018,21 @@ void ParsingStats_free(ParsingStats* this) {
 void ParsingStats_setSymbolsCount(ParsingStats* this, size_t t) {
 	__DEALLOC(this->successBySymbol);
 	__DEALLOC(this->failureBySymbol);
-	this->successBySymbol = calloc(sizeof(size_t), t + 1);
-	this->failureBySymbol = calloc(sizeof(size_t), t + 1);
+	this->successBySymbol = calloc(sizeof(size_t), t);
+	this->failureBySymbol = calloc(sizeof(size_t), t);
+	this->symbolsCount    = t;
+}
+
+Match* ParsingStats_registerMatch(ParsingStats* this, Element* e, Match* m) {
+	// We can convert ParsingElements to Reference and vice-versa as they
+	// have the same start sequence (cart type, int id).
+	Reference* r = (Reference*)e;
+	if (Match_isSuccess(m)) {
+		this->successBySymbol[r->id] += 1;
+	} else {
+		this->failureBySymbol[r->id] += 1;
+	}
+	return m;
 }
 
 // ----------------------------------------------------------------------------
@@ -1060,7 +1077,7 @@ void ParsingResult_free(ParsingResult* this) {
 //
 // ----------------------------------------------------------------------------
 
-int Grammar__resetElementIDs(Element* e, int step) {
+int Grammar__resetElementIDs(Element* e, int step, void* nothing) {
 	if (Reference_Is(e)) {
 		Reference* r = (Reference*)e;
 		if (r->id != ID_BINDING) {
@@ -1080,7 +1097,7 @@ int Grammar__resetElementIDs(Element* e, int step) {
 	}
 }
 
-int Grammar__assignElementIDs(Element* e, int step) {
+int Grammar__assignElementIDs(Element* e, int step, void* nothing) {
 	if (Reference_Is(e)) {
 		Reference* r = (Reference*)e;
 		if (r->id == -1) {
@@ -1099,6 +1116,18 @@ int Grammar__assignElementIDs(Element* e, int step) {
 		} else {
 			return -1;
 		}
+	}
+}
+
+int Grammar__registerElement(Element* e, int step, void* grammar) {
+	Reference* r  = (Reference*)e;
+	Grammar*   g  = (Grammar*)grammar;
+	Element*   ge = g->elements[r->id];
+	if (ge == NULL) {
+		g->elements[r->id] = e;
+		return step;
+	} else {
+		return -1;
 	}
 }
 
@@ -1107,14 +1136,21 @@ void Grammar_prepare ( Grammar* this ) {
 		this->skip->id = 0;
 	}
 	if (this->axiom!=NULL) {
-		Element_walk(this->axiom, Grammar__resetElementIDs);
+		Element_walk(this->axiom, Grammar__resetElementIDs, NULL);
 		if (this->skip != NULL) {
-			Element_walk(this->skip, Grammar__resetElementIDs);
+			Element_walk(this->skip, Grammar__resetElementIDs, NULL);
 		}
-		int count = Element_walk(this->axiom, Grammar__assignElementIDs);
+		int count = Element_walk(this->axiom, Grammar__assignElementIDs, NULL);
 		this->axiomCount = count;
 		if (this->skip != NULL) {
-			this->skipCount = Element__walk(this->skip, Grammar__assignElementIDs, count) - count;
+			this->skipCount = Element__walk(this->skip, Grammar__assignElementIDs, count, NULL) - count;
+		}
+		// Now we register the elements
+		__DEALLOC(this->elements);
+		this->elements = calloc( sizeof(Element*), this->skipCount + this->axiomCount);
+		count = Element_walk(this->axiom, Grammar__registerElement, this);
+		if (this->skip != NULL) {
+			Element__walk(this->skip, Grammar__registerElement, count, this);
 		}
 	}
 }
@@ -1123,7 +1159,10 @@ ParsingResult* Grammar_parseFromIterator( Grammar* this, Iterator* iterator ) {
 	assert(this->axiom != NULL);
 	// ParsingOffset*  offset  = ParsingOffset_new(iterator->offset);
 	ParsingContext* context = ParsingContext_new(this, iterator);
+	clock_t t1  = clock();
 	Match* match = this->axiom->recognize(this->axiom, context);
+	context->stats->parseTime = ((double)clock() - (double)t1) / CLOCKS_PER_SEC;
+	context->stats->bytesRead = iterator->offset;
 	return ParsingResult_new(match, context);
 }
 
