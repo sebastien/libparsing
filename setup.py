@@ -17,7 +17,7 @@ grep = lambda f,e:(l for l in file(f).readlines() if l.startswith(e)).next()
 libparsing = Extension("libparsing",
 	define_macros       = [("PYTHON", "1")],
 	include_dirs        = ["/usr/local/include", "src"],
-	extra_compile_args =  ["-std=c11"],
+	extra_compile_args =  ["-std=c11 -DWITH_PCRE"],
 	libraries           = ["pcre"],
 	library_dirs        = ["/usr/local/lib"],
 	sources             = ["src/parsing.c"]
