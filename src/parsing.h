@@ -5,7 +5,7 @@
 // License           : BSD License
 // ----------------------------------------------------------------------------
 // Creation date     : 12-Dec-2014
-// Last modification : 30-Dec-2014
+// Last modification : 31-Dec-2014
 // ----------------------------------------------------------------------------
 
 #include <stdlib.h>
@@ -23,14 +23,14 @@
 
 #ifndef __PARSING_H__
 #define __PARSING_H__
-#define __PARSING_VERSION__ "0.4.3"
+#define __PARSING_VERSION__ "0.5.0"
 
 /**
  * #  libparsing
  * ## C & Python Parsing Elements Grammar Library
  *
  * ```
- * Version :  0.3.6
+ * Version :  0.5.0
  * URL     :  http://github.com/sebastien/parsing
  * README  :  https://cdn.rawgit.com/sebastien/libparsing/master/README.html
  * ```

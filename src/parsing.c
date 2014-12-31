@@ -5,7 +5,7 @@
 // License           : BSD License
 // ----------------------------------------------------------------------------
 // Creation date     : 12-Dec-2014
-// Last modification : 30-Dec-2014
+// Last modification : 31-Dec-2014
 // ----------------------------------------------------------------------------
 
 #include "parsing.h"
@@ -690,7 +690,10 @@ Match* Token_recognize(ParsingElement* this, ParsingContext* context) {
 		line,                              // Line
 		context->iterator->available,      // Available data
 		0,                                 // Offset
-		PCRE_ANCHORED,                     // OPTIONS -- we do not skip position
+		  PCRE_ANCHORED                    // OPTIONS -- we do not skip position
+		| PCRE_NO_UTF8_CHECK               // These following one are necessary
+		| PCRE_NO_UTF16_CHECK              // for good performance, or the whole
+		| PCRE_NO_UTF32_CHECK,             // string will be checked at each exec.
 		vector,                            // Vector of matching offsets
 		vector_length);                    // Number of elements in the vector
 	if (r <= 0) {
@@ -721,9 +724,10 @@ Match* Token_recognize(ParsingElement* this, ParsingContext* context) {
 
 		// We create the token match
 		__ALLOC(TokenMatch, data);
+
 		data->count    = r;
 		data->groups   = (const char**)malloc(sizeof(const char*) * r);
-		// NOTE: We do  this here, but it's probably better to do it later
+		// NOTE: We do this here, but it's probably better to do it later
 		// once the token is recognized, although this poses the problem
 		// of preserving the input.
 		for (int j=0 ; j<r ; j++) {

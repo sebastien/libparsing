@@ -1,3 +1,4 @@
+# NOTE: To do profiling, use operf & opreport
 PROJECT  = parsing
 VERSION  = $(shell grep VERSION src/parsing.h | cut -d'"' -f2)
 MAJOR    = $(shell echo $(VERSION) | cut -d. -f1)
@@ -9,9 +10,10 @@ PRODUCTS = lib$(PROJECT) lib$(PROJECT).so.$(VERSION) python/libparsing/libparsin
 TEST_PRODUCTS = $(TESTS:tests/%.c=%)
 CC       = colorgcc
 LIBS    := libpcre
-CFLAGS  += -Isrc -std=c11 -g -O3 -Wall -fPIC -DWITH_PCRE
-# -DDEBUG_ENABLED
-LDFLAGS := $(shell pkg-config --cflags --libs $(LIBS))
+CFLAGS  += -Isrc -std=c11 -O3 -Wall -fPIC -DWITH_PCRE
+# -g -pg -DDEBUG_ENABLED
+LDFLAGS :=  $(shell pkg-config --cflags --libs $(LIBS))
+
 
 # =============================================================================
 # MAIN RULES

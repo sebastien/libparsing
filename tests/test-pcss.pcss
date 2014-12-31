@@ -1,251 +1,5649 @@
-// Updates: 2014-01-21
+// 2014-12-29: This test creates a deep recursion, hinting at a problem
+// in the grammar.
+// This is now fixed, but parses quite slowly.
+div:
+	.by-2 > * :
+		float: left
+		width: 50%
 
-PAD            = 1.25em
-COLOR_TXT      = #202020
-COLOR_PAGE_BG  = #F0F0F0
-BG_LIGHT       = #F0F0F0
-COLOR_BD       = #E0E0E0
-CONTRAST_COLOR = #A0A0A0
-BORDER_COLOR   = #202020
+	.by-3 > * :
+		float: left
+		width: 33.331%
 
-html:
-	background: $COLOR_PAGE_BG
-	padding: 0em
-	margin: 0em
+	.by-4 > * :
+		float: left
+		width: 25%
 
-.use-texto .texto-index, .texto-index:
-	position: fixed
-	top: 0em
-	right: 0em
-	padding: $PAD
-	background: #FFFFFF
-	box-shadow: 1px 1px 2px #E0E0E0
+	.by-5 > * :
+		float: left
+		width: 20%
 
-.use-texto:
-	color:      $COLOR_TXT
-	font-size:  13px
-	line-height: 1.25em
-	font-family: Helvetica, Arial, sans-serif
-	.texto-index:
-		font-size: 80%
-		ul, ul li:
-			margin: 0em
-			padding: 0em
-			list-style-type: none
-		ul:before:
-			content: Index
-			font-weight: bold
-			display: block
-			margin-bottom: 0.5em
-			padding-bottom: 0.5em
-			border-bottom: 1px solid $COLOR_BD
-		a, a:hover:
-			text-decoration: none
-			color: $COLOR_TXT
-			&:hover:
-				text-decoration: underline
-	.document, &.document:
-		background: #FFFFFF
-		padding: 6em
-		margin:     auto
-		max-width:  50em
-		box-shadow: 1px 1px 2px #E0E0E0
-		header:
-			border-bottom: 1px solid #F0F0F0
-			margin-bottom:  $PAD * 2
-			padding-bottom: $PAD * 1
-		> .title:
-			border-bottom: 1px solid black
-			padding-bottom: 1em
-			h1:
-				font-size: 200%
-				font-weight: bold
-				margin: 0em
-			h2:
-				margin: 0em
-				font-size:   200%
-				font-weight: bold
+	.by-6 > * :
+		float: left
+		width: 16.667%
 
-	span.hi:
-		background-color: yellow
-		padding-left: 0.25em
-		padding-right: 0.25em
-	.term:
-		background-color: #F0F0F0
-		padding-left: 0.25em
-		font-weight: bold
-		padding-right: 0.25em
-	.highlight:
-		background-color: #FFFF00
-	.header:
-		margin-top: 3em
-		margin-bottom: 2em
-		&, *:
-			font-family: Helvetica, Arial, sans-serif
-		.number:
-			display: none
+	.by-7 > * :
+		float: left
+		width: 14.285%
 
-	sub:
-		font-size: 75%
-		vertical-align: bottom
-	pre:
-		margin-top: 1em
-		margin-bottom: 1em
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
 
-	h1, h2, h3, h4, h5:
-		margin-top:    1em
-		margin-bottom: 0.5em
-		font-weight:   bold
-		a:
-			color: $COLOR_TXT
-			text-decoration: none
-	h1:
-		font-size: 180%
-		line-height: 1.25em
-	h2:
-		font-size: 140%
-		line-height: 1.25em
-	h3:
-		font-size: 125%
-		line-height: 1.25em
-	h4:
-		font-size: 114%
-		line-height: 1.25em
-	h5:
-		font-size: 110%
-		line-height: 1.25em
-	p:
-		margin-top: 0.5em
-		margin-bottom: 0.5em
+	.by-3 > * :
+		float: left
+		width: 33.331%
 
-	ul, ol, dl:
-		margin-top:    0.5em
-		margin-bottom: 0.5em
-		margin-left: 1em
-		padding-left: 1em
-		dt:
-			font-weight: bold
-		dd:
-			margin-bottom: 1.25em
-			margin-top: 1.25em
-	dl:
-		margin-left: 0em
-		padding-left: 0em
+	.by-4 > * :
+		float: left
+		width: 25%
 
-	ul li:
-		list-style-type: disc
+	.by-5 > * :
+		float: left
+		width: 20%
 
-	ol li:
-		list-style-type: decimal
+	.by-6 > * :
+		float: left
+		width: 16.667%
 
-	pre:
-		background: #F0F0F0
-		padding: 1em
-		font-size: 90%
-		overflow: auto
-	code:
-		background: #F0F0F0
-		padding-left: 0.5em
-		padding-right: 0.5em
-		padding-top:    0.05/0.8em
-		padding-bottom: 0.05/0.8em
-		font-size: 90%
+	.by-7 > * :
+		float: left
+		width: 14.285%
 
-	table:
-		width: 100%
-		border-collapse: collapse
-		tr td, tr th:
-			padding: 0.25em
-		thead:
-			th:
-				font-weight: bold
-				border-bottom: 2px solid #E0E0E0
-		tr:
-			td:
-				border: 1px solid #F0F0F0
-			&:hover td:
-				background-color: #F0F0F0
-	.note:
-		border: 1px solid #E0E0E0
-		background-color: #F0F0F0
-		padding: 1.25em
-	.abstract:
-		font-size: 120%
-		line-height: 1.5em
-		margin-top: 1.25em
-		margin-bottom: 1.25em
-		font-style: italic
-	.script:
-		margin-top: 1.25em
-		margin-bottom: 1.25em
-	.example:
-		margin-bottom: 1.25em * 3
-		.controls:
-			background-color: #F0F0F0
-			padding: 0.5em
-		.graph:
-			border: 1px solid #F0F0F0
-			position: relative
-		.instructions:
-			font-style: italic
-			max-width: none
-		.frame:
-			position: absolute
-			background-color: #F0F0F0
-			padding: 0.5em
-			padding-right: 0.75em
-			padding-left: 0.75em
-			text-align: right
-			font-size: 80%
-	table.meta, .content table:
-		margin-top:    1.5em
-		margin-bottom: 1.5em
-		padding:       1.5em
-		border-top:     2px solid black
-		border-bottom:  2px solid black
-		border-collapse: collapse
-		width: 100%
-		caption:
-			font-weight: bold
-			font-size: 120%
-			padding-bottom: 10px
-			border-bottom: 2px solid black
-		tr:
-			border-top:    1px solid $BORDER_COLOR
-			border-bottom: 1px solid $BORDER_COLOR
-			th, td:
-				padding-top: 0.5em
-				padding-bottom: 0.5em
-				pre:
-					padding: 0.25em
-			th:
-				font-weight: bold
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
 
-	table.meta:
-		border-collapse: collapse
-		border: 0px solid $BORDER_COLOR
-		opacity: 0.5
-		tr:
-			border-top:    0px solid $BORDER_COLOR
-			border-bottom: 0px solid $BORDER_COLOR
-			td:
-				font-size: 90%
-				padding:   0em
-			&:last-child:
-				th, td:
-					padding-bottom: 1.25em
-		.name:
-			font-weight: bold
-			padding-right: 1.5em
+	.by-3 > * :
+		float: left
+		width: 33.331%
 
-	.annNote:
-		.title:
-			display: inline
-			font-weight: bold
-			text-transform: capitalize
-			&:after:
-				content: ":"
-		.content:
-			display: inline
-			font-style: italic
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+	.by-2 > * :
+		float: left
+		width: 50%
+
+	.by-3 > * :
+		float: left
+		width: 33.331%
+
+	.by-4 > * :
+		float: left
+		width: 25%
+
+	.by-5 > * :
+		float: left
+		width: 20%
+
+	.by-6 > * :
+		float: left
+		width: 16.667%
+
+	.by-7 > * :
+		float: left
+		width: 14.285%
+
+	.by-8 > * :
+		float: left
+		width: 12.5%
+
 // EOF

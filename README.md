@@ -3,7 +3,7 @@
 ## C & Python Parsing Elements Grammar Library
 
 ```
-Version :  0.3.6
+Version :  0.5.0
 URL     :  http://github.com/sebastien/parsing
 README  :  https://cdn.rawgit.com/sebastien/libparsing/master/README.html
 ```
