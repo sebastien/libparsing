@@ -695,11 +695,17 @@ class Grammar(CObject):
 		self.symbols[name] = r
 		return r
 
+	def aword( self, word):
+		return Word(word)
+
 	def token( self, name, token):
 		r = Token(token)
 		r.setName(name)
 		self.symbols[name] = r
 		return r
+
+	def atoken( self, token):
+		return Token(token)
 
 	def procedure( self, name, callback):
 		r = Procedure(callback)

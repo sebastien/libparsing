@@ -1,0 +1,15 @@
+== Libparsing
+== Todo
+
+[ ] Proper *_free implementation and binding in the Python lib
+[ ] DEBUG_IF should be LOG_IF
+[ ] verbose mode in the grammar
+[ ] Stats: bytes processed, times taken, per-symbol tries, total tries, throughput
+[ ] Parsing: Memoization with option to disable it
+[ ] Context: Optional context to store variables
+[ ] Grammar: Dynamic symbols update
+
+[ ] Prealloc: a lot of time in spent in Mallocs. Doing flyweight Match would
+    probably speed up 5-10%
+[ ] Match_isSuccess: We could scrape another 1% by inline it or simplifying it.
+[ ] ParsingStats_registerMatch  takes 3.7%, we should put it as an option
