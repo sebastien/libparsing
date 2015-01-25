@@ -76,10 +76,10 @@ if os.path.exists(H_PATH):
 		("Condition*",           O),
 		("Grammar*",             O),
 	)
-	with file(FFI_PATH, "w") as f:
+	with open(FFI_PATH, "w") as f:
 		f.write(cdef)
 else:
-	with file(FFI_PATH, "r") as f:
+	with open(FFI_PATH, "r") as f:
 		cdef = f.read()
 
 ffi = FFI()
@@ -661,16 +661,16 @@ class Grammar(CObject):
 		g.isVerbose = 1 if verbose else 0
 		return g
 
-	# def setVerbose( self, verbose ):
-	# 	# FIXME: That cast should not be necessary
-	# 	e = ffi.cast("Grammar*", self._cobject)
-	# 	e.verbose = 1 if verbose else 0
-	# 	return self
+	def setVerbose( self, verbose=True ):
+		# FIXME: That cast should not be necessary
+		e = ffi.cast("Grammar*", self._cobject)
+		e.isVerbose = 1 if verbose else 0
+		return self
 
-	# def isVerbose( self, verbose ):
-	# 	# FIXME: That cast should not be necessary
-	# 	e = ffi.cast("Grammar*", self._cobject)
-	# 	return e.verbose == 1
+	def isVerbose( self, verbose ):
+		# FIXME: That cast should not be necessary
+		e = ffi.cast("Grammar*", self._cobject)
+		return e.isVerbose == 1
 
 	def symbol( self, id ):
 		if type(id) is int:
