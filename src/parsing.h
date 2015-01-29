@@ -5,7 +5,7 @@
 // License           : BSD License
 // ----------------------------------------------------------------------------
 // Creation date     : 12-Dec-2014
-// Last modification : 31-Dec-2014
+// Last modification : 29-Jan-2015
 // ----------------------------------------------------------------------------
 
 #include <stdlib.h>
@@ -23,7 +23,7 @@
 
 #ifndef __PARSING_H__
 #define __PARSING_H__
-#define __PARSING_VERSION__ "0.5.0"
+#define __PARSING_VERSION__ "0.5.1"
 
 /**
  * #  libparsing
