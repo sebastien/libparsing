@@ -300,6 +300,9 @@ ParsingResult* Grammar_parseFromIterator( Grammar* this, Iterator* iterator );
 // @method
 ParsingResult* Grammar_parseFromPath( Grammar* this, const char* path );
 
+// @method
+ParsingResult* Grammar_parseFromString( Grammar* this, const char* text );
+
 /**
  * Elements
  * --------

@@ -218,3 +218,5 @@ void Grammar_prepare ( Grammar* this );
 ParsingResult* Grammar_parseFromIterator( Grammar* this, Iterator* iterator );
 
 ParsingResult* Grammar_parseFromPath( Grammar* this, const char* path );
+
+ParsingResult* Grammar_parseFromString( Grammar* this, const char* text );

@@ -394,6 +394,9 @@ class ParsingElement(CObject):
 			lib.ParsingElement_add(self._cobject, lib.Reference_Ensure(c._cobject))
 		return self
 
+	def append( self, *children ):
+		return self.add(*children)
+
 	def name( self ):
 		return ffi.string(self._cobject.name)
 

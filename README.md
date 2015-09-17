@@ -384,6 +384,14 @@ ParsingResult* Grammar_parseFromPath( Grammar* this, const char* path );
 ```
 
 
+#### <a name="Grammar_parseFromString_method"><span class="classifier">method</span> `Grammar_parseFromString`</a>
+
+
+```c
+ParsingResult* Grammar_parseFromString( Grammar* this, const char* text );
+```
+
+
 Elements
 --------
 
