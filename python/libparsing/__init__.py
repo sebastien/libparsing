@@ -819,7 +819,9 @@ class AbstractProcessor:
 		for k in dir(self):
 			if not k.startswith("on"): continue
 			name = k[2:]
-			# assert name in self.symbolByName, "Handler does not match any symbol: {0}".format(k)
+			if not name:
+				continue
+			assert name in self.symbolByName, "Handler does not match any symbol: {0}, symbols are {1}".format(k, ", ".join(self.symbolByName.keys()))
 			symbol = self.symbolByName[name]
 			self.handlerByID[symbol.id()] = getattr(self, k)
 
@@ -842,10 +844,13 @@ class AbstractProcessor:
 				n = e.name()
 				if n and n in varnames:
 					kwargs[n] = self.process(m)
-			if match.isFromReference():
+			try:
 				return handler(match, **kwargs)
-			else:
-				return handler(match, **kwargs)
+			except TypeError as e:
+				args = ["match"] + list(kwargs.keys())
+				raise Exception(str(e) + " -- arguments: {0}".format(",".join(args)))
+			except Exception as e:
+				raise e
 		else:
 			# If we don't have a handler, we recurse
 			return self.defaultProcess(match)

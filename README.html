@@ -106,6 +106,7 @@ make install               # You can set PREFIX</code></pre>
     size_t         lines;     <span class="co">// Counter for lines that have been encountered</span>
     size_t         length;    <span class="co">// Buffer length (in bytes), might be bigger than the data acquired from the input</span>
     size_t         available; <span class="co">// Available data in buffer (in bytes), always `&lt;= length`</span>
+    bool           freeBuffer;
     <span class="dt">void</span>*          input;     <span class="co">// Pointer to the input source</span>
     bool          (*move) (<span class="kw">struct</span> Iterator*, <span class="dt">int</span> n); <span class="co">// Plug-in function to move to the previous/next positions</span>
 } Iterator;</code></pre>

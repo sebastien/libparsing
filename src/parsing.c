@@ -5,7 +5,7 @@
 // License           : BSD License
 // ----------------------------------------------------------------------------
 // Creation date     : 12-Dec-2014
-// Last modification : 31-Dec-2014
+// Last modification : 21-Oct-2015
 // ----------------------------------------------------------------------------
 
 #include "parsing.h"
@@ -35,6 +35,7 @@ Match* FAILURE = &FAILURE_S;
 
 Iterator* Iterator_Open(const char* path) {
 	NEW(Iterator,result);
+	result->freeBuffer = TRUE;
 	if (Iterator_open(result, path)) {
 		return result;
 	} else {
@@ -67,6 +68,7 @@ Iterator* Iterator_new( void ) {
 	this->length        = 0;
 	this->input         = NULL;
 	this->move          = NULL;
+	this->freeBuffer    = FALSE;
 	return this;
 }
 
@@ -101,7 +103,7 @@ bool Iterator_open( Iterator* this, const char *path ) {
 
 bool Iterator_hasMore( Iterator* this ) {
 	// NOTE: This is STATUS_ENDED;
-	return this->status != 'E';
+	return this->status != STATUS_ENDED;
 }
 
 size_t Iterator_remaining( Iterator* this ) {
@@ -114,7 +116,9 @@ bool Iterator_moveTo ( Iterator* this, size_t offset ) {
 
 void Iterator_free( Iterator* this ) {
 	// FIXME: Should close input file
-	__DEALLOC(this->buffer);
+	if (this->freeBuffer) {
+		__DEALLOC(this->buffer);
+	}
 	__DEALLOC(this);
 
 }
@@ -127,31 +131,45 @@ void Iterator_free( Iterator* this ) {
 
 bool String_move ( Iterator* this, int n ) {
 	if ( n == 0) {
+		// --- STAYING IN PLACE -----------------------------------------------
 		// We're not moving position
 		return TRUE;
 	} else if ( n >= 0 ) {
+		// --- MOVING FORWARD -------------------------------------------------
 		// We're moving forward, so we want to know if there is at one more element
 		// in the file input.
 		size_t left = this->available - this->offset;
+		// `c` is the number of elements we're actually agoing to move, which
+		// is either `n` or the number of elements left.
 		size_t c    = n < left ? n : left;
+		// This iterates throught the characters and counts line separators.
 		while (c > 0) {
 			this->current++;
 			this->offset++;
 			if (*(this->current) == this->separator) {this->lines++;}
 			c--;
 		}
+		// We then store the amount of available
 		this->available = this->length - this->offset;
-		if (n != c) {
+		if (this->available == 0) {
+			// If we have no more available elements, then the status of
+			// the stream is STATUS_ENDED
 			this->status = STATUS_ENDED;
 			return FALSE;
 		} else {
+			// Otherwise, we can go on.
 			return TRUE;
 		}
 	} else {
-		// We make sure that `n` is not bigger than the length of the available buffer
-		n = this->available + n < 0 ? 0 - this->available : n;
-		this->current = (((char*)this->current) + n);
-		this->offset += n;
+		// --- BACKTRACKING ---------------------------------------------------
+		// We make sure that `n` is not smaller than the length of the available buffer
+		// ie. n = max(n,0 - this->available);
+		n = (this->available + n) < 0 ? 0 - this->available : n;
+		// FIXME: This is a little bit brittle, we should rather use a macro
+		// in the iterator itself.
+		this->current    = (((ITERATION_UNIT*)this->current) + n);
+		this->offset    += n;
+		this->available -= n;
 		if (n!=0) {
 			this->status  = STATUS_PROCESSING;
 		}
@@ -285,7 +303,7 @@ Grammar* Grammar_new(void) {
 	this->axiomCount = 0;
 	this->skipCount  = 0;
 	this->elements   = NULL;
-	this->isVerbose  = FALSE;
+	this->isVerbose  = TRUE;
 	return this;
 }
 
@@ -534,12 +552,13 @@ Match* Reference_recognize(Reference* this, ParsingContext* context) {
 	Match* match;
 	int    count    = 0;
 	int    offset   = context->iterator->offset;
+	// DEBUG("Reference_recognize: %s offset %d", this->element->name, offset);
 	while (Iterator_hasMore(context->iterator)) {
 		ASSERT(this->element->recognize, "Reference_recognize: Element %s has no recognize callback", this->element->name);
 		// We ask the element to recognize the current iterator's position
 		match = this->element->recognize(this->element, context);
 		if (Match_isSuccess(match)) {
-			// DEBUG("Reference_recognize: Matched %s at %zd", this->element->name, context->iterator->offset);
+			// DEBUG("Reference_recognize: Matched %s at %zd-%zd", this->element->name, context->iterator->offset, context->iterator->offset + match->length);
 			if (count == 0) {
 				// If it's the first match and we're in a ONE reference
 				// we force has_more to FALSE and exit the loop.
@@ -555,9 +574,11 @@ Match* Reference_recognize(Reference* this, ParsingContext* context) {
 			}
 			count++;
 		} else {
+			// DEBUG("Reference_recognize: Failed %s at %zd", this->element->name, context->iterator->offset);
 			break;
 		}
 	}
+	// DEBUG("Reference_recognize: Count %s at %d", this->element->name, count);
 	// Depending on the cardinality, we might return FAILURE, or not
 	switch (this->cardinality) {
 		case CARDINALITY_ONE:
@@ -618,7 +639,7 @@ Match* Word_recognize(ParsingElement* this, ParsingContext* context) {
 		// NOTE: You can see here that the word actually consumes input
 		// and moves the iterator.
 		context->iterator->move(context->iterator, config->length);
-		LOG_IF(context->grammar->isVerbose, "[✓] %s:%s matched at %zd", this->name, ((WordConfig*)this->config)->word, context->iterator->offset);
+		LOG_IF(context->grammar->isVerbose, "[✓] %s:%s matched %zd-%zd", this->name, ((WordConfig*)this->config)->word, context->iterator->offset - config->length, context->iterator->offset);
 		return MATCH_STATS(Match_Success(config->length, this, context));
 	} else {
 		LOG_IF(context->grammar->isVerbose, "    %s:%s failed at %zd", this->name, ((WordConfig*)this->config)->word, context->iterator->offset);
@@ -720,7 +741,7 @@ Match* Token_recognize(ParsingElement* this, ParsingContext* context) {
 		}
 		// FIXME: Make sure it is the length and not the end offset
 		result           = Match_Success(vector[1], this, context);
-		LOG_IF(context->grammar->isVerbose, "[✓] %s:%s matched at %zd", this->name, config->expr, context->iterator->offset);
+		LOG_IF(context->grammar->isVerbose, "[✓] %s:%s matched %zd-%zd", this->name, config->expr, context->iterator->offset, context->iterator->offset + result->length);
 
 		// We create the token match
 		__ALLOC(TokenMatch, data);
@@ -826,19 +847,24 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 	Match*     result = NULL;
 	Match*     last   = NULL;
 	int        step   = 0;
+	const char*   step_name = NULL;
 	size_t     offset = context->iterator->offset;
 	// We don't need to care wether the parsing context has more
 	// data, the Reference_recognize will take care of it.
 	while (child != NULL) {
 		Match* match = Reference_recognize(child, context);
-		// DEBUG("Rule:%s[%d]=%s %s at %zd", this->name, step, child->element->name, (Match_isSuccess(match) ? "matched" : "failed"), context->iterator->offset);
+		// DEBUG("Rule:%s[%d]=%s %s at %zd-%zd", this->name, step, child->element->name, (Match_isSuccess(match) ? "matched" : "failed"), (Match_isSuccess(match) ?  context->iterator->offset - match->length : context->iterator->offset), context->iterator->offset);
 		if (!Match_isSuccess(match)) {
 			// Match_free(match);
 			ParsingElement* skip = context->grammar->skip;
 			Match* skip_match    = skip->recognize(skip, context);
 			int    skip_count    = 0;
+			size_t skip_offset   = context->iterator->offset;
 			while (Match_isSuccess(skip_match)){skip_match = skip->recognize(skip, context); skip_count++; }
-			if (skip_count > 0) {match = Reference_recognize(child, context);}
+			if (skip_count > 0) {
+				DEBUG("Rule:%s[%d] skipped %d (%zd elements)", this->name, step, skip_count, context->iterator->offset - skip_offset);
+				match = Reference_recognize(child, context);
+			}
 			// If we haven't matched even after the skip
 			if (!Match_isSuccess(match)) {
 				// Match_free(match);
@@ -852,11 +878,12 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 		} else {
 			last = last->next = match;
 		}
+		step_name = child->name;
 		child = child->next;
 		step++;
 	}
-	LOG_IF( context->grammar->isVerbose && offset != context->iterator->offset && strcmp(this->name, "_") != 0 && !Match_isSuccess(result), "[!] %s[%d] failed at %zd", this->name, step, context->iterator->offset)
-	LOG_IF( context->grammar->isVerbose && strcmp(this->name, "_") != 0 &&  Match_isSuccess(result), "[✓] %s[%d] matched at %zd", this->name, step, context->iterator->offset)
+	LOG_IF( context->grammar->isVerbose && offset != context->iterator->offset && strcmp(this->name, "_") != 0 && !Match_isSuccess(result), "[!] %s#%d(%s) failed at %zd", this->name, step, step_name == NULL ? "-" : step_name, context->iterator->offset)
+	LOG_IF( context->grammar->isVerbose && strcmp(this->name, "_") != 0 &&  Match_isSuccess(result), "[✓] %s[%d] matched %zd-%zd", this->name, step, context->iterator->offset - result->length, context->iterator->offset)
 	if (!Match_isSuccess(result)) {
 		// Match_free(result);
 		// If we had a failure, then we backtrack the iterator
@@ -911,7 +938,7 @@ ParsingElement* Condition_new(ConditionCallback c) {
 Match*  Condition_recognize(ParsingElement* this, ParsingContext* context) {
 	if (this->config != NULL) {
 		Match* result = ((ConditionCallback)this->config)(this, context);
-		LOG_IF(context->grammar->isVerbose &&  Match_isSuccess(result), "[✓] Condition %s matched at %zd", this->name, context->iterator->offset)
+		LOG_IF(context->grammar->isVerbose &&  Match_isSuccess(result), "[✓] Condition %s matched %zd-%zd", this->name, context->iterator->offset - result->length, context->iterator->offset)
 		LOG_IF(context->grammar->isVerbose && !Match_isSuccess(result), "[1] Condition %s failed at %zd",  this->name, context->iterator->offset)
 		return  MATCH_STATS(result);
 	} else {

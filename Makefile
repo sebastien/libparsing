@@ -10,8 +10,7 @@ PRODUCTS = lib$(PROJECT) lib$(PROJECT).so.$(VERSION) python/libparsing/libparsin
 TEST_PRODUCTS = $(TESTS:tests/%.c=%)
 CC       = gcc
 LIBS    := libpcre
-CFLAGS  += -Isrc -std=c11 -O3 -Wall -fPIC -DWITH_PCRE
-# -g -pg -DDEBUG_ENABLED
+CFLAGS  += -Isrc -std=c11 -O3 -Wall -fPIC -DWITH_PCRE -g -pg -DDEBUG_ENABLED
 LDFLAGS :=  $(shell pkg-config --cflags --libs $(LIBS))
 
 

@@ -178,6 +178,7 @@ typedef struct Iterator {
 	size_t         lines;     // Counter for lines that have been encountered
 	size_t         length;    // Buffer length (in bytes), might be bigger than the data acquired from the input
 	size_t         available; // Available data in buffer (in bytes), always `<= length`
+	bool           freeBuffer;
 	// FIXME: The head should be freed when the offsets have been parsed, no need to keep in memory stuff we won't need.
 	void*          input;     // Pointer to the input source
 	bool          (*move) (struct Iterator*, int n); // Plug-in function to move to the previous/next positions
