@@ -303,7 +303,7 @@ Grammar* Grammar_new(void) {
 	this->axiomCount = 0;
 	this->skipCount  = 0;
 	this->elements   = NULL;
-	this->isVerbose  = TRUE;
+	this->isVerbose  = FALSE;
 	return this;
 }
 

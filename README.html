@@ -39,7 +39,7 @@ README  :  https://cdn.rawgit.com/sebastien/libparsing/master/README.html</code>
 <li><em>contextual rules</em>, ie. a rule that will match or not depending on external variables</li>
 </ul>
 <p>Parsing elements are usually slower than compiled or FSM-based parsers as they trade performance for flexibility. It's probably not a great idea to use <code>libparsing</code> if the parsing has to happen as fast as possible (ie. a protocol implementation), but it is a great use for programming languages, as it opens up the door to dynamic syntax plug-ins and multiple language embedding.</p>
-<p>If you're interested in PEG, you can start reading Brian Ford's original article. Projects such as PEG/LEG by Ian Piumarta <a href="http://piumarta.com/software/peg/">http://piumarta.com/software/peg/</a> ,OMeta by Alessandro Warth <a href="http://www.tinlizzie.org/ometa/">http://www.tinlizzie.org/ometa/</a> or Haskell's Parsec library <a href="https://www.haskell.org/haskellwiki/Parsec">https://www.haskell.org/haskellwiki/Parsec</a> are of particular interest in the field.</p>
+<p>If you're interested in PEG, you can start reading Brian Ford's original article. Projects such as PEG/LEG by Ian Piumarta <a href="http://piumarta.com/software/peg/" class="uri">http://piumarta.com/software/peg/</a> ,OMeta by Alessandro Warth <a href="http://www.tinlizzie.org/ometa/" class="uri">http://www.tinlizzie.org/ometa/</a> or Haskell's Parsec library <a href="https://www.haskell.org/haskellwiki/Parsec" class="uri">https://www.haskell.org/haskellwiki/Parsec</a> are of particular interest in the field.</p>
 <p>Here is a short example of what creating a simple grammar looks like in Python:</p>
 <pre><code>g = Grammar()
 s = g.symbols

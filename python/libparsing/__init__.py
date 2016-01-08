@@ -900,4 +900,7 @@ class TreeWriter(AbstractProcessor):
 			self.indent -= 1
 		return r
 
+def __init__():
+	pass
+
 # EOF - vim: ts=4 sw=4 noet
