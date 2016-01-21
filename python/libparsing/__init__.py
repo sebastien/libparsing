@@ -90,6 +90,7 @@ for p in (LIB_PATH, LIB_ALT_PATH, PACKAGE_PATH):
 	if os.path.exists(p):
 		lib = ffi.dlopen(p)
 		break
+
 assert lib, "libparsing: Cannot find libparsing.so"
 CARDINALITY_OPTIONAL      = '?'
 CARDINALITY_ONE           = '1'
