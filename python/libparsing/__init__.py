@@ -22,9 +22,11 @@ VERSION            = "0.5.1"
 LICENSE            = "http://ffctn.com/doc/licenses/bsd"
 PACKAGE_PATH       = dirname(abspath(__file__))
 LIB_PATHS          = [_ for _ in (os.path.join(_, "libparsing.so") for _ in (
+	PACKAGE_PATH,
 	dirname(PACKAGE_PATH),
 	dirname(dirname(PACKAGE_PATH))
 )) if os.path.exists(_)]
+print (LIB_PATHS)
 assert LIB_PATHS, "libparsing: Cannot find libparsing.so"
 LIBPARSING         = ctypes.cdll.LoadLibrary(LIB_PATHS[0])
 assert LIBPARSING, "libparsing: Cannot load libparsing.so"
@@ -75,12 +77,16 @@ def unwrap( value, self ):
 		raise ValueError
 
 class CObject(object):
+	"""The CObject class wraps C values (pointers) in a Python object
+	that defines methods mirroring (and wrapping) the corresponding
+	C API. This is specifically designed for libparsing's C style."""
 
 	# CObjects can be pooled so that they can be easily recycled,
 	# which is very usefultype for short-lived objects
 	POOL_SIZE   = 0
 	POOL        = None
 	INITIALIZED = False
+	CNAME       = None
 	METHODS     = {}
 
 	@classmethod
@@ -89,9 +95,12 @@ class CObject(object):
 		`METHODS` and invoke the `BindMethod` on each item. This will
 		generate the wrapper methods for the C API."""
 		if not cls.INITIALIZED:
+			if not cls.CNAME:
+				cls.CNAME = cls.__name__.rsplit(".",1)[-1]
 			for k,v in cls.METHODS.items():
 				ret =  v[-1]
 				args = v[0:-1] if len(v) > 1 else []
+				print ("BIND", cls.CNAME + "_" + k, args, ret)
 				cls.BindMethod(k, args, ret )
 			cls.INITIALIZED = True
 		return cls
@@ -103,13 +112,23 @@ class CObject(object):
 		# If there is already a method with that name, we return it
 		if hasattr(cls, name): return getattr(cls, name)
 		# Otherwise we retrieve the symbol
-		symbol = cls.__name__.rsplit(".",1)[-1] + "_" + name
+		symbol = cls.CNAME+ "_" + name
 		func   = LIBPARSING[symbol]
 		if ret == SELF: ret = cls
+		# The method function will automatically wrap the call, including
+		# its arguments and return value based on `args` and ` ret`.
+		if args and args[0] == SELF:
+			is_method = True
+			delta     = 1
+		else:
+			is_method = False
+			delta     = 0
 		def method( self, *pargs ):
-			# NOTE: Not sure why we're not using self here
-			cargs = [unwrap(_) if _ != SELF else self._unwrap() for _ in pargs]
-			res   = func(*cargs)
+			# If SELF is the first argument, the we have a method, and we will
+			# automatically insert the SELF value.
+			assert len(pargs) == (len(args) - delta), "{0}: {1} arguments required, {2} given: {3}".format(symbol, len(args) - delta, len(pargs), pargs)
+			cargs = [unwrap(_, args[i + delta]) if _ != SELF else self._unwrap() for i,_ in enumerate(pargs)]
+			res   = func(self._unwrap(), *cargs) if is_method else func(*cargs)
 			if ret is SELF:
 				self._wrap(res)
 			else:
@@ -134,7 +153,7 @@ class CObject(object):
 		self.__class__.Init()
 		self._cvalue = None
 		if cValue is NOTHING:
-			self.new(cValue)
+			self.new()
 		else:
 			self._wrap(cValue)
 
@@ -152,7 +171,9 @@ class CObject(object):
 		return self
 
 	def _reset( self ):
-		if self._value: self.free()
+		"""Resets this C object. This will invoke `free` on the value, which
+		implies that `free` was previously defined in `METHODS`."""
+		if self._cvalue: self.free()
 		self._cvalue = None
 		return self
 
