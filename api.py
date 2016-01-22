@@ -23,9 +23,8 @@ class C:
 		"int"             : ctypes.c_int,
 		"float"           : ctypes.c_float,
 		"double"          : ctypes.c_double,
-		# NOTE: We have to be very careful here about the size of the size_t
-		"size_t"          : ctypes.c_uint64,
-		"size_t*"         : ctypes.POINTER(ctypes.c_uint64),
+		"size_t"          : ctypes.c_size_t,
+		"size_t*"         : ctypes.POINTER(ctypes.c_size_t),
 	}
 
 	@classmethod
@@ -43,6 +42,13 @@ class C:
 		value = cls.Unwrap(value)
 		if issubclass(value.__class__, type):
 			return value
+		if type is ctypes.c_char:
+			if value is True:
+				return chr(1)
+			elif value is False:
+				return chr(0)
+			else:
+				return chr(value)
 		else:
 			return ctypes.cast(value, type)
 
@@ -528,6 +534,7 @@ g       = Grammar()
 text    = "pouet"
 w       = Word(text)
 g.axiom = w
+g.isVerbose = True
 r       = g.parseFromString(text)
 #assert r
 m       = r.match
