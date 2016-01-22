@@ -11,7 +11,10 @@ C_API   = None
 
 class C:
 	"""An interface/helper to the `ctypes` module. The `C.TYPES` mapping maps
-	C type names to their corresponding `ctypes` type declaration."""
+	C type names to their corresponding `ctypes` type declaration. In addition
+	to smart unwrapping functions, this library also offers functions to
+	parse simple C structure and prototype definitions.
+	"""
 
 	TYPES = {
 		"void"            : None,
@@ -20,12 +23,16 @@ class C:
 		"void*"           : ctypes.c_void_p,
 		"char*"           : ctypes.c_char_p,
 		"const char*"     : ctypes.c_char_p,
+		"const char**"    : ctypes.POINTER(ctypes.c_char_p),
 		"int"             : ctypes.c_int,
 		"float"           : ctypes.c_float,
 		"double"          : ctypes.c_double,
 		"size_t"          : ctypes.c_size_t,
 		"size_t*"         : ctypes.POINTER(ctypes.c_size_t),
 	}
+
+	# NOTE: Unwrap and UnwrapCast is highly specific to this library, and
+	# should probably be moved in the init.
 
 	@classmethod
 	def Unwrap( cls, value ):
@@ -141,6 +148,8 @@ class C:
 # -----------------------------------------------------------------------------
 
 class CLibrary:
+	"""A abstraction of a C library loaded with `ctypes`, in which
+	`CObjectWrapper` subclasses register themselves."""
 
 	WRAPS = []
 	PATHS   = [
@@ -205,6 +214,11 @@ class CLibrary:
 # -----------------------------------------------------------------------------
 
 class CObjectWrapper(object):
+	"""The CObjectWrapper class wrap pointers to `ctypes.Structure` objects
+	(ie. abstractions of underlying C structures) in an object-oriented API. This
+	class seamlessly integrates with the `Library` class to dynamically load
+	and type functions from the underlying C library and manage the
+	conversion of values to and from C types."""
 
 	WRAPPED   = None
 	FUNCTIONS = None
@@ -396,6 +410,84 @@ class TParsingResult(ctypes.Structure):
 	ParsingContext* context;
 	"""
 
+class TTokenMatch(ctypes.Structure):
+
+	STRUCTURE = """
+	int             count;
+	const char**    groups;
+	"""
+
+# -----------------------------------------------------------------------------
+#
+# PARSING ELEMENTS
+#
+# -----------------------------------------------------------------------------
+
+class ParsingElement(CObjectWrapper):
+
+	WRAPPED   = TParsingElement
+	FUNCTIONS = """
+	self* ParsingElement_name( ParsingElement* this, const char* name );
+	"""
+
+
+class Word(ParsingElement):
+
+	FUNCTIONS = """
+	ParsingElement* Word_new(const char* word);
+	void Word_free(ParsingElement* this);
+	"""
+
+class Token(ParsingElement):
+
+	FUNCTIONS = """
+	ParsingElement* Token_new(const char* expr);
+	void Token_free(ParsingElement* this);
+	"""
+
+# -----------------------------------------------------------------------------
+#
+# COMPOSITE PARSING ELEMENTS
+#
+# -----------------------------------------------------------------------------
+
+class CompositeParsingElement(ParsingElement):
+
+	WRAPPED   = TParsingElement
+	FUNCTIONS = """
+	ParsingElement* ParsingElement_add(ParsingElement *this, Reference *child);
+	"""
+
+class Rule(CompositeParsingElement):
+
+	# FIXME: No free method here
+	FUNCTIONS = """
+	ParsingElement* Rule_new(Reference* children[]);
+	"""
+
+# -----------------------------------------------------------------------------
+#
+# PARSING RESULTS
+#
+# -----------------------------------------------------------------------------
+
+class Match(CObjectWrapper):
+
+	WRAPPED   = TMatch
+	FUNCTIONS = """
+	bool Match_isSuccess(Match* this);
+	int Match_getOffset(Match* this);
+	int Match_getLength(Match* this);
+	int Match__walk(Match* this, WalkingCallback callback, int step, void* context );
+	"""
+
+class ParsingResult(CObjectWrapper):
+
+	WRAPPED   = TParsingResult
+	FUNCTIONS = """
+	void ParsingResult_free(ParsingResult* this);
+	"""
+
 # -----------------------------------------------------------------------------
 #
 # GRAMMAR
@@ -414,41 +506,26 @@ class Grammar(CObjectWrapper):
 	ParsingResult* Grammar_parseFromPath( Grammar* this, const char* path );
 	ParsingResult* Grammar_parseFromString( Grammar* this, const char* text );
 	"""
-
 	PROPERTIES = lambda:dict(
 		axiom = Word
 	)
 
-	# def setAxiom( self, value ):
-	# 	g._wrapped.axiom = value._wrapped
+# -----------------------------------------------------------------------------
+#
+# PROCESS
+#
+# -----------------------------------------------------------------------------
 
-	# def getAxiom( self ):
-	# 	return Word.FromWrapped(g._wrapped.axiom)
+class AbstractProcessor( object ):
+	"""The main entry point when using `libparsing` form Python. Subclass
+	the processor and define parsing element handlers using the convention
+	`on<ParsingElement's name`. For instance, if your grammar has a `NAME`
+	symbol defined, then `onNAME` will be invoked with its match element.
 
-class Word(CObjectWrapper):
-
-	WRAPPED   = TParsingElement
-	FUNCTIONS = """
-	ParsingElement* Word_new(const char* word);
-	void Word_free(ParsingElement* this);
-	"""
-
-class ParsingResult(CObjectWrapper):
-
-	WRAPPED   = TParsingResult
-	FUNCTIONS = """
-	void ParsingResult_free(ParsingResult* this);
-	"""
-
-class Match(CObjectWrapper):
-
-	WRAPPED   = TMatch
-	FUNCTIONS = """
-	bool Match_isSuccess(Match* this);
-	int Match_getOffset(Match* this);
-	int Match_getLength(Match* this);
-	int Match__walk(Match* this, WalkingCallback callback, int step, void* context );
-	"""
+	Note that symbol handlers (`onXXX` methods) take the `match` object
+	as first argument as well as the named elements defined in the symbol,
+	if it is a composite symbol (rule, group, etc). The named elements
+	are the ones you declare using `_as`."""
 
 # -----------------------------------------------------------------------------
 #
@@ -477,6 +554,7 @@ C.TYPES.update({
 # through C types
 C.Register(
 	TParsingElement,
+	TTokenMatch,
 	TMatch,
 	#TParsingContext,
 	#TParsingStats,
@@ -498,6 +576,19 @@ C_API = CLibrary(
 	Word,
 )
 
+# We dynamically register shorthand factory methods for parsing elements in
+# the Grammar.
+for _ in [Word]:
+	name = _.__name__.rsplit(".", 1)[-1]
+	name = name.lower()
+	def creator( self, *args, **kwargs ):
+		element = _(*args, **kwargs)
+	def named_creator( self, name, *args, **kwargs ):
+		element = _(*args, **kwargs)
+		element.name = name
+	setattr(Grammar, name,       named_creator)
+	setattr(Grammar, "a" + name, creator)
+
 # -----------------------------------------------------------------------------
 #
 # TEST
@@ -513,12 +604,15 @@ class Test(unittest.TestCase):
 		text    = "pouet"
 		w       = Word(text)
 		g.axiom = w
+		g.isVerbose = False
 		r       = g.parseFromString(text)
 		assert r
 		m       = r.match
 		assert m
 		print m.status, m.offset
 		self.assertEqual(m.status, "M")
+		self.assertEqual(m.offset,  m.getOffset())
+		self.assertEqual(m.length,  m.getLength())
 		self.assertEqual(m.offset,  0)
 		self.assertEqual(m.length,   len(text))
 		self.assertIsNone(m.next)
@@ -549,7 +643,7 @@ print m.length, m.getLength()
 #assert m
 #print m.status, m.offset
 
-#if __name__ == "__main__":
-#	unittest.main()
+# if __name__ == "__main__":
+# 	unittest.main()
 
 # EOF
