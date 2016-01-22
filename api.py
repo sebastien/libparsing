@@ -15,7 +15,7 @@ class C:
 
 	TYPES = {
 		"void"            : None,
-		"bool"            : ctypes.c_byte,
+		"bool"            : ctypes.c_char,
 		"char"            : ctypes.c_char,
 		"void*"           : ctypes.c_void_p,
 		"char*"           : ctypes.c_char_p,
@@ -23,8 +23,9 @@ class C:
 		"int"             : ctypes.c_int,
 		"float"           : ctypes.c_float,
 		"double"          : ctypes.c_double,
-		"size_t"          : ctypes.c_uint,
-		"size_t*"         : ctypes.POINTER(ctypes.c_uint),
+		# NOTE: We have to be very careful here about the size of the size_t
+		"size_t"          : ctypes.c_uint64,
+		"size_t*"         : ctypes.POINTER(ctypes.c_uint64),
 	}
 
 	@classmethod
@@ -91,7 +92,8 @@ class C:
 			assert c_name.startswith("T"), c_name
 			c_name = c_name[1:] + "*"
 			types[c_name] = ctypes.POINTER(_)
-		cls.TYPES.update(types)
+			# It's important to update the type directly here
+			cls.TYPES[c_name] = types[c_name]
 		return types
 
 	@classmethod
@@ -215,11 +217,12 @@ class CObjectWrapper(object):
 		definition."""
 		c = C
 		def getter( self ):
-			print "G:", cls.__name__ + "." + name, type
-			return getattr(self._wrapped.contents, name)
+			value = getattr(self._wrapped.contents, name)
+			# print "g: ", cls.__name__ + "." + name, type, "=", value
+			return self._library.wrap(value)
 		def setter( self, value ):
 			value = c.UnwrapCast(value, type)
-			print "S:", cls.__name__ + "." + name, type, "=", value, "|", c.Unwrap(value)
+			# print "s: ", cls.__name__ + "." + name, type, "<=", value
 			return setattr(self._wrapped.contents, name, value)
 		return property(getter, setter)
 
@@ -239,11 +242,11 @@ class CObjectWrapper(object):
 		def method(self, *args):
 			# We unwrap the arguments, meaning that the arguments are now
 			# pure C types values
-			print "F:", proto[0], args,
+			# print "F: ", proto[0], args
 			args = [c.Unwrap(_) for _ in args]
 			res  = ctypesFunction(*args)
 			res  = self._library.wrap(res)
-			print "|", args, "-->", res
+			# print "F=>", res
 			return res
 		return method
 
@@ -253,12 +256,12 @@ class CObjectWrapper(object):
 		def method(self, *args):
 			# We unwrap the arguments, meaning that the arguments are now
 			# pure C types values
-			print "M:", proto[0], args,
+			# print "M: ", proto[0], args
 			args = [c.Unwrap(self)] + [c.Unwrap(_) for _ in args]
 			assert args[0], "CObjectWrapper: method {0} `this` is None in {1}".format(proto[0], self)
 			res  = ctypesFunction(*args)
 			res  = self._library.wrap(res)
-			print "|", args, "-->", res
+			# print "M=>", res
 			return res
 		return method
 
@@ -299,12 +302,15 @@ class CObjectWrapper(object):
 			self._wrapped = C.Unwrap(self.new(*args))
 			self._created = True
 
-	def __del__( self ):
-		if self._wrapped and self._created:
-			# FIXME: There are some issues with the __DEL__ when other stuff is not available
-			# if hasattr(self, "free") and getattr(self, "free"):
-			# 	self.free(self._wrapped)
-			pass
+	# FIXME: We experience many problems with destructors, ie. segfaults in GC.
+	# Thsi needs to be sorted out.
+	# def __del__( self ):
+	# 	if self._wrapped and self._created:
+	# 		# FIXME: There are some issues with the __DEL__ when other stuff is not available
+	# 		# if hasattr(self, "free") and getattr(self, "free"):
+	# 		# 	self.free(self._wrapped)
+	# 		pass
+	# 	object.__del__(self)
 
 # -----------------------------------------------------------------------------
 #
@@ -428,54 +434,63 @@ class ParsingResult(CObjectWrapper):
 	void ParsingResult_free(ParsingResult* this);
 	"""
 
+class Match(CObjectWrapper):
+
+	WRAPPED   = TMatch
+	FUNCTIONS = """
+	bool Match_isSuccess(Match* this);
+	int Match_getOffset(Match* this);
+	int Match_getLength(Match* this);
+	int Match__walk(Match* this, WalkingCallback callback, int step, void* context );
+	"""
+
 # -----------------------------------------------------------------------------
 #
 # MODULE INITIALIZATION
 #
 # -----------------------------------------------------------------------------
 
-def __init__():
+# We pre-declare the types that are required by the structure declarations.
+# It's OK if they're void* instead of the actual structure definition.
+C.TYPES.update({
+	"Grammar*"        : ctypes.c_void_p,
+	"Iterator*"       : ctypes.c_void_p,
+	"Reference*"      : ctypes.c_void_p,
+	"Element*"        : ctypes.c_void_p,
+	"Element**"       : ctypes.POINTER(ctypes.c_void_p),
+	"ParsingContext*" : ctypes.c_void_p,
+	"ParsingOffset*"  : ctypes.c_void_p,
+	"ParsingStats*"   : ctypes.c_void_p,
+	"ParsingElement*" : ctypes.c_void_p,
+	"ParsingResult*"  : ctypes.c_void_p,
+	"Match*"          : ctypes.c_void_p,
+	"WalkingCallback" : ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p),
+})
 
-	# We pre-declare the types that are required by the structure declarations.
-	# It's OK if they're void* instead of the actual structure definition.
-	C.TYPES.update({
-		"Grammar*"        : ctypes.c_void_p,
-		"Iterator*"       : ctypes.c_void_p,
-		"Reference*"      : ctypes.c_void_p,
-		"Element*"        : ctypes.c_void_p,
-		"Element**"       : ctypes.POINTER(ctypes.c_void_p),
-		"ParsingContext*" : ctypes.c_void_p,
-		"ParsingOffset*"  : ctypes.c_void_p,
-		"ParsingStats*"   : ctypes.c_void_p,
-		"ParsingElement*" : ctypes.c_void_p,
-		"ParsingResult*"  : ctypes.c_void_p,
-		"Match*"          : ctypes.c_void_p,
-	})
+# We register structure definitions that we want to be accessible
+# through C types
+C.Register(
+	TParsingElement,
+	TMatch,
+	#TParsingContext,
+	#TParsingStats,
+	TParsingResult,
+	TGrammar,
+)
 
-	# We register structure definitions that we want to be accessible
-	# through C types
-	C.Register(
-		TParsingElement,
-		#TMatch,
-		#TParsingContext,
-		#TParsingStats,
-		TParsingResult,
-		TGrammar,
-	)
-
-	# Now we load the C API and register the CObjectWrapper, which
-	# will enrich the ctypes library with typing, while ensuring that
-	# the prototypes that we have are working. The C_API will now be
-	# a flat interface to the native C library, but all the registered
-	# CObjectWrapper subclasses will now offer an object-oriented wrapper.
-	global C_API
-	C_API = CLibrary(
-		"libparsing"
-	).register(
-		ParsingResult,
-		Grammar,
-		Word
-	)
+# Now we load the C API and register the CObjectWrapper, which
+# will enrich the ctypes library with typing, while ensuring that
+# the prototypes that we have are working. The C_API will now be
+# a flat interface to the native C library, but all the registered
+# CObjectWrapper subclasses will now offer an object-oriented wrapper.
+C_API = CLibrary(
+	"libparsing"
+).register(
+	Match,
+	ParsingResult,
+	Grammar,
+	Word,
+)
 
 # -----------------------------------------------------------------------------
 #
@@ -483,16 +498,51 @@ def __init__():
 #
 # -----------------------------------------------------------------------------
 
-__init__()
+import unittest
 
-g = Grammar()
-w = Word("pouet")
+class Test(unittest.TestCase):
+
+	def testSimpleGrammar( self ):
+		g       = Grammar()
+		text    = "pouet"
+		w       = Word(text)
+		g.axiom = w
+		r       = g.parseFromString(text)
+		assert r
+		m       = r.match
+		assert m
+		print m.status, m.offset
+		self.assertEqual(m.status, "M")
+		self.assertEqual(m.offset,  0)
+		self.assertEqual(m.length,   len(text))
+		self.assertIsNone(m.next)
+		self.assertIsNone(m.child)
+
+# -----------------------------------------------------------------------------
+#
+# DIRECTIVES
+#
+# -----------------------------------------------------------------------------
+
+g       = Grammar()
+text    = "pouet"
+w       = Word(text)
 g.axiom = w
+r       = g.parseFromString(text)
+#assert r
+m       = r.match
+assert m.offset == m.getOffset()
+assert m.length == m.getLength()
+print m.offset, m.getOffset()
+print m.length, m.getLength()
 
-print "=" * 80
-#print "WRAPPED", g._wrapped.contents.axiom
-r = g.parseFromString("pouet")
-print r.match
-print "=" * 80
+# print m.status
+# print m.offset
+# print m.length
+#assert m
+#print m.status, m.offset
+
+#if __name__ == "__main__":
+#	unittest.main()
 
 # EOF

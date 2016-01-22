@@ -661,6 +661,22 @@ bool Match_isSuccess(Match* this);
 ```
 
 
+#### <a name="Match_getOffset_method"><span class="classifier">method</span> `Match_getOffset`</a>
+
+
+```c
+int Match_getOffset(Match* this);
+```
+
+
+#### <a name="Match_getLength_method"><span class="classifier">method</span> `Match_getLength`</a>
+
+
+```c
+int Match_getLength(Match* this);
+```
+
+
 #### <a name="Match__walk_method"><span class="classifier">method</span> `Match__walk`</a>
 
 
