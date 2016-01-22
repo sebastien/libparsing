@@ -420,6 +420,12 @@ void Match_free(Match* this);
 bool Match_isSuccess(Match* this);
 
 // @method
+int Match_getOffset(Match* this);
+
+// @method
+int Match_getLength(Match* this);
+
+// @method
 int Match__walk(Match* this, WalkingCallback callback, int step, void* context );
 
 // @type ParsingElement

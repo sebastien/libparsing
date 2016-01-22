@@ -303,7 +303,7 @@ Grammar* Grammar_new(void) {
 	this->axiomCount = 0;
 	this->skipCount  = 0;
 	this->elements   = NULL;
-	this->isVerbose  = FALSE;
+	this->isVerbose  = TRUE;
 	return this;
 }
 
@@ -351,6 +351,15 @@ Match* Match_new(void) {
 	this->child     = NULL;
 	this->next      = NULL;
 	return this;
+}
+
+
+int Match_getOffset(Match *this) {
+	return (int)this->offset;
+}
+
+int Match_getLength(Match *this) {
+	return (int)this->length;
 }
 
 void Match_free(Match* this) {
@@ -647,9 +656,10 @@ Match* Word_recognize(ParsingElement* this, ParsingContext* context) {
 	if (strncmp(config->word, context->iterator->current, config->length) == 0) {
 		// NOTE: You can see here that the word actually consumes input
 		// and moves the iterator.
+		Match* success = MATCH_STATS(Match_Success(config->length, this, context));
 		context->iterator->move(context->iterator, config->length);
 		LOG_IF(context->grammar->isVerbose, "[✓] %s:%s matched %zd-%zd", this->name, ((WordConfig*)this->config)->word, context->iterator->offset - config->length, context->iterator->offset);
-		return MATCH_STATS(Match_Success(config->length, this, context));
+		return success;
 	} else {
 		LOG_IF(context->grammar->isVerbose, "    %s:%s failed at %zd", this->name, ((WordConfig*)this->config)->word, context->iterator->offset);
 		return MATCH_STATS(FAILURE);
@@ -1196,9 +1206,7 @@ void Grammar_prepare ( Grammar* this ) {
 }
 
 ParsingResult* Grammar_parseFromIterator( Grammar* this, Iterator* iterator ) {
-	printf("Parse from iterator.1\n");
 	assert(this->axiom != NULL);
-	printf("Parse from iterator.2\n");
 	// ParsingOffset*  offset  = ParsingOffset_new(iterator->offset);
 	ParsingContext* context = ParsingContext_new(this, iterator);
 	assert(this->axiom->recognize != NULL);
