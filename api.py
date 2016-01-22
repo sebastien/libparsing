@@ -46,10 +46,6 @@ class C:
 			return ctypes.cast(value, type)
 
 	@classmethod
-	def Wrap( cls, cValue ):
-		return wrap(cValue)
-
-	@classmethod
 	def ParseStructure( cls, text ):
 		"""Parses a structure definition, ie. the body of a C `struct {}`
 		declaration. This requires all the referenced types to be defined
@@ -138,7 +134,8 @@ class C:
 
 class CLibrary:
 
-	PATHS = [
+	WRAPS = []
+	PATHS   = [
 		".",
 		__file__,
 		os.path.join(__file__, ".."),
@@ -166,18 +163,32 @@ class CLibrary:
 
 	def __init__( self, path ):
 		self.lib = self.Load(path)
+		self._wraps = [] + self.WRAPS
 
 	def register( self, *wrapperClasses ):
 		"""Register the given `CObjectWrapper` in this library, loading the
 		corresponding functions and binding them to the class."""
 		for _ in wrapperClasses:
+			_._library = self
 			assert issubclass(_, CObjectWrapper)
 			# We load the functions from the library
 			functions = C.LoadFunctions(self.lib, _.FUNCTIONS)
 			# We bind the functions declared in the wrapper
 			_.BindFunctions(functions)
 			_.BindFields()
+			if _.WRAPPED:
+				self._wraps.append((
+					ctypes.POINTER(_.WRAPPED),
+					_.Wrap
+				))
 		return self
+
+	def wrap( self, cValue ):
+		"""Passes the given value through this library's `_wraps` filter
+		list, processing the first filter bound to a matching type."""
+		for t,f in self._wraps:
+			if isinstance(cValue, t): return f(cValue)
+		return cValue
 
 # -----------------------------------------------------------------------------
 #
@@ -207,8 +218,9 @@ class CObjectWrapper(object):
 			print "G:", cls.__name__ + "." + name, type
 			return getattr(self._wrapped.contents, name)
 		def setter( self, value ):
+			value = c.UnwrapCast(value, type)
 			print "S:", cls.__name__ + "." + name, type, "=", value, "|", c.Unwrap(value)
-			return setattr(self._wrapped.contents, name, c.UnwrapCast(value, type))
+			return setattr(self._wrapped.contents, name, value)
 		return property(getter, setter)
 
 	@classmethod
@@ -230,7 +242,7 @@ class CObjectWrapper(object):
 			print "F:", proto[0], args,
 			args = [c.Unwrap(_) for _ in args]
 			res  = ctypesFunction(*args)
-			res  = c.Wrap(res)
+			res  = self._library.wrap(res)
 			print "|", args, "-->", res
 			return res
 		return method
@@ -245,7 +257,7 @@ class CObjectWrapper(object):
 			args = [c.Unwrap(self)] + [c.Unwrap(_) for _ in args]
 			assert args[0], "CObjectWrapper: method {0} `this` is None in {1}".format(proto[0], self)
 			res  = ctypesFunction(*args)
-			res  = c.Wrap(res)
+			res  = self._library.wrap(res)
 			print "|", args, "-->", res
 			return res
 		return method
@@ -268,23 +280,31 @@ class CObjectWrapper(object):
 		return (name, method)
 
 	@classmethod
-	def FromWrapped( cls, wrapped ):
-		return cls.__init__( wrappedCObject=wrapped )
+	def Wrap( cls, wrapped ):
+		"""Wraps the given object in this CObjectWrapper. The given
+		object must be a ctypes value, usually a pointer to a struct."""
+		return cls( wrappedCObject=wrapped )
 
 	def __init__( self, *args, **kwargs ):
 		self._wrapped = None
 		if "wrappedCObject" in kwargs:
 			self._wrapped = kwargs["wrappedCObject"]
+			assert self._wrapped
+			assert isinstance(self._wrapped, ctypes.POINTER(self.WRAPPED))
 			self._created = False
 		else:
-			self._wrapped = self.new(*args)
+			# We ensure that the _wrapped value returned by the creator is
+			# unwrapped. In fact, we might want to implement a special case
+			# for new that returns directly an unwrapped value.
+			self._wrapped = C.Unwrap(self.new(*args))
 			self._created = True
 
 	def __del__( self ):
 		if self._wrapped and self._created:
 			# FIXME: There are some issues with the __DEL__ when other stuff is not available
-			if hasattr(self, "free") and getattr(self, "free"):
-				self.free(self._wrapped)
+			# if hasattr(self, "free") and getattr(self, "free"):
+			# 	self.free(self._wrapped)
+			pass
 
 # -----------------------------------------------------------------------------
 #
@@ -396,23 +416,17 @@ class Grammar(CObjectWrapper):
 class Word(CObjectWrapper):
 
 	WRAPPED   = TParsingElement
-
 	FUNCTIONS = """
 	ParsingElement* Word_new(const char* word);
 	void Word_free(ParsingElement* this);
 	"""
 
-# -----------------------------------------------------------------------------
-#
-# WRAPPING
-#
-# -----------------------------------------------------------------------------
+class ParsingResult(CObjectWrapper):
 
-def wrap( cValue ):
-	"""Wraps a C value. We define this as global as it requires knowlege of
-	specific classes in this module and is tailored to the specific datatypes."""
-	return cValue
-
+	WRAPPED   = TParsingResult
+	FUNCTIONS = """
+	void ParsingResult_free(ParsingResult* this);
+	"""
 
 # -----------------------------------------------------------------------------
 #
@@ -445,7 +459,7 @@ def __init__():
 		#TMatch,
 		#TParsingContext,
 		#TParsingStats,
-		#TParsingResult,
+		TParsingResult,
 		TGrammar,
 	)
 
@@ -458,6 +472,7 @@ def __init__():
 	C_API = CLibrary(
 		"libparsing"
 	).register(
+		ParsingResult,
 		Grammar,
 		Word
 	)
@@ -476,7 +491,8 @@ g.axiom = w
 
 print "=" * 80
 #print "WRAPPED", g._wrapped.contents.axiom
-g.parseFromString("pouet")
+r = g.parseFromString("pouet")
+print r.match
 print "=" * 80
 
 # EOF
