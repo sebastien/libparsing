@@ -31,6 +31,15 @@ class C:
 		else:
 			return value
 
+	@classmethod
+	def UnwrapCast( cls, value, type ):
+		value = cls.Unwrap(value)
+		if issubclass(value.__class__, type):
+			return value
+		else:
+			return ctypes.cast(value, type)
+
+
 	# @classmethod
 	# def Wrap( cls cValue)
 
@@ -108,10 +117,10 @@ class C:
 		"""Binds the declared functions in the given library."""
 		res = []
 		for proto in cls.ParsePrototypes(declarations):
-			name, argtypes, rettype = proto
+			name, argtypes, restype = proto
 			func = library[name]
 			func.argtypes = [_[0] for _ in argtypes]
-			func.rettype  = rettype
+			func.restype  = restype
 			res.append((func, proto))
 		return res
 
@@ -127,6 +136,17 @@ class C:
 # instanciated or referenced, but are to be obtained and manipulated through
 # a `Libparsing` instance.
 # }}}
+
+class TGrammar(ctypes.Structure):
+
+	STRUCTURE = """
+	ParsingElement*  axiom;       // The axiom
+	ParsingElement*  skip;        // The skipped element
+	int              axiomCount;  // The count of parsing elemetns in axiom
+	int              skipCount;   // The count of parsing elements in skip
+	Element**        elements;    // The set of all elements in the grammar
+	bool             isVerbose;
+	"""
 
 class TParsingContext(ctypes.Structure):
 
@@ -197,6 +217,7 @@ class Library:
 			functions = C.LoadFunctions(self.lib, _.FUNCTIONS)
 			# We bind the functions declared in the wrapper
 			_.BindFunctions(functions)
+			_.BindFields()
 		return self
 
 # -----------------------------------------------------------------------------
@@ -207,7 +228,29 @@ class Library:
 
 class CObjectWrapper(object):
 
+	WRAPPED   = None
 	FUNCTIONS = None
+
+	@classmethod
+	def BindFields( cls ):
+		"""Binds the fields in this wrapped object."""
+		if cls.WRAPPED:
+			for name, type in cls.WRAPPED._fields_:
+				accessor = cls._CreateAccessor(name, type)
+				setattr(cls, name, accessor)
+
+	@classmethod
+	def _CreateAccessor( cls, name, type ):
+		"""Returns an accessor for the given field from a `ctypes.Structure._fields_`
+		definition."""
+		c = C
+		def getter( self ):
+			print "G:", cls.__name__ + "." + name, type
+			return getattr(self._wrapped.contents, name)
+		def setter( self, value ):
+			print "S:", cls.__name__ + "." + name, type, "=", value, "|", c.Unwrap(value)
+			return setattr(self._wrapped.contents, name, c.UnwrapCast(value, type))
+		return property(getter, setter)
 
 	@classmethod
 	def BindFunctions( cls, functions ):
@@ -225,10 +268,10 @@ class CObjectWrapper(object):
 		def method(self, *args):
 			# We unwrap the arguments, meaning that the arguments are now
 			# pure C types values
-			print "CALLING FUNCTION", proto[0], ctypesFunction, "with", args
+			print "F:", proto[0], args,
 			args = [c.Unwrap(_) for _ in args]
-			print "-->", args
 			res  = ctypesFunction(*args)
+			print "|", args, "-->", res
 			return res
 		return method
 
@@ -238,11 +281,11 @@ class CObjectWrapper(object):
 		def method(self, *args):
 			# We unwrap the arguments, meaning that the arguments are now
 			# pure C types values
-			print "CALLING METHOD", proto[0], ctypesFunction, "with", args
+			print "M:", proto[0], args,
 			args = [c.Unwrap(self)] + [c.Unwrap(_) for _ in args]
-			print "-->", args
 			assert args[0], "CObjectWrapper: method {0} `this` is None in {1}".format(proto[0], self)
 			res  = ctypesFunction(*args)
+			print "|", args, "-->", res
 			return res
 		return method
 
@@ -283,11 +326,13 @@ class CObjectWrapper(object):
 
 # -----------------------------------------------------------------------------
 #
-# WRAPPER
+# GRAMMAR
 #
 # -----------------------------------------------------------------------------
 
 class Grammar(CObjectWrapper):
+
+	WRAPPED   = TGrammar
 
 	FUNCTIONS = """
 	Grammar* Grammar_new(void);
@@ -310,6 +355,8 @@ class Grammar(CObjectWrapper):
 
 class Word(CObjectWrapper):
 
+	WRAPPED   = TParsingElement
+
 	FUNCTIONS = """
 	ParsingElement* Word_new(const char* word);
 	void Word_free(ParsingElement* this);
@@ -328,6 +375,7 @@ def __init__():
 		"Grammar*"        : ctypes.c_void_p,
 		"Iterator*"       : ctypes.c_void_p,
 		"Reference*"      : ctypes.c_void_p,
+		"Element**"       : ctypes.POINTER(ctypes.c_void_p),
 		"ParsingContext*" : ctypes.c_void_p,
 		"ParsingOffset*"  : ctypes.c_void_p,
 		"ParsingStats*"   : ctypes.c_void_p,
@@ -339,6 +387,7 @@ def __init__():
 	C.Register(
 		TParsingElement,
 		TParsingContext,
+		TGrammar,
 	)
 
 	global API
@@ -360,6 +409,10 @@ __init__()
 g = Grammar()
 w = Word("pouet")
 g.axiom = w
+
+print "=" * 80
+print "WRAPPED", g._wrapped.contents.axiom
 g.parseFromString("pouet")
+print "=" * 80
 
 # EOF
