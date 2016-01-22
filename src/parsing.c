@@ -633,6 +633,14 @@ ParsingElement* Word_new(const char* word) {
 }
 
 // TODO: Implement Word_free and regfree
+void Word_free(ParsingElement* this) {
+	WordConfig* config = (WordConfig*)this->config;
+	if (config != NULL) {
+		// We don't have anything special to dealloc besides the config
+		__DEALLOC(config);
+	}
+	__DEALLOC(this);
+}
 
 Match* Word_recognize(ParsingElement* this, ParsingContext* context) {
 	WordConfig* config = ((WordConfig*)this->config);

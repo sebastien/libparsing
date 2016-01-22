@@ -775,6 +775,14 @@ ParsingElement* Word_new(const char* word);
 ```
 
 
+#### <a name="Word_free_destructor"><span class="classifier">destructor</span> `Word_free`</a>
+
+
+```c
+void Word_free(ParsingElement* this);
+```
+
+
 #### <a name="Word_recognize_method"><span class="classifier">method</span> `Word_recognize`</a>
 
  The specialized match function for token parsing elements.

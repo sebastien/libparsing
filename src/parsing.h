@@ -486,6 +486,9 @@ typedef struct WordConfig {
 // @constructor
 ParsingElement* Word_new(const char* word);
 
+// @destructor
+void Word_free(ParsingElement* this);
+
 // @method
 // The specialized match function for token parsing elements.
 Match*          Word_recognize(ParsingElement* this, ParsingContext* context);
