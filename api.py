@@ -1,7 +1,7 @@
 import ctypes, os
 
 NOTHING = ctypes
-API     = None
+C_API   = None
 
 # -----------------------------------------------------------------------------
 #
@@ -21,12 +21,18 @@ class C:
 		"char*"           : ctypes.c_char_p,
 		"const char*"     : ctypes.c_char_p,
 		"int"             : ctypes.c_int,
+		"float"           : ctypes.c_float,
+		"double"          : ctypes.c_double,
 		"size_t"          : ctypes.c_uint,
+		"size_t*"         : ctypes.POINTER(ctypes.c_uint),
 	}
 
 	@classmethod
 	def Unwrap( cls, value ):
-		if isinstance(value, CObjectWrapper):
+		# CObjectWrapper might be garbage collected at this time
+		if CObjectWrapper and isinstance(value, CObjectWrapper):
+			return value._wrapped
+		if not CObjectWrapper and hasattr( value, "_wrapped"):
 			return value._wrapped
 		else:
 			return value
@@ -39,9 +45,9 @@ class C:
 		else:
 			return ctypes.cast(value, type)
 
-
-	# @classmethod
-	# def Wrap( cls cValue)
+	@classmethod
+	def Wrap( cls, cValue ):
+		return wrap(cValue)
 
 	@classmethod
 	def ParseStructure( cls, text ):
@@ -126,58 +132,11 @@ class C:
 
 # -----------------------------------------------------------------------------
 #
-# C STRUCTURES
+# C LIBRARY
 #
 # -----------------------------------------------------------------------------
 
-# {{{
-# The `T*` types are `ctypes.Structure` subclasses that wrap the structures
-# defined in the `libparsing` C API. They are not meant to be directly
-# instanciated or referenced, but are to be obtained and manipulated through
-# a `Libparsing` instance.
-# }}}
-
-class TGrammar(ctypes.Structure):
-
-	STRUCTURE = """
-	ParsingElement*  axiom;       // The axiom
-	ParsingElement*  skip;        // The skipped element
-	int              axiomCount;  // The count of parsing elemetns in axiom
-	int              skipCount;   // The count of parsing elements in skip
-	Element**        elements;    // The set of all elements in the grammar
-	bool             isVerbose;
-	"""
-
-class TParsingContext(ctypes.Structure):
-
-	STRUCTURE = """
-		struct Grammar*       grammar;      // The grammar used to parse
-		struct Iterator*      iterator;     // Iterator on the input data
-		struct ParsingOffset* offsets;      // The parsing offsets, starting at 0
-		struct ParsingOffset* current;      // The current parsing offset
-		struct ParsingStats*  stats;
-	"""
-
-class TParsingElement(ctypes.Structure):
-
-	STRUCTURE = """
-		char           type;
-		int            id;
-		const char*    name;       // The parsing element's name, for debugging
-		void*          config;     // The configuration of the parsing element
-		struct Reference*     children;   // The parsing element's children, if any
-		ParsingElement*->ParsingContext*->Match* recognize;
-		ParsingElement*->ParsingContext*->Match*->Match* process;
-		Match*->void freeMatch;
-	"""
-
-# -----------------------------------------------------------------------------
-#
-# C API
-#
-# -----------------------------------------------------------------------------
-
-class Library:
+class CLibrary:
 
 	PATHS = [
 		".",
@@ -271,6 +230,7 @@ class CObjectWrapper(object):
 			print "F:", proto[0], args,
 			args = [c.Unwrap(_) for _ in args]
 			res  = ctypesFunction(*args)
+			res  = c.Wrap(res)
 			print "|", args, "-->", res
 			return res
 		return method
@@ -285,6 +245,7 @@ class CObjectWrapper(object):
 			args = [c.Unwrap(self)] + [c.Unwrap(_) for _ in args]
 			assert args[0], "CObjectWrapper: method {0} `this` is None in {1}".format(proto[0], self)
 			res  = ctypesFunction(*args)
+			res  = c.Wrap(res)
 			print "|", args, "-->", res
 			return res
 		return method
@@ -321,8 +282,87 @@ class CObjectWrapper(object):
 
 	def __del__( self ):
 		if self._wrapped and self._created:
-			if hasattr(self, "free"):
+			# FIXME: There are some issues with the __DEL__ when other stuff is not available
+			if hasattr(self, "free") and getattr(self, "free"):
 				self.free(self._wrapped)
+
+# -----------------------------------------------------------------------------
+#
+# C STRUCTURES
+#
+# -----------------------------------------------------------------------------
+
+# {{{
+# The `T*` types are `ctypes.Structure` subclasses that wrap the structures
+# defined in the `libparsing` C API. They are not meant to be directly
+# instanciated or referenced, but are to be obtained and manipulated through
+# a `Libparsing` instance.
+# }}}
+
+class TMatch(ctypes.Structure):
+
+	STRUCTURE = """
+	char            status;     // The status of the match (see STATUS_XXX)
+	size_t          offset;     // The offset of `iterated_t` matched
+	size_t          length;     // The number of `iterated_t` matched
+	Element*        element;
+	ParsingContext* context;
+	void*           data;      // The matched data (usually a subset of the input stream)
+	Match*          next;      // A pointer to the next  match (see `References`)
+	Match*          child;     // A pointer to the child match (see `References`)
+	"""
+
+class TParsingElement(ctypes.Structure):
+
+	STRUCTURE = """
+	char           type;
+	int            id;
+	const char*    name;       // The parsing element's name, for debugging
+	void*          config;     // The configuration of the parsing element
+	struct Reference*     children;   // The parsing element's children, if any
+	ParsingElement*->ParsingContext*->Match* recognize;
+	ParsingElement*->ParsingContext*->Match*->Match* process;
+	Match*->void freeMatch;
+	"""
+
+class TGrammar(ctypes.Structure):
+
+	STRUCTURE = """
+	ParsingElement*  axiom;       // The axiom
+	ParsingElement*  skip;        // The skipped element
+	int              axiomCount;  // The count of parsing elemetns in axiom
+	int              skipCount;   // The count of parsing elements in skip
+	Element**        elements;    // The set of all elements in the grammar
+	bool             isVerbose;
+	"""
+
+class TParsingContext(ctypes.Structure):
+
+	STRUCTURE = """
+	struct Grammar*       grammar;      // The grammar used to parse
+	struct Iterator*      iterator;     // Iterator on the input data
+	struct ParsingOffset* offsets;      // The parsing offsets, starting at 0
+	struct ParsingOffset* current;      // The current parsing offset
+	struct ParsingStats*  stats;
+	"""
+
+class TParsingStats(ctypes.Structure):
+
+	STRUCTURE = """
+	size_t  bytesRead;
+	double  parseTime;
+	size_t  symbolsCount;
+	size_t* successBySymbol;
+	size_t* failureBySymbol;
+	"""
+
+class TParsingResult(ctypes.Structure):
+
+	STRUCTURE = """
+	char            status;
+	Match*          match;
+	ParsingContext* context;
+	"""
 
 # -----------------------------------------------------------------------------
 #
@@ -362,19 +402,33 @@ class Word(CObjectWrapper):
 	void Word_free(ParsingElement* this);
 	"""
 
+# -----------------------------------------------------------------------------
+#
+# WRAPPING
+#
+# -----------------------------------------------------------------------------
 
-# g = Grammar()
-# w = Word("a")
-# g.setAxiom(w)
-# g.getAxiom()
-# print w._wrapped.contents.recognize
+def wrap( cValue ):
+	"""Wraps a C value. We define this as global as it requires knowlege of
+	specific classes in this module and is tailored to the specific datatypes."""
+	return cValue
+
+
+# -----------------------------------------------------------------------------
+#
+# MODULE INITIALIZATION
+#
+# -----------------------------------------------------------------------------
 
 def __init__():
 
+	# We pre-declare the types that are required by the structure declarations.
+	# It's OK if they're void* instead of the actual structure definition.
 	C.TYPES.update({
 		"Grammar*"        : ctypes.c_void_p,
 		"Iterator*"       : ctypes.c_void_p,
 		"Reference*"      : ctypes.c_void_p,
+		"Element*"        : ctypes.c_void_p,
 		"Element**"       : ctypes.POINTER(ctypes.c_void_p),
 		"ParsingContext*" : ctypes.c_void_p,
 		"ParsingOffset*"  : ctypes.c_void_p,
@@ -384,14 +438,24 @@ def __init__():
 		"Match*"          : ctypes.c_void_p,
 	})
 
+	# We register structure definitions that we want to be accessible
+	# through C types
 	C.Register(
 		TParsingElement,
-		TParsingContext,
+		#TMatch,
+		#TParsingContext,
+		#TParsingStats,
+		#TParsingResult,
 		TGrammar,
 	)
 
-	global API
-	API = Library(
+	# Now we load the C API and register the CObjectWrapper, which
+	# will enrich the ctypes library with typing, while ensuring that
+	# the prototypes that we have are working. The C_API will now be
+	# a flat interface to the native C library, but all the registered
+	# CObjectWrapper subclasses will now offer an object-oriented wrapper.
+	global C_API
+	C_API = CLibrary(
 		"libparsing"
 	).register(
 		Grammar,
@@ -411,7 +475,7 @@ w = Word("pouet")
 g.axiom = w
 
 print "=" * 80
-print "WRAPPED", g._wrapped.contents.axiom
+#print "WRAPPED", g._wrapped.contents.axiom
 g.parseFromString("pouet")
 print "=" * 80
 
