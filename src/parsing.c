@@ -627,7 +627,8 @@ ParsingElement* Word_new(const char* word) {
 	config->length       = strlen(word);
 	assert(config->length>0);
 	this->config         = config;
-	assert(this->config != NULL);
+	assert(this->config    != NULL);
+	assert(this->recognize != NULL);
 	return this;
 }
 
@@ -1187,9 +1188,12 @@ void Grammar_prepare ( Grammar* this ) {
 }
 
 ParsingResult* Grammar_parseFromIterator( Grammar* this, Iterator* iterator ) {
+	printf("Parse from iterator.1\n");
 	assert(this->axiom != NULL);
+	printf("Parse from iterator.2\n");
 	// ParsingOffset*  offset  = ParsingOffset_new(iterator->offset);
 	ParsingContext* context = ParsingContext_new(this, iterator);
+	assert(this->axiom->recognize != NULL);
 	clock_t t1  = clock();
 	Match* match = this->axiom->recognize(this->axiom, context);
 	context->stats->parseTime = ((double)clock() - (double)t1) / CLOCKS_PER_SEC;
@@ -1208,6 +1212,7 @@ ParsingResult* Grammar_parseFromPath( Grammar* this, const char* path ) {
 }
 
 ParsingResult* Grammar_parseFromString( Grammar* this, const char* text ) {
+	printf("Grammar_parseFromString: %s\n", text);
 	Iterator* iterator = Iterator_FromString(text);
 	if (iterator != NULL) {
 		return Grammar_parseFromIterator(this, iterator);
