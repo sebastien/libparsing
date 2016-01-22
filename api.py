@@ -110,34 +110,42 @@ class C:
 		return types
 
 	@classmethod
-	def ParsePrototype( cls, prototype ):
+	def GetType( cls, name, selfType=None ):
+		if name == "this*":
+			return selfType
+		else:
+			return cls.TYPES[name]
+
+	@classmethod
+	def ParsePrototype( cls, prototype, selfType=None ):
 		"""Parses a function prototype, returning `(name, argument ctypes, return ctype)`"""
+		# print "C:Parsing prototype", prototype
 		prototype = prototype.split("//",1)[0].split(";",1)[0]
 		ret_name, params = prototype.split("(", 1)
 		params           = params.rsplit(")",1)[0]
 		ret, name        = ret_name.strip().rsplit(" ", 1)
 		params           = [_.strip().rsplit(" ", 1) for _ in params.split(",",) if _.strip()]
-		params           = [(cls.TYPES[_[0]],_[1]) for _ in params if _ != ["void"]]
-		ret              = cls.TYPES[ret]
-		return (name, params, ret)
+		# We convert the type, preserving its name and its original type name
+		params           = [(cls.GetType(_[0], selfType),_[1],_[0]) for _ in params if _ != ["void"]]
+		return (name, params, [cls.GetType(ret, selfType), None, ret])
 
 	@classmethod
-	def ParsePrototypes( cls, declarations ):
+	def ParsePrototypes( cls, declarations, selfType=None ):
 		for line in (declarations or "").split("\n"):
 			line = line.replace("\t", " ").strip()
 			if not line: continue
-			proto = cls.ParsePrototype(line)
+			proto = cls.ParsePrototype(line, selfType)
 			yield proto
 
 	@classmethod
-	def LoadFunctions( cls, library, declarations ):
+	def LoadFunctions( cls, library, declarations, selfType=None ):
 		"""Binds the declared functions in the given library."""
 		res = []
-		for proto in cls.ParsePrototypes(declarations):
+		for proto in cls.ParsePrototypes(declarations, selfType):
 			name, argtypes, restype = proto
 			func = library[name]
 			func.argtypes = [_[0] for _ in argtypes]
-			func.restype  = restype
+			func.restype  = restype[0]
 			res.append((func, proto))
 		return res
 
@@ -189,7 +197,7 @@ class CLibrary:
 			_._library = self
 			assert issubclass(_, CObjectWrapper)
 			# We load the functions from the library
-			functions = C.LoadFunctions(self.lib, _.FUNCTIONS)
+			functions = C.LoadFunctions(self.lib, _.GetFunctions(), _.WRAPPED)
 			# We bind the functions declared in the wrapper
 			_.BindFunctions(functions)
 			_.BindFields()
@@ -222,6 +230,16 @@ class CObjectWrapper(object):
 
 	WRAPPED   = None
 	FUNCTIONS = None
+
+	@classmethod
+	def GetFunctions( cls ):
+		res = []
+		for _ in cls.__bases__:
+			if hasattr(_, "GetFunctions"):
+				f = _.GetFunctions()
+				if f: res.append(f)
+		if cls.FUNCTIONS: res.append(cls.FUNCTIONS)
+		return "\n".join(res)
 
 	@classmethod
 	def BindFields( cls ):
@@ -262,11 +280,11 @@ class CObjectWrapper(object):
 		def method(self, *args):
 			# We unwrap the arguments, meaning that the arguments are now
 			# pure C types values
-			# print "F: ", proto[0], args
+			print "F: ", proto[0], args
 			args = [c.Unwrap(_) for _ in args]
 			res  = ctypesFunction(*args)
 			res  = self._library.wrap(res)
-			# print "F=>", res
+			print "F=>", res
 			return res
 		return method
 
@@ -276,12 +294,11 @@ class CObjectWrapper(object):
 		def method(self, *args):
 			# We unwrap the arguments, meaning that the arguments are now
 			# pure C types values
-			# print "M: ", proto[0], args
 			args = [c.Unwrap(self)] + [c.Unwrap(_) for _ in args]
 			assert args[0], "CObjectWrapper: method {0} `this` is None in {1}".format(proto[0], self)
 			res  = ctypesFunction(*args)
 			res  = self._library.wrap(res)
-			# print "M=>", res
+			print "M=>", res
 			return res
 		return method
 
@@ -295,8 +312,9 @@ class CObjectWrapper(object):
 			method = cls._CreateMethod(ctypesFunction, proto)
 		else:
 			method = cls._CreateFunction(ctypesFunction, proto)
-		# We assume the convention is <Classname>_methodName
-		assert proto[0].startswith(class_name + "_")
+		# We assume the convention is <Classname>_methodName, but in practice
+		# Classname could be the name of a super class.
+		#assert proto[0].startswith(class_name + "_"), "Prototype does not start with class name: {0} != {1}".format(proto[0], class_name)
 		name = proto[0].split("_", 1)[1]
 		setattr(cls, name, method)
 		assert hasattr(cls, name)
@@ -427,7 +445,7 @@ class ParsingElement(CObjectWrapper):
 
 	WRAPPED   = TParsingElement
 	FUNCTIONS = """
-	self* ParsingElement_name( ParsingElement* this, const char* name );
+	this* ParsingElement_name( ParsingElement* this, const char* name );
 	"""
 
 
@@ -455,14 +473,14 @@ class CompositeParsingElement(ParsingElement):
 
 	WRAPPED   = TParsingElement
 	FUNCTIONS = """
-	ParsingElement* ParsingElement_add(ParsingElement *this, Reference *child);
+	this* ParsingElement_add(ParsingElement* this, Reference* child);
 	"""
 
 class Rule(CompositeParsingElement):
 
 	# FIXME: No free method here
 	FUNCTIONS = """
-	ParsingElement* Rule_new(Reference* children[]);
+	ParsingElement* Rule_new(Reference** children);
 	"""
 
 # -----------------------------------------------------------------------------
@@ -539,6 +557,7 @@ C.TYPES.update({
 	"Grammar*"        : ctypes.c_void_p,
 	"Iterator*"       : ctypes.c_void_p,
 	"Reference*"      : ctypes.c_void_p,
+	"Reference**"     : ctypes.POINTER(ctypes.c_void_p),
 	"Element*"        : ctypes.c_void_p,
 	"Element**"       : ctypes.POINTER(ctypes.c_void_p),
 	"ParsingContext*" : ctypes.c_void_p,
@@ -574,6 +593,7 @@ C_API = CLibrary(
 	ParsingResult,
 	Grammar,
 	Word,
+	Rule,
 )
 
 # We dynamically register shorthand factory methods for parsing elements in
@@ -618,6 +638,9 @@ class Test(unittest.TestCase):
 		self.assertIsNone(m.next)
 		self.assertIsNone(m.child)
 
+	def testCompositGrammar( self ):
+		pass
+
 # -----------------------------------------------------------------------------
 #
 # DIRECTIVES
@@ -625,23 +648,17 @@ class Test(unittest.TestCase):
 # -----------------------------------------------------------------------------
 
 g       = Grammar()
-text    = "pouet"
-w       = Word(text)
-g.axiom = w
+text    = "ab"
+a       = Word("a")
+b       = Word("b")
+ab      = Rule(None)
+print "AB", ab
+print "add", ab.add(a)
+print "ab"
+ab.add(b)
+g.axiom = ab
 g.isVerbose = True
 r       = g.parseFromString(text)
-#assert r
-m       = r.match
-assert m.offset == m.getOffset()
-assert m.length == m.getLength()
-print m.offset, m.getOffset()
-print m.length, m.getLength()
-
-# print m.status
-# print m.offset
-# print m.length
-#assert m
-#print m.status, m.offset
 
 # if __name__ == "__main__":
 # 	unittest.main()
