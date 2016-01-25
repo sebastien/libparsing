@@ -232,7 +232,7 @@ class CLibrary:
 			functions = C.LoadFunctions(self._cdll, _.GetFunctions(), _.WRAPPED)
 			for func, proto in functions:
 				name = proto[0][0]
-				print ("L:Library: binding symbol {0} with {1} → {2}".format(name, func.argtypes, func.restype))
+				# print ("L:Library: binding symbol {0} with {1} → {2}".format(name, func.argtypes, func.restype))
 				self.symbols.__dict__[name] = func
 			# We bind the functions declared in the wrapper
 			_.BindFunctions(functions)
@@ -602,7 +602,7 @@ class CompositeParsingElement(ParsingElement):
 		# assert isinstance(reference, ctypes.POINTER(TReference))
 		# print reference.contents.next
 		reference = self.LIBRARY.symbols.Reference_Ensure(reference._wrapped)
-		self.LIBRARY.symbols.ParsingElement_add(self._wrapped, reference)
+		self.LIBRARY.cdll["ParsingElement_add"](self._wrapped, reference)
 		#self._add(reference)
 		assert self.children
 		return self
@@ -738,8 +738,8 @@ for _ in [Word]:
 	setattr(Grammar, "a" + name, creator)
 
 # NOTE: Useful for debugging
-for k in sorted(C.TYPES.keys()):
-	print "C.TYPES[{0}] = {1}".format(k, C.TYPES[k])
+# for k in sorted(C.TYPES.keys()):
+# 	print "C.TYPES[{0}] = {1}".format(k, C.TYPES[k])
 
 # -----------------------------------------------------------------------------
 #
@@ -804,7 +804,7 @@ def testReference():
 	# work as expected.
 	libparsing = C_API.symbols
 	r = libparsing.Reference_new()
-	print "ctypes.ref:", hex(ctypes.addressof(r.contents))
+	print "    ctypes.ref   :", hex(ctypes.addressof(r.contents))
 	assert not libparsing.Reference_hasElement(r)
 	assert not libparsing.Reference_hasNext(r)
 	assert r.contents._b_needsfree_ is 0
@@ -831,9 +831,21 @@ def testReference():
 	assert ctypes.addressof(r.contents.next)    != 0
 	# Anyhow, we now creat an empty rule
 	ab = libparsing.Rule_new(None)
-	print "ctypes.ref:", hex(ctypes.addressof(ab.contents))
+	assert ab.contents._b_needsfree_ is 0
+	print "  ctypes.ref:", hex(ctypes.addressof(ab.contents))
 	# And we add it the reference
-	libparsing.ParsingElement_add(ab.contents, r)
+	print libparsing.ParsingElement_add.argtypes
+	print [ab, r]
+	print libparsing.ParsingElement_add.restype
+	print hex(ctypes.addressof(ab.contents))
+	print "REF HAS NEXT", libparsing.Reference_hasNext(r)
+	#libparsing.ParsingElement_add(ab.contents, r)
+	print "Direct invocation"
+	C_API._cdll["ParsingElement_add"](ab, r)
+	# DEBUG: This is whhere the problem happens. The above call without the
+	# type conversions work. The one below does not work!
+	print "Invocation throught symbols"
+	libparsing.ParsingElement_add(ab, r)
 
 
 def testRuleFlat():
@@ -842,15 +854,15 @@ def testRuleFlat():
 	a  = libparsing.Word_new("a")
 	b  = libparsing.Word_new("b")
 	ab = libparsing.Rule_new(None)
-
-	# ra = libparsing.Reference_Ensure(a)
-	# rb = libparsing.Reference_Ensure(b)
-	print ("ADDING", ab, ra)
-	print "NEXT", ra.contents.next
-	#libparsing.ParsingElement_add(ab, ra)
-	#libparsing.ParsingElement_add(ab, rb)
+	ra = libparsing.Reference_Ensure(a)
+	rb = libparsing.Reference_Ensure(b)
+	# NOTE: Somehow, using ParsingElement_add with typing fucks everything.
+	C_API._cdll["ParsingElement_add"](ab, ra)
+	C_API._cdll["ParsingElement_add"](ab, rb)
+	# libparsing.ParsingElement_add(ab, ra)
+	# libparsing.ParsingElement_add(ab, rb)
 	g.contents.axiom     = ab
-	g.contents.isVerbose = chr(1)
+	g.contents.isVerbose = 1
 	libparsing.Grammar_parseFromString(g, "abab")
 
 def testRuleOO():
@@ -867,8 +879,8 @@ def testRuleOO():
 	g.isVerbose = True
 	r = g.parseFromString(text)
 
-testReference()
-# testRuleFlat()
+#testReference()
+testRuleFlat()
 # if __name__ == "__main__":
 # 	unittest.main()
 

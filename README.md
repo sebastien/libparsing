@@ -1000,6 +1000,22 @@ Reference* Reference_name(Reference* this, const char* name);
 ```
 
 
+#### <a name="Reference_hasNext_method"><span class="classifier">method</span> `Reference_hasNext`</a>
+
+
+```c
+bool Reference_hasNext(Reference* this);
+```
+
+
+#### <a name="Reference_hasElement_method"><span class="classifier">method</span> `Reference_hasElement`</a>
+
+
+```c
+bool Reference_hasElement(Reference* this);
+```
+
+
 #### <a name="Reference__walk_method"><span class="classifier">method</span> `Reference__walk`</a>
 
 

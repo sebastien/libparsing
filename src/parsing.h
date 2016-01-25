@@ -603,6 +603,12 @@ Reference* Reference_cardinality(Reference* this, char cardinality);
 Reference* Reference_name(Reference* this, const char* name);
 
 // @method
+bool Reference_hasNext(Reference* this);
+
+// @method
+bool Reference_hasElement(Reference* this);
+
+// @method
 int Reference__walk( Reference* this, WalkingCallback callback, int step, void* nothing );
 
 // @method
