@@ -34,7 +34,7 @@ class C:
 
 	TYPES = {
 		"void"            : None,
-		"bool"            : ctypes.c_char,
+		"bool"            : ctypes.c_byte,
 		"char"            : ctypes.c_char,
 		"void*"           : ctypes.c_void_p,
 		"char*"           : ctypes.c_char_p,
@@ -65,13 +65,6 @@ class C:
 		value = cls.Unwrap(value)
 		if issubclass(value.__class__, type):
 			return value
-		if type is ctypes.c_char:
-			if value is True:
-				return chr(1)
-			elif value is False:
-				return chr(0)
-			else:
-				return chr(value)
 		else:
 			return ctypes.cast(value, type)
 
@@ -147,7 +140,7 @@ class C:
 		prototype = prototype.split("//",1)[0].split(";",1)[0]
 		ret_name, params = prototype.split("(", 1)
 		params           = params.rsplit(")",1)[0]
-		ret, name        = ret_name.strip().rsplit(" ", 1)
+		ret, name        = (_.strip() for _ in ret_name.strip().rsplit(" ", 1))
 		params           = [_.strip().rsplit(" ", 1) for _ in params.split(",",) if _.strip()]
 		# We convert the type, preserving its name and its original type name
 		params           = [(cls.GetType(_[0], selfType),_[1],_[0]) for _ in params if _ != ["void"]]
@@ -462,8 +455,8 @@ class TReference(ctypes.Structure):
 	int             id;              // The ID, assigned by the grammar, as the relative distance to the axiom
 	char            cardinality;     // Either ONE (default), OPTIONAL, MANY or MANY_OPTIONAL
 	const char*     name;            // The name of the reference (optional)
-	void* element;         // The reference to the parsing element
-	void*      next;            // The next child reference in the parsing elements
+	ParsingElement* element;         // The reference to the parsing element
+	Reference*      next;            // The next child reference in the parsing elements
 	"""
 
 	def __init__( self, *args, **kwargs ):
@@ -552,6 +545,8 @@ class Reference(CObjectWrapper):
 	Reference* Reference_new(void);
 	Reference* Reference_cardinality(Reference* this, char cardinality); // @as setCardinality
 	Reference* Reference_name(Reference* this, const char* name); // @as setName
+	bool       Reference_hasElement(Reference* this);
+	bool       Reference_hasNext(Reference* this);
 	"""
 
 	@classmethod
@@ -809,6 +804,9 @@ def testReference():
 	# work as expected.
 	libparsing = C_API.symbols
 	r = libparsing.Reference_new()
+	print "ctypes.ref:", hex(ctypes.addressof(r.contents))
+	assert not libparsing.Reference_hasElement(r)
+	assert not libparsing.Reference_hasNext(r)
 	assert r.contents._b_needsfree_ is 0
 	# SEE: https://docs.python.org/2.5/lib/ctypes-data-types.html
 	assert r.contents.name == "_"
@@ -820,22 +818,22 @@ def testReference():
 	# they return these pointers pointing to NULL.
 	assert not r.contents.element
 	assert not r.contents.next
-	# assert r.contents.element is not None
-	# assert r.contents.next    is not None
-	r.contents.element = None
-	r.contents.next    = None
-	# assert isinstance(r.contents.element, C.TYPES["ParsingElement*"])
-	# assert isinstance(r.contents.next,    C.TYPES["Reference*"])
+	assert r.contents.element is not None
+	assert r.contents.next    is not None
+	# r.contents.element = 0
+	# r.contents.next    = 0
+	assert isinstance(r.contents.element, C.TYPES["ParsingElement*"])
+	assert isinstance(r.contents.next,    C.TYPES["Reference*"])
 	# And the C addresses of the element and next (which are NULL pointers)
 	# is not 0. This is because `addressof` returns the object of the Python
 	# pointer instance, not the address of its contents.
-	# assert ctypes.addressof(r.contents.element) != 0
-	# assert ctypes.addressof(r.contents.next)    != 0
+	assert ctypes.addressof(r.contents.element) != 0
+	assert ctypes.addressof(r.contents.next)    != 0
 	# Anyhow, we now creat an empty rule
 	ab = libparsing.Rule_new(None)
+	print "ctypes.ref:", hex(ctypes.addressof(ab.contents))
 	# And we add it the reference
-	print libparsing.ParsingElement_add.argtypes, r
-	libparsing.ParsingElement_add(ab, r)
+	libparsing.ParsingElement_add(ab.contents, r)
 
 
 def testRuleFlat():

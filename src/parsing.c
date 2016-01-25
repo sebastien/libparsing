@@ -442,8 +442,8 @@ void ParsingElement_free(ParsingElement* this) {
 }
 
 
-ParsingElement* ParsingElement_add(ParsingElement *this, Reference *child) {
-	DEBUG("ParsingElement_add: %d, t=%c, id=%d element=%zd next=%zd", child->type, child->id, child->element, child->next)
+ParsingElement* ParsingElement_add(ParsingElement* this, Reference *child) {
+	DEBUG("ParsingElement_add: %p %p", this, child);
 	assert(child->next == NULL);
 	assert(child->element->recognize!=NULL);
 	if (this->children) {
@@ -539,7 +539,16 @@ Reference* Reference_new(void) {
 	this->name        = "_";
 	this->element     = NULL;
 	this->next        = NULL;
+	DEBUG("Reference_new: %p", this);
 	return this;
+}
+
+bool Reference_hasElement(Reference* this) {
+	return this->element != NULL;
+}
+
+bool Reference_hasNext(Reference* this) {
+	return this->next != NULL;
 }
 
 Reference* Reference_cardinality(Reference* this, char cardinality) {
@@ -868,6 +877,7 @@ ParsingElement* Rule_new(Reference* children[]) {
 	ParsingElement* this = ParsingElement_new(children);
 	this->type           = TYPE_RULE;
 	this->recognize      = Rule_recognize;
+	DEBUG("Rule_new: %p", this)
 	return this;
 }
 
