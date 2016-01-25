@@ -1,3 +1,17 @@
+#!/usr/bin/env python
+# encoding=utf8 ---------------------------------------------------------------
+# Project           : libparsing (Python bindings)
+# -----------------------------------------------------------------------------
+# Author            : FFunction
+# License           : BSD License
+# -----------------------------------------------------------------------------
+# Creation date     : 2016-01-21
+# Last modification : 2016-01-26
+# -----------------------------------------------------------------------------
+
+VERSION = "0.0.0"
+LICENSE = "http://ffctn.com/doc/licenses/bsd"
+
 import ctypes, os, re
 
 NOTHING = ctypes
@@ -107,11 +121,12 @@ class C:
 			types[c_name]       = ctypes.POINTER(_)
 			types[c_name + "*"] = ctypes.POINTER(types[c_name])
 			# It's important to update the type directly here
-			print ("C:Register: type {0} from {1}".format(c_name, _))
+			# print ("C:Register: type {0} from {1}".format(c_name, _))
 			cls.TYPES[c_name]       = types[c_name]
 			cls.TYPES[c_name + "*"] = types[c_name + "*"]
 		for _ in ctypeClasses:
-			# We bind the fields of the structure
+			# We bind the fields of the structure as a separate iteration, so
+			# as to ensure that the types are already available.
 			cls.BindStructure(_)
 		return types
 
@@ -125,7 +140,7 @@ class C:
 	@classmethod
 	def ParsePrototype( cls, prototype, selfType=None ):
 		"""Parses a function prototype, returning `(name, argument ctypes, return ctype)`"""
-		print "C:Parsing prototype", prototype
+		# print "C:Parsing prototype", prototype
 		as_name   = cls.RE_AS.search(prototype)
 		prototype = prototype.replace(" *", "* ")
 		prototype = prototype.split("//",1)[0].split(";",1)[0]
@@ -146,16 +161,23 @@ class C:
 			yield proto
 
 	@classmethod
-	def LoadFunctions( cls, library, declarations, selfType=None ):
-		"""Binds the declared functions in the given library."""
+	def LoadFunctions( cls, symbols, declarations, selfType=None ):
+		"""Retrieves typed versions of the given declarations from the given
+		library symbols, as a list of `(func, proto)` couples."""
 		res = []
 		for proto in cls.ParsePrototypes(declarations, selfType):
 			name, argtypes, restype = proto
 			name, alias             = name
-			print ("C:Loading function {0} with {1} -> {2}".format( name, argtypes, restype))
-			func = library[name]
-			func.argtypes = [_[0] for _ in argtypes]
-			func.restype  = restype[0]
+			# print ("C:Loading function {0} with {1} -> {2}".format( name, argtypes, restype))
+			# NOTE: Something to now about `ctypes` is that you cannot mutate
+			# the argtypes/restype of the symbol. Instead, you refer to it,
+			# change it and assign the result. I assume it's because ctypes
+			# often returns new ephemeral instances upon native object access.
+			func          = symbols[name]
+			func.argtypes = argtypes = [_[0] for _ in argtypes]
+			func.restype  = restype  = restype[0]
+			assert func.argtypes == argtypes, "ctypes: argtypes do not match {0} != {1}".format(func.argtypes, argtypes)
+			assert func.restype  == restype , "ctypes: restyp deso not match {0} != {1}".format(func.restype , restype)
 			res.append((func, proto))
 		return res
 
@@ -181,6 +203,11 @@ class CLibrary:
 	]
 	EXT = ["", ".so", ".ld", ".dyld"]
 
+	# FROM: http://goodcode.io/articles/python-dict-object/
+	class Symbols(object):
+		def __init__(self, d=None):
+			self.__dict__ = d or {}
+
 	@classmethod
 	def Find( cls, name ):
 		"""Tries to find a library with the given name."""
@@ -197,8 +224,9 @@ class CLibrary:
 		return ctypes.cdll.LoadLibrary(cls.Find(name))
 
 	def __init__( self, path ):
-		self.lib = self.Load(path)
-		self._wraps = [] + self.WRAPS
+		self._cdll    = self.Load(path)
+		self.symbols  = CLibrary.Symbols()
+		self._wraps   = [] + self.WRAPS
 
 	def register( self, *wrapperClasses ):
 		"""Register the given `CObjectWrapper` in this library, loading the
@@ -207,7 +235,11 @@ class CLibrary:
 			_.LIBRARY = self
 			assert issubclass(_, CObjectWrapper)
 			# We load the functions from the library
-			functions = C.LoadFunctions(self.lib, _.GetFunctions(), _.WRAPPED)
+			functions = C.LoadFunctions(self._cdll, _.GetFunctions(), _.WRAPPED)
+			for func, proto in functions:
+				name = proto[0][0]
+				print ("L:Library: binding symbol {0} with {1} → {2}".format(name, func.argtypes, func.restype))
+				self.symbols.__dict__[name] = func
 			# We bind the functions declared in the wrapper
 			_.BindFunctions(functions)
 			_.BindFields()
@@ -221,8 +253,8 @@ class CLibrary:
 	def wrap( self, cValue ):
 		"""Passes the given value through this library's `_wraps` filter
 		list, processing the first filter bound to a matching type."""
-		# for t,f in self._wraps:
-		# 	if isinstance(cValue, t): return f(cValue)
+		for t,f in self._wraps:
+			if isinstance(cValue, t): return f(cValue)
 		return cValue
 
 	def unwrap( self, value):
@@ -295,7 +327,7 @@ class CObjectWrapper(object):
 	def _CreateFunction( cls, ctypesFunction, proto):
 		c = C
 		assert proto[2][2] != "this*", "Function cannot return this"
-		is_constructor = proto[0][0].endswith("_name")
+		is_constructor = proto[0][0].endswith("_new")
 		def function(cls, *args):
 			# We unwrap the arguments, meaning that the arguments are now
 			# pure C types values
@@ -353,7 +385,7 @@ class CObjectWrapper(object):
 		elif not is_method:
 			assert proto[0][0][0].upper() == proto[0][0][0], "Class functions must start be CamelCase: {0}".format(proto[0][0])
 			method = classmethod(method)
-		print ("O:{1} bound as {3} {0}.{2}".format(cls.__name__, proto[0][0], name, "method" if is_method else "function"))
+		# print ("O:{1} bound as {3} {0}.{2}".format(cls.__name__, proto[0][0], name, "method" if is_method else "function"))
 		setattr(cls, name, method)
 		assert hasattr(cls, name)
 		return (name, method)
@@ -362,7 +394,6 @@ class CObjectWrapper(object):
 	def Wrap( cls, wrapped ):
 		"""Wraps the given object in this CObjectWrapper. The given
 		object must be a ctypes value, usually a pointer to a struct."""
-		assert None
 		return cls( wrappedCObject=wrapped )
 
 	@classmethod
@@ -374,16 +405,17 @@ class CObjectWrapper(object):
 		if "wrappedCObject" in kwargs:
 			assert not self._wrapped
 			self._wrapped = kwargs["wrappedCObject"]
-			assert self._wrapped
 			assert isinstance(self._wrapped, ctypes.POINTER(self.WRAPPED))
+			assert self._wrapped != None, "{0}(wrappedCObject): wrappedCObject expected, got: {1}".format(self.__class__.__name__, self._wrapped)
 			self._mustFree = False
 		else:
 			# We ensure that the _wrapped value returned by the creator is
 			# unwrapped. In fact, we might want to implement a special case
 			# for new that returns directly an unwrapped value.
 			instance       = self.__class__._Create(*args)
-			assert isinstance( instance, ctypes.POINTER(self.WRAPPED))
+			assert isinstance( instance, ctypes.POINTER(self.WRAPPED)), "{0}(): {1} pointer expected, got {2}".format(self.__class__.__name__, self.WRAPPED, instance)
 			assert not self._wrapped
+			assert instance != None, "{0}(): created instance seems to have no value: {1}".format(self.__class__.__name__, self._wrapped)
 			self._wrapped  = instance
 			self._mustFree = True
 
@@ -473,6 +505,7 @@ class TParsingStats(ctypes.Structure):
 	size_t* successBySymbol;
 	size_t* failureBySymbol;
 	"""
+
 class TParsingResult(ctypes.Structure):
 
 	STRUCTURE = """
@@ -510,7 +543,7 @@ class Reference(CObjectWrapper):
 	WRAPPED   = TReference
 
 	FUNCTIONS = """
-	Reference* Reference_Ensure(void* elementOrReference);     // @as _Ensure
+	Reference* Reference_Ensure(void* element); // @as _Ensure
 	Reference* Reference_FromElement(ParsingElement* element); // @as _FromElement
 	Reference* Reference_new(void);
 	Reference* Reference_cardinality(Reference* this, char cardinality); // @as setCardinality
@@ -529,7 +562,7 @@ class Reference(CObjectWrapper):
 	def FromElement( cls, element ):
 		assert isinstance( element, ParsingElement)
 		res = cls._FromElement(element)
-		assert isinstance(res, Reference)
+		assert isinstance(res, Reference), "Expected reference, got: {0}".format(res)
 		res._mustFree = True
 		return res
 
@@ -566,11 +599,12 @@ class CompositeParsingElement(ParsingElement):
 		# FIXME: Somehow, using _add does not work! This is potentially a
 		# major source of problems down the road.
 		#self._add(reference)
-		print "REFERENCE", reference, reference._wrapped
-		reference = self.LIBRARY.lib.Reference_Ensure(reference._wrapped)
-		print ("REFERENCE", reference)
-		self._add(reference)
-		# self.LIBRARY.lib.ParsingElement_add(self._wrapped, reference)
+		# reference = self.LIBRARY.symbols.Reference_Ensure(reference._wrapped)
+		# assert isinstance(reference, ctypes.POINTER(TReference))
+		# print reference.contents.next
+		reference = self.LIBRARY.symbols.Reference_Ensure(reference._wrapped)
+		self.LIBRARY.symbols.ParsingElement_add(self._wrapped, reference)
+		#self._add(reference)
 		assert self.children
 		return self
 
@@ -578,7 +612,7 @@ class Rule(CompositeParsingElement):
 
 	# FIXME: No free method here
 	FUNCTIONS = """
-	ParsingElement* Rule_new(Reference** children);
+	ParsingElement* Rule_new(void* children);
 	"""
 
 # -----------------------------------------------------------------------------
@@ -750,8 +784,10 @@ text    = "abab"
 a       = Word("a")
 b       = Word("b")
 ab      = Rule(None)
-ab.add(a)
-ab.add(b)
+#ra      = Reference.Ensure(a)
+#print "RA", ra.next
+#ab.add(a)
+#ab.add(b)
 g.axiom = ab
 g.isVerbose = True
 r = g.parseFromString(text)
@@ -759,4 +795,4 @@ r = g.parseFromString(text)
 # if __name__ == "__main__":
 # 	unittest.main()
 
-# EOF
+# EOF - vim: ts=4 sw=4 noet
