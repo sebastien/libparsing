@@ -143,6 +143,7 @@ class C:
 		# print "C:Parsing prototype", prototype
 		as_name   = cls.RE_AS.search(prototype)
 		prototype = prototype.replace(" *", "* ")
+		prototype = prototype.replace("struct ", "")
 		prototype = prototype.split("//",1)[0].split(";",1)[0]
 		ret_name, params = prototype.split("(", 1)
 		params           = params.rsplit(")",1)[0]
@@ -420,13 +421,12 @@ class CObjectWrapper(object):
 			self._mustFree = True
 
 	# FIXME: We experience many problems with destructors, ie. segfaults in GC.
-	# Thsi needs to be sorted out.
+	# This needs to be sorted out.
 	# def __del__( self ):
-	# 	if self._wrapped and self._created:
+	# 	if self._wrapped and self._mustFree:
 	# 		# FIXME: There are some issues with the __DEL__ when other stuff is not available
-	# 		# if hasattr(self, "free") and getattr(self, "free"):
-	# 		# 	self.free(self._wrapped)
-	# 		pass
+	# 		if hasattr(self, "free") and getattr(self, "free"):
+	# 			self.free(self._wrapped)
 	# 	object.__del__(self)
 
 # -----------------------------------------------------------------------------
@@ -462,9 +462,13 @@ class TReference(ctypes.Structure):
 	int             id;              // The ID, assigned by the grammar, as the relative distance to the axiom
 	char            cardinality;     // Either ONE (default), OPTIONAL, MANY or MANY_OPTIONAL
 	const char*     name;            // The name of the reference (optional)
-	struct ParsingElement* element;  // The reference to the parsing element
-	struct Reference*      next;     // The next child reference in the parsing elements
+	void* element;         // The reference to the parsing element
+	void*      next;            // The next child reference in the parsing elements
 	"""
+
+	def __init__( self, *args, **kwargs ):
+		print self, args, kwargs
+		ctypes.Structure.__init__(*args, **kwargs)
 
 class TMatch(ctypes.Structure):
 
@@ -739,8 +743,8 @@ for _ in [Word]:
 	setattr(Grammar, "a" + name, creator)
 
 # NOTE: Useful for debugging
-# for k in C.TYPES:
-# 	print "C.TYPES[{0}] = {1}".format(k, C.TYPES[k])
+for k in sorted(C.TYPES.keys()):
+	print "C.TYPES[{0}] = {1}".format(k, C.TYPES[k])
 
 # -----------------------------------------------------------------------------
 #
@@ -779,19 +783,94 @@ class Test(unittest.TestCase):
 #
 # -----------------------------------------------------------------------------
 
-g       = Grammar()
-text    = "abab"
-a       = Word("a")
-b       = Word("b")
-ab      = Rule(None)
-#ra      = Reference.Ensure(a)
-#print "RA", ra.next
-#ab.add(a)
-#ab.add(b)
-g.axiom = ab
-g.isVerbose = True
-r = g.parseFromString(text)
+def testCTypesBehaviour():
+	"""A few assertions about what to expect from CTypes."""
+	# We retrieve the TReference type
+	ref = C.TYPES["Reference*"]
+	assert ref.__name__.endswith("LP_TReference")
+	# We create a new reference pointer, which is a NULL pointer
+	r = ref()
+	# NULL pointers have a False boolean value
+	assert not r
+	assert not bool(r)
+	assert r is not False
+	assert r is not None
+	# And raise a ValueError when accessed
+	was_null = False
+	try:
+		r.contents
+	except ValueError as e:
+		assert "NULL pointer access" in str(e)
+		was_null = True
+	assert was_null
 
+def testReference():
+	# We're trying to assert that Reference objects created from C
+	# work as expected.
+	libparsing = C_API.symbols
+	r = libparsing.Reference_new()
+	assert r.contents._b_needsfree_ is 0
+	# SEE: https://docs.python.org/2.5/lib/ctypes-data-types.html
+	assert r.contents.name == "_"
+	assert r.contents.id   == -1, r.contents.id
+	# So that's the surprising stuff about ctypes. Our C code assigns
+	# NULL to element and next. If we had declared TReference with
+	# `next` and `element` as returning `void*`, then we would
+	# get None. But because they're ParsingElement* and Reference*
+	# they return these pointers pointing to NULL.
+	assert not r.contents.element
+	assert not r.contents.next
+	# assert r.contents.element is not None
+	# assert r.contents.next    is not None
+	r.contents.element = None
+	r.contents.next    = None
+	# assert isinstance(r.contents.element, C.TYPES["ParsingElement*"])
+	# assert isinstance(r.contents.next,    C.TYPES["Reference*"])
+	# And the C addresses of the element and next (which are NULL pointers)
+	# is not 0. This is because `addressof` returns the object of the Python
+	# pointer instance, not the address of its contents.
+	# assert ctypes.addressof(r.contents.element) != 0
+	# assert ctypes.addressof(r.contents.next)    != 0
+	# Anyhow, we now creat an empty rule
+	ab = libparsing.Rule_new(None)
+	# And we add it the reference
+	print libparsing.ParsingElement_add.argtypes, r
+	libparsing.ParsingElement_add(ab, r)
+
+
+def testRuleFlat():
+	libparsing = C_API.symbols
+	g  = libparsing.Grammar_new()
+	a  = libparsing.Word_new("a")
+	b  = libparsing.Word_new("b")
+	ab = libparsing.Rule_new(None)
+
+	# ra = libparsing.Reference_Ensure(a)
+	# rb = libparsing.Reference_Ensure(b)
+	print ("ADDING", ab, ra)
+	print "NEXT", ra.contents.next
+	#libparsing.ParsingElement_add(ab, ra)
+	#libparsing.ParsingElement_add(ab, rb)
+	g.contents.axiom     = ab
+	g.contents.isVerbose = chr(1)
+	libparsing.Grammar_parseFromString(g, "abab")
+
+def testRuleOO():
+	g       = Grammar()
+	text    = "abab"
+	a       = Word("a")
+	b       = Word("b")
+	ab      = Rule(None)
+	ra      = Reference.Ensure(a)
+	rb      = Reference.Ensure(b)
+	ab.add(ra)
+	ab.add(rb)
+	g.axiom = ab
+	g.isVerbose = True
+	r = g.parseFromString(text)
+
+testReference()
+# testRuleFlat()
 # if __name__ == "__main__":
 # 	unittest.main()
 

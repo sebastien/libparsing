@@ -443,6 +443,7 @@ void ParsingElement_free(ParsingElement* this) {
 
 
 ParsingElement* ParsingElement_add(ParsingElement *this, Reference *child) {
+	DEBUG("ParsingElement_add: %d, t=%c, id=%d element=%zd next=%zd", child->type, child->id, child->element, child->next)
 	assert(child->next == NULL);
 	assert(child->element->recognize!=NULL);
 	if (this->children) {
@@ -533,6 +534,7 @@ Reference* Reference_FromElement(ParsingElement* element){
 Reference* Reference_new(void) {
 	__ALLOC(Reference, this);
 	this->type        = TYPE_REFERENCE;
+	this->id          = -1;
 	this->cardinality = CARDINALITY_ONE;
 	this->name        = "_";
 	this->element     = NULL;
