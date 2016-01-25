@@ -857,8 +857,17 @@ def testRuleFlat():
 	ra = libparsing.Reference_Ensure(a)
 	rb = libparsing.Reference_Ensure(b)
 	# NOTE: Somehow, using ParsingElement_add with typing fucks everything.
-	C_API._cdll["ParsingElement_add"](ab, ra)
-	C_API._cdll["ParsingElement_add"](ab, rb)
+	f = C_API._cdll["ParsingElement_add"]
+	# C_API._cdll["ParsingElement_add"](ab, ra)
+	# C_API._cdll["ParsingElement_add"](ab, rb)
+	f.argtypes = [ctypes.POINTER(TParsingElement), ctypes.POINTER(TReference)]
+	f.restype  = ctypes.POINTER(TParsingElement)
+	f(ab, ra)
+	#f(ab, rb)
+	print f.argtypes
+	print libparsing.ParsingElement_add.argtypes
+	print f.restype
+	print libparsing.ParsingElement_add.restype
 	# libparsing.ParsingElement_add(ab, ra)
 	# libparsing.ParsingElement_add(ab, rb)
 	g.contents.axiom     = ab
