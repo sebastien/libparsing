@@ -126,7 +126,7 @@ class C:
 	@classmethod
 	def GetType( cls, name, selfType=None ):
 		if name == "this*":
-			return selfType
+			return ctypes.POINTER(selfType)
 		else:
 			return cls.TYPES[name]
 
@@ -170,8 +170,9 @@ class C:
 			func          = symbols[name]
 			func.argtypes = argtypes = [_[0] for _ in argtypes]
 			func.restype  = restype  = restype[0]
+			print ("C:Loaded {0} with {1} → {2}".format(name, argtypes, restype))
 			assert func.argtypes == argtypes, "ctypes: argtypes do not match {0} != {1}".format(func.argtypes, argtypes)
-			assert func.restype  == restype , "ctypes: restyp deso not match {0} != {1}".format(func.restype , restype)
+			assert func.restype  == restype , "ctypes: restype does not match {0} != {1}".format(func.restype , restype)
 			res.append((func, proto))
 		return res
 
@@ -857,19 +858,8 @@ def testRuleFlat():
 	ra = libparsing.Reference_Ensure(a)
 	rb = libparsing.Reference_Ensure(b)
 	# NOTE: Somehow, using ParsingElement_add with typing fucks everything.
-	f = C_API._cdll["ParsingElement_add"]
-	# C_API._cdll["ParsingElement_add"](ab, ra)
-	# C_API._cdll["ParsingElement_add"](ab, rb)
-	f.argtypes = [ctypes.POINTER(TParsingElement), ctypes.POINTER(TReference)]
-	f.restype  = ctypes.POINTER(TParsingElement)
-	f(ab, ra)
-	#f(ab, rb)
-	print f.argtypes
-	print libparsing.ParsingElement_add.argtypes
-	print f.restype
-	print libparsing.ParsingElement_add.restype
-	# libparsing.ParsingElement_add(ab, ra)
-	# libparsing.ParsingElement_add(ab, rb)
+	libparsing.ParsingElement_add(ab, ra)
+	libparsing.ParsingElement_add(ab, rb)
 	g.contents.axiom     = ab
 	g.contents.isVerbose = 1
 	libparsing.Grammar_parseFromString(g, "abab")
