@@ -1110,7 +1110,6 @@ ParsingResult* ParsingResult_new(Match* match, ParsingContext* context) {
 	this->match   = match;
 	this->context = context;
 	if (match != FAILURE) {
-		printf("Iterator has_more: %d, Iterator_remaining: %zd\n", Iterator_hasMore(context->iterator), Iterator_remaining(context->iterator));
 		if (Iterator_hasMore(context->iterator) && Iterator_remaining(context->iterator) > 0) {
 			LOG_IF(context->grammar->isVerbose, "Partial success, parsed %zd bytes, %zd remaining", context->iterator->offset, Iterator_remaining(context->iterator));
 			this->status = STATUS_PARTIAL;

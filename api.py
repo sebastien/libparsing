@@ -108,7 +108,7 @@ class C:
 			c_name = c_name[1:] + "*"
 			types[c_name] = ctypes.POINTER(_)
 			# It's important to update the type directly here
-			print ("C.Register: type {0} from {1}".format(c_name, _))
+			print ("C:Register: type {0} from {1}".format(c_name, _))
 			cls.TYPES[c_name] = types[c_name]
 		return types
 
@@ -310,7 +310,9 @@ class CObjectWrapper(object):
 		def method(self, *args):
 			# We unwrap the arguments, meaning that the arguments are now
 			# pure C types values
+			print "M: ", proto[0], args
 			args = [self.LIBRARY.unwrap(self)] + [self.LIBRARY.unwrap(_) for _ in args]
+			print "   ", args
 			assert args[0], "CObjectWrapper: method {0} `this` is None in {1}".format(proto[0], self)
 			res  = ctypesFunction(*args)
 			res  = self if returns_this else self.LIBRARY.wrap(res)
@@ -342,7 +344,7 @@ class CObjectWrapper(object):
 		elif not is_method:
 			assert proto[0][0][0].upper() == proto[0][0][0], "Class functions must start be CamelCase: {0}".format(proto[0][0])
 			method = classmethod(method)
-		print ("{1} bound as {3} {0}.{2}".format(cls.__name__, proto[0][0], name, "method" if is_method else "function"))
+		print ("O:{1} bound as {3} {0}.{2}".format(cls.__name__, proto[0][0], name, "method" if is_method else "function"))
 		setattr(cls, name, method)
 		assert hasattr(cls, name)
 		return (name, method)
@@ -360,6 +362,7 @@ class CObjectWrapper(object):
 	def __init__( self, *args, **kwargs ):
 		self._wrapped = None
 		if "wrappedCObject" in kwargs:
+			assert not self._wrapped
 			self._wrapped = kwargs["wrappedCObject"]
 			assert self._wrapped
 			assert isinstance(self._wrapped, ctypes.POINTER(self.WRAPPED))
@@ -369,6 +372,7 @@ class CObjectWrapper(object):
 			# unwrapped. In fact, we might want to implement a special case
 			# for new that returns directly an unwrapped value.
 			instance       = self.__class__._Create(*args)
+			assert not self._wrapped
 			self._wrapped  = C.Unwrap(instance)
 			self._mustFree = True
 
@@ -547,8 +551,10 @@ class CompositeParsingElement(ParsingElement):
 	def add( self, reference ):
 		reference = Reference.Ensure(reference)
 		assert isinstance(reference, Reference)
-		self.LIBRARY.lib.ParsingElement_add(self._wrapped, reference._wrapped)
+		# FIXME: Somehow, using _add does not work! This is potentially a
+		# major source of problems down the road.
 		#self._add(reference)
+		self.LIBRARY.lib.ParsingElement_add(self._wrapped, reference._wrapped)
 		assert self.children
 		return self
 
@@ -708,7 +714,6 @@ class Test(unittest.TestCase):
 		assert r
 		m       = r.match
 		assert m
-		print m.status, m.offset
 		self.assertEqual(m.status, "M")
 		self.assertEqual(m.offset,  m.getOffset())
 		self.assertEqual(m.length,  m.getLength())
@@ -727,16 +732,15 @@ class Test(unittest.TestCase):
 # -----------------------------------------------------------------------------
 
 g       = Grammar()
-text    = "ab"
+text    = "abab"
 a       = Word("a")
 b       = Word("b")
 ab      = Rule(None)
-print "ab"
 ab.add(a)
 ab.add(b)
 g.axiom = ab
 g.isVerbose = True
-r       = g.parseFromString(text)
+r = g.parseFromString(text)
 
 # if __name__ == "__main__":
 # 	unittest.main()
