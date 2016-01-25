@@ -102,12 +102,14 @@ bool Iterator_open( Iterator* this, const char *path ) {
 }
 
 bool Iterator_hasMore( Iterator* this ) {
-	// NOTE: This is STATUS_ENDED;
-	return this->status != STATUS_ENDED;
+	// DEBUG("Iterator_hasMore: %zd, offset=%zd length=%zd available=%zd", this->length - this->offset, this->offset, this->length, this->available)
+	// NOTE: This used to be STATUS_ENDED, but I changed it to the actual.
+	return this->offset < this->length;
 }
 
 size_t Iterator_remaining( Iterator* this ) {
-	return this->available - (this->current - this->buffer);
+	// DEBUG("Iterator_remaining: %zd, offset=%zd length=%zd available=%zd", this->length - this->offset, this->offset, this->length, this->available)
+	return (this->length - this->offset);
 }
 
 bool Iterator_moveTo ( Iterator* this, size_t offset ) {
@@ -133,15 +135,17 @@ bool String_move ( Iterator* this, int n ) {
 	if ( n == 0) {
 		// --- STAYING IN PLACE -----------------------------------------------
 		// We're not moving position
+		DEBUG("String_move: did not move (n=%d) offset=%zd/length=%zd, available=%zd, current-buffer=%ld\n", n, this->offset, this->length, this->available, this->current - this->buffer);
 		return TRUE;
 	} else if ( n >= 0 ) {
 		// --- MOVING FORWARD -------------------------------------------------
 		// We're moving forward, so we want to know if there is at one more element
 		// in the file input.
-		size_t left = this->available - this->offset;
+		size_t left = this->available;
 		// `c` is the number of elements we're actually agoing to move, which
 		// is either `n` or the number of elements left.
-		size_t c    = n < left ? n : left;
+		size_t c    = n <= left ? n : left;
+		size_t c_copy = c;
 		// This iterates throught the characters and counts line separators.
 		while (c > 0) {
 			this->current++;
@@ -151,6 +155,7 @@ bool String_move ( Iterator* this, int n ) {
 		}
 		// We then store the amount of available
 		this->available = this->length - this->offset;
+		DEBUG("String_move: moved forward by c=%zd, n=%d offset=%zd length=%zd, available=%zd, current-buffer=%ld", c_copy, n, this->offset, this->length, this->available, this->current - this->buffer);
 		if (this->available == 0) {
 			// If we have no more available elements, then the status of
 			// the stream is STATUS_ENDED
@@ -174,6 +179,7 @@ bool String_move ( Iterator* this, int n ) {
 			this->status  = STATUS_PROCESSING;
 		}
 		assert(Iterator_remaining(this) >= 0 - n);
+		DEBUG("String_move: moved backwards by n=%d offset=%zd/length=%zd, available=%zd, current-buffer=%ld", n, this->offset, this->length, this->available, this->current - this->buffer);
 		return TRUE;
 	}
 }
@@ -277,7 +283,7 @@ bool FileInput_move   ( Iterator* this, int n ) {
 	} else {
 		// The assert below is temporary, once we figure out when to free the input data
 		// that we don't need anymore this would work.
-		ASSERT(this->length > this->offset, "FileInput_move: offset is greater than length (%zd > %zd)", this->offset, this->length);
+		ASSERT(this->length > this->offset, "FileInput_move: offset is greater than length (%zd > %zd)", this->offset, this->length)
 		// We make sure that `n` is not bigger than the length of the available buffer
 		n = this->length + n < 0 ? 0 - this->length : n;
 		this->current = (((char*)this->current) + n);
@@ -657,7 +663,10 @@ Match* Word_recognize(ParsingElement* this, ParsingContext* context) {
 		// NOTE: You can see here that the word actually consumes input
 		// and moves the iterator.
 		Match* success = MATCH_STATS(Match_Success(config->length, this, context));
+		size_t offset = context->iterator->offset;
+		ASSERT(config->length > 0, "Word: %s configuration length == 0", config->word)
 		context->iterator->move(context->iterator, config->length);
+		LOG_IF(context->grammar->isVerbose, "Moving iterator from %zd to %zd", offset, context->iterator->offset);
 		LOG_IF(context->grammar->isVerbose, "[✓] %s:%s matched %zd-%zd", this->name, ((WordConfig*)this->config)->word, context->iterator->offset - config->length, context->iterator->offset);
 		return success;
 	} else {
@@ -1101,11 +1110,12 @@ ParsingResult* ParsingResult_new(Match* match, ParsingContext* context) {
 	this->match   = match;
 	this->context = context;
 	if (match != FAILURE) {
+		printf("Iterator has_more: %d, Iterator_remaining: %zd\n", Iterator_hasMore(context->iterator), Iterator_remaining(context->iterator));
 		if (Iterator_hasMore(context->iterator) && Iterator_remaining(context->iterator) > 0) {
 			LOG_IF(context->grammar->isVerbose, "Partial success, parsed %zd bytes, %zd remaining", context->iterator->offset, Iterator_remaining(context->iterator));
 			this->status = STATUS_PARTIAL;
 		} else {
-			LOG_IF(context->grammar->isVerbose, "Succeeded, parsed %zd bytes", context->iterator->offset);
+			LOG_IF(context->grammar->isVerbose, "Succeeded, iterator at %zd, parsed %zd bytes", context->iterator->offset, context->stats->bytesRead);
 			this->status = STATUS_SUCCESS;
 		}
 	} else {

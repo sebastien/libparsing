@@ -112,7 +112,7 @@ typedef char  bool;
 #define LOG_IF(cond,msg,...)     if(cond){LOG(msg, __VA_ARGS__);}
 
 #ifdef DEBUG_ENABLED
-#define ASSERT(v,msg,...) if(!v){DEBUG(msg,__VA_ARGS__);abort();}
+#define ASSERT(v,msg,...) if(!(v)){DEBUG(msg,__VA_ARGS__);abort();}
 #else
 #define ASSERT(v,msg,...) /* */
 #endif

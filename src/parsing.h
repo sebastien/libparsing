@@ -176,7 +176,7 @@ typedef struct Iterator {
 	iterated_t     separator; // The character for line separator, `\n` by default.
 	size_t         offset;    // Offset in input (in bytes), might be different from `current - buffer` if some input was freed.
 	size_t         lines;     // Counter for lines that have been encountered
-	size_t         length;    // Buffer length (in bytes), might be bigger than the data acquired from the input
+	size_t         length;    // Content length (in bytes), might be bigger than the data acquired from the input
 	size_t         available; // Available data in buffer (in bytes), always `<= length`
 	bool           freeBuffer;
 	// FIXME: The head should be freed when the offsets have been parsed, no need to keep in memory stuff we won't need.
