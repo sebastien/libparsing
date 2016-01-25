@@ -99,17 +99,20 @@ class C:
 		types = {}
 		for _ in ctypeClasses:
 			assert issubclass(_, ctypes.Structure)
-			# We bind the fields of the structure
-			cls.BindStructure(_)
 			# And we register, possibly overriding the already
 			# registered type.
 			c_name = _.__name__.rsplit(".", 1)[-1]
 			assert c_name.startswith("T"), c_name
 			c_name = c_name[1:] + "*"
-			types[c_name] = ctypes.POINTER(_)
+			types[c_name]       = ctypes.POINTER(_)
+			types[c_name + "*"] = ctypes.POINTER(types[c_name])
 			# It's important to update the type directly here
 			print ("C:Register: type {0} from {1}".format(c_name, _))
-			cls.TYPES[c_name] = types[c_name]
+			cls.TYPES[c_name]       = types[c_name]
+			cls.TYPES[c_name + "*"] = types[c_name + "*"]
+		for _ in ctypeClasses:
+			# We bind the fields of the structure
+			cls.BindStructure(_)
 		return types
 
 	@classmethod
@@ -218,8 +221,8 @@ class CLibrary:
 	def wrap( self, cValue ):
 		"""Passes the given value through this library's `_wraps` filter
 		list, processing the first filter bound to a matching type."""
-		for t,f in self._wraps:
-			if isinstance(cValue, t): return f(cValue)
+		# for t,f in self._wraps:
+		# 	if isinstance(cValue, t): return f(cValue)
 		return cValue
 
 	def unwrap( self, value):
@@ -292,13 +295,16 @@ class CObjectWrapper(object):
 	def _CreateFunction( cls, ctypesFunction, proto):
 		c = C
 		assert proto[2][2] != "this*", "Function cannot return this"
+		is_constructor = proto[0][0].endswith("_name")
 		def function(cls, *args):
 			# We unwrap the arguments, meaning that the arguments are now
 			# pure C types values
 			print "F: ", proto[0], args
 			args = [cls.LIBRARY.unwrap(_) for _ in args]
 			res  = ctypesFunction(*args)
-			res  = cls.LIBRARY.wrap(res)
+			if not is_constructor:
+				# Non-constructors must wrap the result
+				res  = cls.LIBRARY.wrap(res)
 			print "F=>", res
 			return res
 		return function
@@ -314,7 +320,10 @@ class CObjectWrapper(object):
 			args = [self.LIBRARY.unwrap(self)] + [self.LIBRARY.unwrap(_) for _ in args]
 			print "   ", args
 			assert args[0], "CObjectWrapper: method {0} `this` is None in {1}".format(proto[0], self)
-			res  = ctypesFunction(*args)
+			try:
+				res  = ctypesFunction(*args)
+			except ctypes.ArgumentError as e:
+				raise ValueError("{1} failed with {2}: {3}".format(cls.__name__, proto[0][0], args, e))
 			res  = self if returns_this else self.LIBRARY.wrap(res)
 			print "M=>", res
 			return res
@@ -353,6 +362,7 @@ class CObjectWrapper(object):
 	def Wrap( cls, wrapped ):
 		"""Wraps the given object in this CObjectWrapper. The given
 		object must be a ctypes value, usually a pointer to a struct."""
+		assert None
 		return cls( wrappedCObject=wrapped )
 
 	@classmethod
@@ -372,8 +382,9 @@ class CObjectWrapper(object):
 			# unwrapped. In fact, we might want to implement a special case
 			# for new that returns directly an unwrapped value.
 			instance       = self.__class__._Create(*args)
+			assert isinstance( instance, ctypes.POINTER(self.WRAPPED))
 			assert not self._wrapped
-			self._wrapped  = C.Unwrap(instance)
+			self._wrapped  = instance
 			self._mustFree = True
 
 	# FIXME: We experience many problems with destructors, ie. segfaults in GC.
@@ -499,6 +510,7 @@ class Reference(CObjectWrapper):
 	WRAPPED   = TReference
 
 	FUNCTIONS = """
+	Reference* Reference_Ensure(void* elementOrReference);     // @as _Ensure
 	Reference* Reference_FromElement(ParsingElement* element); // @as _FromElement
 	Reference* Reference_new(void);
 	Reference* Reference_cardinality(Reference* this, char cardinality); // @as setCardinality
@@ -549,12 +561,16 @@ class CompositeParsingElement(ParsingElement):
 	"""
 
 	def add( self, reference ):
-		reference = Reference.Ensure(reference)
-		assert isinstance(reference, Reference)
+		#reference = Reference.Ensure(reference)
+		#assert isinstance(reference, Reference)
 		# FIXME: Somehow, using _add does not work! This is potentially a
 		# major source of problems down the road.
 		#self._add(reference)
-		self.LIBRARY.lib.ParsingElement_add(self._wrapped, reference._wrapped)
+		print "REFERENCE", reference, reference._wrapped
+		reference = self.LIBRARY.lib.Reference_Ensure(reference._wrapped)
+		print ("REFERENCE", reference)
+		self._add(reference)
+		# self.LIBRARY.lib.ParsingElement_add(self._wrapped, reference)
 		assert self.children
 		return self
 
@@ -637,18 +653,12 @@ class AbstractProcessor( object ):
 # We pre-declare the types that are required by the structure declarations.
 # It's OK if they're void* instead of the actual structure definition.
 C.TYPES.update({
-	"Grammar*"        : ctypes.c_void_p,
 	"Iterator*"       : ctypes.c_void_p,
-	"Reference*"      : ctypes.c_void_p,
-	"Reference**"     : ctypes.POINTER(ctypes.c_void_p),
 	"Element*"        : ctypes.c_void_p,
 	"Element**"       : ctypes.POINTER(ctypes.c_void_p),
 	"ParsingContext*" : ctypes.c_void_p,
 	"ParsingOffset*"  : ctypes.c_void_p,
 	"ParsingStats*"   : ctypes.c_void_p,
-	"ParsingElement*" : ctypes.c_void_p,
-	"ParsingResult*"  : ctypes.c_void_p,
-	"Match*"          : ctypes.c_void_p,
 	"WalkingCallback" : ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p),
 })
 
@@ -656,9 +666,9 @@ C.TYPES.update({
 # through C types
 C.Register(
 	TParsingElement,
+	TReference,
 	TTokenMatch,
 	TMatch,
-	TReference,
 	#TParsingContext,
 	#TParsingStats,
 	TParsingResult,
@@ -693,6 +703,10 @@ for _ in [Word]:
 		element.name = name
 	setattr(Grammar, name,       named_creator)
 	setattr(Grammar, "a" + name, creator)
+
+# NOTE: Useful for debugging
+# for k in C.TYPES:
+# 	print "C.TYPES[{0}] = {1}".format(k, C.TYPES[k])
 
 # -----------------------------------------------------------------------------
 #
