@@ -3,7 +3,7 @@
 ## C & Python Parsing Elements Grammar Library
 
 ```
-Version :  0.5.0
+Version :  0.6.0
 URL     :  http://github.com/sebastien/parsing
 README  :  https://cdn.rawgit.com/sebastien/libparsing/master/README.html
 ```
@@ -965,12 +965,12 @@ Reference* Reference_Ensure(void* elementOrReference);
 ```
 
 
-#### <a name="Reference_New_operation"><span class="classifier">operation</span> `Reference_New`</a>
+#### <a name="Reference_FromElement_operation"><span class="classifier">operation</span> `Reference_FromElement`</a>
 
  Returns a new reference wrapping the given parsing element
 
 ```c
-Reference* Reference_New(ParsingElement *);
+Reference* Reference_FromElement(ParsingElement* element);
 ```
 
 

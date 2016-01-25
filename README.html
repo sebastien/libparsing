@@ -22,7 +22,896 @@ var texto=typeof"extend"!="undefined"&&extend&&extend.module&&extend.module("tex
 	<body>
 		<div class="API use-texto use-base">
 			<div class="documentation" style="margin-left:250px;">
-				<div class="document">
+				<div class="document"><div id="libparsing" class="section level1">
+<h1>libparsing</h1>
+<div id="c-python-parsing-elements-grammar-library" class="section level2">
+<h2>C &amp; Python Parsing Elements Grammar Library</h2>
+<pre><code>Version :  0.6.0
+URL     :  http://github.com/sebastien/parsing
+README  :  https://cdn.rawgit.com/sebastien/libparsing/master/README.html</code></pre>
+<p><code>libparsing</code> is a parsing element grammar (PEG) library written in C with Python bindings. It offers decent performance while allowing for a lot of flexibility. It is mainly intended to be used to create programming languages and software engineering tools.</p>
+<p>As opposed to more traditional parsing techniques, the grammar is not compiled but constructed using an API that allows dynamic update of the grammar.</p>
+<p>The parser does not do any tokeninzation, the instead input stream is consumed and parsing elements are dynamically asked to match the next element of it. Once parsing elements match, the resulting matched input is processed and an action is triggered.</p>
+<p><code>libparsing</code> supports the following features:</p>
+<ul>
+<li><em>backtracking</em>, ie. going back in the input stream if a match is not found</li>
+<li><em>cherry-picking</em>, ie. skipping unrecognized input</li>
+<li><em>contextual rules</em>, ie. a rule that will match or not depending on external variables</li>
+</ul>
+<p>Parsing elements are usually slower than compiled or FSM-based parsers as they trade performance for flexibility. It's probably not a great idea to use <code>libparsing</code> if the parsing has to happen as fast as possible (ie. a protocol implementation), but it is a great use for programming languages, as it opens up the door to dynamic syntax plug-ins and multiple language embedding.</p>
+<p>If you're interested in PEG, you can start reading Brian Ford's original article. Projects such as PEG/LEG by Ian Piumarta <a href="http://piumarta.com/software/peg/" class="uri">http://piumarta.com/software/peg/</a> ,OMeta by Alessandro Warth <a href="http://www.tinlizzie.org/ometa/" class="uri">http://www.tinlizzie.org/ometa/</a> or Haskell's Parsec library <a href="https://www.haskell.org/haskellwiki/Parsec" class="uri">https://www.haskell.org/haskellwiki/Parsec</a> are of particular interest in the field.</p>
+<p>Here is a short example of what creating a simple grammar looks like in Python:</p>
+<pre><code>g = Grammar()
+s = g.symbols
+g.token(&quot;WS&quot;,       &quot;\s+&quot;)
+g.token(&quot;NUMBER&quot;,   &quot;\d+(\.\d+)?&quot;)
+g.token(&quot;VARIABLE&quot;, &quot;\w+&quot;)
+g.token(&quot;OPERATOR&quot;, &quot;[\/\+\-\*]&quot;)
+g.group(&quot;Value&quot;,     s.NUMBER, s.VARIABLE)
+g.rule(&quot;Suffix&quot;,     s.OPERATOR._as(&quot;operator&quot;), s.Value._as(&quot;value&quot;))
+g.rule(&quot;Expression&quot;, s.Value, s.Suffix.zeroOrMore())
+g.axiom(s.Expression)
+g.skip(s.WS)
+match = g.parseString(&quot;10 + 20 / 5&quot;)</code></pre>
+<p>and the equivalent code in C</p>
+<pre><code>Grammar* g = Grammar_new()
+SYMBOL(WS,         TOKEN(&quot;\\s+&quot;))
+SYMBOL(NUMBER,     TOKEN(&quot;\\d+(\\.\\d+)?&quot;))
+SYMBOL(VARIABLE,   TOKEN(&quot;\\w+&quot;))
+SYMBOL(OPERATOR,   GROUP(&quot;[\\/\\+\\-\\*]&quot;))
+SYMBOL(Value,      GOUP(_S(NUMBER), _S(VARIABLE)))
+SYMBOL(Suffix,     RULE(_AS(_S(OPERATOR), &quot;operator&quot;), _AS(_S(Value), &quot;value&quot;)))
+SYMBOL(Expression, RULE(_S(Value), _MO(Suffix))
+g-&gt;axiom = s_Expression;
+g-&gt;skip(s_WS);
+Grammar_prepare(g);
+Match* match = Grammar_parseString(g, &quot;10 + 20 / 5&quot;)</code></pre>
+</div>
+</div>
+<div id="installing" class="section level1">
+<h1>Installing</h1>
+<p>To install the Python parsing module:</p>
+<pre class="shell"><code>easy_install libparsing    # From Setuptools
+pip install  libparsing     # From PIP</code></pre>
+<p>Note that for the above to work, you'll need a C compiler and libpcre-dev. On Ubuntu, do <code>sudo apt install build-essential libprcre-dev</code>.</p>
+<p>To compile the C parsing module:</p>
+<pre class="shell"><code>git clone http://github.com/sebastien/libparsing
+cd libparsing
+make
+make install               # You can set PREFIX</code></pre>
+<p><code>libparsing</code> works with GCC4 and Clang and is written following the <code>c11</code> standard.</p>
+</div>
+<div id="c-api" class="section level1">
+<h1>C API</h1>
+<div id="input-data" class="section level2">
+<h2>Input data</h2>
+<p>The parsing library is configured at compile-time to iterate on specific elements of input, typically <code>char</code>. You can redefine the macro <code>ITERATION_UNIT</code> to the type you'd like to iterate on.</p>
+<p>By default, the <code>ITERATION_UNIT</code> is a <code>char</code>, which works both for ASCII and UTF8. On the topic of Unicode/UTF8, the parsing library only uses functions that are UTF8-savvy.</p>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="ot">#ifndef ITERATION_UNIT</span>
+<span class="ot">#define ITERATION_UNIT char</span>
+<span class="ot">#endif</span>
+
+<span class="kw">typedef</span> ITERATION_UNIT iterated_t;</code></pre>
+<p>Input data is acquired through <em>iterators</em>. Iterators wrap an input source (the default input is a <code>FileInput</code>) and a <code>move</code> callback that updates the iterator's offset. The iterator will build a buffer of the acquired input and maintain a pointer for the current offset within the data acquired from the input stream.</p>
+<p>You can get an iterator on a file by doing:</p>
+<pre class="sourceCode c"><code class="sourceCode c">Iterator* iterator = Iterator_Open(<span class="st">&quot;example.txt&quot;</span>);</code></pre>
+<div id="type-iterator" class="section level4">
+<h4><a name="Iterator_type"><span class="classifier">type</span> <code>Iterator</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="kw">typedef</span> <span class="kw">struct</span> Iterator {
+    <span class="dt">char</span>           status;    <span class="co">// The status of the iterator, one of STATUS_{INIT|PROCESSING|INPUT_ENDED|ENDED}</span>
+    <span class="dt">char</span>*          buffer;    <span class="co">// The buffer to the read data, note how it is a (void*) and not an `iterated_t`</span>
+    iterated_t*    current;   <span class="co">// The for the current offset within the buffer</span>
+    iterated_t     separator; <span class="co">// The character for line separator, `\n` by default.</span>
+    size_t         offset;    <span class="co">// Offset in input (in bytes), might be different from `current - buffer` if some input was freed.</span>
+    size_t         lines;     <span class="co">// Counter for lines that have been encountered</span>
+    size_t         length;    <span class="co">// Buffer length (in bytes), might be bigger than the data acquired from the input</span>
+    size_t         available; <span class="co">// Available data in buffer (in bytes), always `&lt;= length`</span>
+    bool           freeBuffer;
+    <span class="dt">void</span>*          input;     <span class="co">// Pointer to the input source</span>
+    bool          (*move) (<span class="kw">struct</span> Iterator*, <span class="dt">int</span> n); <span class="co">// Plug-in function to move to the previous/next positions</span>
+} Iterator;</code></pre>
+</div>
+<div id="type-fileinput" class="section level4">
+<h4><a name="FileInput_type"><span class="classifier">type</span> <code>FileInput</code></a></h4>
+<p>The file input wraps information about the input file, such as the <code>FILE</code> object and the <code>path</code>.</p>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="kw">typedef</span> <span class="kw">struct</span> FileInput {
+    FILE*        file;
+    <span class="dt">const</span> <span class="dt">char</span>*  path;
+} FileInput;</code></pre>
+</div>
+<div id="shared-eol" class="section level4">
+<h4><a name="EOL_shared"><span class="classifier">shared</span> <code>EOL</code></a></h4>
+<p>The EOL character used to count lines in an iterator context.</p>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="kw">extern</span> iterated_t         EOL;</code></pre>
+</div>
+<div id="operation-iterator_open" class="section level4">
+<h4><a name="Iterator_Open_operation"><span class="classifier">operation</span> <code>Iterator_Open</code></a></h4>
+<p>Returns a new iterator instance with the given open file as input</p>
+<pre class="sourceCode c"><code class="sourceCode c">Iterator* Iterator_Open(<span class="dt">const</span> <span class="dt">char</span>* path);</code></pre>
+</div>
+<div id="operation-iterator_fromstring" class="section level4">
+<h4><a name="Iterator_FromString_operation"><span class="classifier">operation</span> <code>Iterator_FromString</code></a></h4>
+<p>Returns a new iterator instance with the text</p>
+<pre class="sourceCode c"><code class="sourceCode c">Iterator* Iterator_FromString(<span class="dt">const</span> <span class="dt">char</span>* text);</code></pre>
+</div>
+<div id="constructor-iterator" class="section level4">
+<h4><a name="Iterator_constructor"><span class="classifier">constructor</span> <code>Iterator</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c">Iterator* Iterator_new(<span class="dt">void</span>);</code></pre>
+</div>
+<div id="destructor-iterator_free" class="section level4">
+<h4><a name="Iterator_free_destructor"><span class="classifier">destructor</span> <code>Iterator_free</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="dt">void</span>      Iterator_free(Iterator* this);</code></pre>
+</div>
+<div id="method-iterator_open" class="section level4">
+<h4><a name="Iterator_open_method"><span class="classifier">method</span> <code>Iterator_open</code></a></h4>
+<p>Makes the given iterator open the file at the given path. This will automatically assign a <code>FileInput</code> to the iterator as an input source.</p>
+<pre class="sourceCode c"><code class="sourceCode c">bool Iterator_open( Iterator* this, <span class="dt">const</span> <span class="dt">char</span> *path );</code></pre>
+</div>
+<div id="method-iterator_hasmore" class="section level4">
+<h4><a name="Iterator_hasMore_method"><span class="classifier">method</span> <code>Iterator_hasMore</code></a></h4>
+<p>Tells if the iterator has more available data</p>
+<pre class="sourceCode c"><code class="sourceCode c">bool Iterator_hasMore( Iterator* this );</code></pre>
+</div>
+<div id="method-iterator_remaining" class="section level4">
+<h4><a name="Iterator_remaining_method"><span class="classifier">method</span> <code>Iterator_remaining</code></a></h4>
+<p>Returns the number of bytes available from the current iterator's position. This should be at least <code>ITERATOR_BUFFER_AHEAD</code> until end of input stream is reached.</p>
+<pre class="sourceCode c"><code class="sourceCode c">size_t Iterator_remaining( Iterator* this );</code></pre>
+</div>
+<div id="method-iterator_moveto" class="section level4">
+<h4><a name="Iterator_moveTo_method"><span class="classifier">method</span> <code>Iterator_moveTo</code></a></h4>
+<p>Moves the iterator to the given offset</p>
+<pre class="sourceCode c"><code class="sourceCode c">bool Iterator_moveTo ( Iterator* this, size_t offset );</code></pre>
+</div>
+<div id="method-string_move" class="section level4">
+<h4><a name="String_move_method"><span class="classifier">method</span> <code>String_move</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c">bool String_move ( Iterator* this, <span class="dt">int</span> offset );</code></pre>
+</div>
+<div id="define-iterator_buffer_ahead" class="section level4">
+<h4><a name="ITERATOR_BUFFER_AHEAD_define"><span class="classifier">define</span> <code>ITERATOR_BUFFER_AHEAD</code></a></h4>
+<p>The number of <code>iterated_t</code> that should be loaded after the iterator's current position. This limits the numbers of <code>iterated_t</code> that a <code>Token</code> could match.</p>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="ot">#define ITERATOR_BUFFER_AHEAD 64000</span></code></pre>
+</div>
+<div id="constructor-fileinput" class="section level4">
+<h4><a name="FileInput_constructor"><span class="classifier">constructor</span> <code>FileInput</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c">FileInput* FileInput_new(<span class="dt">const</span> <span class="dt">char</span>* path );</code></pre>
+</div>
+<div id="destructor-fileinput_free" class="section level4">
+<h4><a name="FileInput_free_destructor"><span class="classifier">destructor</span> <code>FileInput_free</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="dt">void</span>       FileInput_free(FileInput* this);</code></pre>
+</div>
+<div id="method-fileinput_preload" class="section level4">
+<h4><a name="FileInput_preload_method"><span class="classifier">method</span> <code>FileInput_preload</code></a></h4>
+<p>Preloads data from the input source so that the buffer has ITERATOR_BUFFER_AHEAD characters ahead.</p>
+<pre class="sourceCode c"><code class="sourceCode c">size_t FileInput_preload( Iterator* this );</code></pre>
+</div>
+<div id="method-fileinput_move" class="section level4">
+<h4><a name="FileInput_move_method"><span class="classifier">method</span> <code>FileInput_move</code></a></h4>
+<p>Advances/rewinds the given iterator, loading new data from the file input whenever there is not <code>ITERATOR_BUFFER_AHEAD</code> data elements ahead of the iterator's current position.</p>
+<pre class="sourceCode c"><code class="sourceCode c">bool FileInput_move   ( Iterator* this, <span class="dt">int</span> n );</code></pre>
+</div>
+</div>
+<div id="grammar" class="section level2">
+<h2>Grammar</h2>
+<p>The <code>Grammar</code> is the concrete definition of the language you're going to parse. It is defined by an <code>axiom</code> and input data that can be skipped, such as white space.</p>
+<p>The <code>axiom</code> and <code>skip</code> properties are both references to <em>parsing elements</em>.</p>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="kw">typedef</span> <span class="kw">struct</span> ParsingContext ParsingContext;
+<span class="kw">typedef</span> <span class="kw">struct</span> ParsingElement ParsingElement;
+<span class="kw">typedef</span> <span class="kw">struct</span> ParsingResult  ParsingResult;
+<span class="kw">typedef</span> <span class="kw">struct</span> Reference      Reference;
+<span class="kw">typedef</span> <span class="kw">struct</span> Match          Match;
+<span class="kw">typedef</span> <span class="dt">void</span>                  Element;</code></pre>
+<div id="type-grammar" class="section level4">
+<h4><a name="Grammar_type"><span class="classifier">type</span> <code>Grammar</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="kw">typedef</span> <span class="kw">struct</span> Grammar {
+    ParsingElement*  axiom;       <span class="co">// The axiom</span>
+    ParsingElement*  skip;        <span class="co">// The skipped element</span>
+    <span class="dt">int</span>              axiomCount;  <span class="co">// The count of parsing elemetns in axiom</span>
+    <span class="dt">int</span>              skipCount;   <span class="co">// The count of parsing elements in skip</span>
+    Element**        elements;    <span class="co">// The set of all elements in the grammar</span>
+    bool             isVerbose;
+} Grammar;</code></pre>
+</div>
+<div id="constructor-grammar" class="section level4">
+<h4><a name="Grammar_constructor"><span class="classifier">constructor</span> <code>Grammar</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c">Grammar* Grammar_new(<span class="dt">void</span>);</code></pre>
+</div>
+<div id="destructor-grammar_free" class="section level4">
+<h4><a name="Grammar_free_destructor"><span class="classifier">destructor</span> <code>Grammar_free</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="dt">void</span> Grammar_free(Grammar* this);</code></pre>
+</div>
+<div id="method-grammar_prepare" class="section level4">
+<h4><a name="Grammar_prepare_method"><span class="classifier">method</span> <code>Grammar_prepare</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="dt">void</span> Grammar_prepare ( Grammar* this );</code></pre>
+</div>
+<div id="method-grammar_parsefromiterator" class="section level4">
+<h4><a name="Grammar_parseFromIterator_method"><span class="classifier">method</span> <code>Grammar_parseFromIterator</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c">ParsingResult* Grammar_parseFromIterator( Grammar* this, Iterator* iterator );</code></pre>
+</div>
+<div id="method-grammar_parsefrompath" class="section level4">
+<h4><a name="Grammar_parseFromPath_method"><span class="classifier">method</span> <code>Grammar_parseFromPath</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c">ParsingResult* Grammar_parseFromPath( Grammar* this, <span class="dt">const</span> <span class="dt">char</span>* path );</code></pre>
+</div>
+<div id="method-grammar_parsefromstring" class="section level4">
+<h4><a name="Grammar_parseFromString_method"><span class="classifier">method</span> <code>Grammar_parseFromString</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c">ParsingResult* Grammar_parseFromString( Grammar* this, <span class="dt">const</span> <span class="dt">char</span>* text );</code></pre>
+</div>
+</div>
+<div id="elements" class="section level2">
+<h2>Elements</h2>
+<div id="callback-walkingcallback" class="section level4">
+<h4><a name="WalkingCallback_callback"><span class="classifier">callback</span> <code>WalkingCallback</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="kw">typedef</span> <span class="dt">int</span> (*WalkingCallback)(Element* this, <span class="dt">int</span> step, <span class="dt">void</span>* context);</code></pre>
+</div>
+<div id="method-element_walk" class="section level4">
+<h4><a name="Element_walk_method"><span class="classifier">method</span> <code>Element_walk</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="dt">int</span> Element_walk( Element* this, WalkingCallback callback, <span class="dt">void</span>* context);</code></pre>
+</div>
+<div id="method-element__walk" class="section level4">
+<h4><a name="Element__walk_method"><span class="classifier">method</span> <code>Element__walk</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="dt">int</span> Element__walk( Element* this, WalkingCallback callback, <span class="dt">int</span> step, <span class="dt">void</span>* context);</code></pre>
+</div>
+<div id="parsing-elements" class="section level3">
+<h3>Parsing Elements</h3>
+<p>Parsing elements are the core elements that recognize and process input data. There are 4 basic types: <code>Work</code>, <code>Token</code>, <code>Group</code> and <code>Rule</code>.</p>
+<p>Parsing elements offer two main operations: <code>recognize</code> and <code>process</code>. The <code>recognize</code> method generates a <code>Match</code> object (that might be the <code>FAILURE</code> singleton if the data was not recognized). The <code>process</code> method tranforms corresponds to a user-defined action that transforms the <code>Match</code> object and returns the generated value.</p>
+<p>Parsing element are assigned an <code>id</code> that corresponds to their breadth-first distance to the axiom. Before parsing, the grammar will re-assign the parsing element's id accordingly.</p>
+<div id="type-match" class="section level4">
+<h4><a name="Match_type"><span class="classifier">type</span> <code>Match</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="kw">typedef</span> <span class="kw">struct</span> Match {
+    <span class="dt">char</span>            status;     <span class="co">// The status of the match (see STATUS_XXX)</span>
+    size_t          offset;     <span class="co">// The offset of `iterated_t` matched</span>
+    size_t          length;     <span class="co">// The number of `iterated_t` matched</span>
+    Element*        element;
+    ParsingContext* context;
+    <span class="dt">void</span>*           data;      <span class="co">// The matched data (usually a subset of the input stream)</span>
+    <span class="kw">struct</span> Match*   next;      <span class="co">// A pointer to the next  match (see `References`)</span>
+    <span class="kw">struct</span> Match*   child;     <span class="co">// A pointer to the child match (see `References`)</span>
+} Match;</code></pre>
+</div>
+<div id="define-status_init" class="section level4">
+<h4><a name="STATUS_INIT_define"><span class="classifier">define</span> <code>STATUS_INIT</code></a></h4>
+<p>The different values for a match (or iterator)'s status</p>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="ot">#define STATUS_INIT        &#39;-&#39;</span></code></pre>
+</div>
+<div id="define-status_processing" class="section level4">
+<h4><a name="STATUS_PROCESSING_define"><span class="classifier">define</span> <code>STATUS_PROCESSING</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="ot">#define STATUS_PROCESSING  &#39;~&#39;</span></code></pre>
+</div>
+<div id="define-status_matched" class="section level4">
+<h4><a name="STATUS_MATCHED_define"><span class="classifier">define</span> <code>STATUS_MATCHED</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="ot">#define STATUS_MATCHED     &#39;M&#39;</span></code></pre>
+</div>
+<div id="define-status_success" class="section level4">
+<h4><a name="STATUS_SUCCESS_define"><span class="classifier">define</span> <code>STATUS_SUCCESS</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="ot">#define STATUS_SUCCESS     &#39;S&#39;</span></code></pre>
+</div>
+<div id="define-status_partial" class="section level4">
+<h4><a name="STATUS_PARTIAL_define"><span class="classifier">define</span> <code>STATUS_PARTIAL</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="ot">#define STATUS_PARTIAL     &#39;s&#39;</span></code></pre>
+</div>
+<div id="define-status_failed" class="section level4">
+<h4><a name="STATUS_FAILED_define"><span class="classifier">define</span> <code>STATUS_FAILED</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="ot">#define STATUS_FAILED      &#39;X&#39;</span></code></pre>
+</div>
+<div id="define-status_input_ended" class="section level4">
+<h4><a name="STATUS_INPUT_ENDED_define"><span class="classifier">define</span> <code>STATUS_INPUT_ENDED</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="ot">#define STATUS_INPUT_ENDED &#39;.&#39;</span></code></pre>
+</div>
+<div id="define-status_ended" class="section level4">
+<h4><a name="STATUS_ENDED_define"><span class="classifier">define</span> <code>STATUS_ENDED</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="ot">#define STATUS_ENDED       &#39;E&#39;</span></code></pre>
+</div>
+<div id="define-type_element" class="section level4">
+<h4><a name="TYPE_ELEMENT_define"><span class="classifier">define</span> <code>TYPE_ELEMENT</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="ot">#define TYPE_ELEMENT    &#39;E&#39;</span></code></pre>
+</div>
+<div id="define-type_word" class="section level4">
+<h4><a name="TYPE_WORD_define"><span class="classifier">define</span> <code>TYPE_WORD</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="ot">#define TYPE_WORD       &#39;W&#39;</span></code></pre>
+</div>
+<div id="define-type_token" class="section level4">
+<h4><a name="TYPE_TOKEN_define"><span class="classifier">define</span> <code>TYPE_TOKEN</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="ot">#define TYPE_TOKEN      &#39;T&#39;</span></code></pre>
+</div>
+<div id="define-type_group" class="section level4">
+<h4><a name="TYPE_GROUP_define"><span class="classifier">define</span> <code>TYPE_GROUP</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="ot">#define TYPE_GROUP      &#39;G&#39;</span></code></pre>
+</div>
+<div id="define-type_rule" class="section level4">
+<h4><a name="TYPE_RULE_define"><span class="classifier">define</span> <code>TYPE_RULE</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="ot">#define TYPE_RULE       &#39;R&#39;</span></code></pre>
+</div>
+<div id="define-type_condition" class="section level4">
+<h4><a name="TYPE_CONDITION_define"><span class="classifier">define</span> <code>TYPE_CONDITION</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="ot">#define TYPE_CONDITION  &#39;c&#39;</span></code></pre>
+</div>
+<div id="define-type_procedure" class="section level4">
+<h4><a name="TYPE_PROCEDURE_define"><span class="classifier">define</span> <code>TYPE_PROCEDURE</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="ot">#define TYPE_PROCEDURE  &#39;p&#39;</span></code></pre>
+</div>
+<div id="define-type_reference" class="section level4">
+<h4><a name="TYPE_REFERENCE_define"><span class="classifier">define</span> <code>TYPE_REFERENCE</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="ot">#define TYPE_REFERENCE  &#39;#&#39;</span></code></pre>
+</div>
+<div id="define-id_unbound" class="section level4">
+<h4><a name="ID_UNBOUND_define"><span class="classifier">define</span> <code>ID_UNBOUND</code></a></h4>
+<p>A parsing element that is not bound to a grammar will have ID_UNBOUND by default.</p>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="ot">#define ID_UNBOUND      -10</span></code></pre>
+</div>
+<div id="define-id_binding" class="section level4">
+<h4><a name="ID_BINDING_define"><span class="classifier">define</span> <code>ID_BINDING</code></a></h4>
+<p>A parsing element that being bound to a grammar (see <code>Grammar_prepare</code>) will have an id of <code>ID_BINDING</code> temporarily.</p>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="ot">#define ID_BINDING       -1</span></code></pre>
+</div>
+<div id="singleton-failure_s" class="section level4">
+<h4><a name="FAILURE_S_singleton"><span class="classifier">singleton</span> <code>FAILURE_S</code></a></h4>
+<p>A specific match that indicates a failure</p>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="kw">extern</span> Match FAILURE_S;</code></pre>
+</div>
+<div id="shared-failure" class="section level4">
+<h4><a name="FAILURE_shared"><span class="classifier">shared</span> <code>FAILURE</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="kw">extern</span> Match* FAILURE;</code></pre>
+</div>
+<div id="operation-match_empty" class="section level4">
+<h4><a name="Match_Empty_operation"><span class="classifier">operation</span> <code>Match_Empty</code></a></h4>
+<p>Creates new empty (successful) match</p>
+<pre class="sourceCode c"><code class="sourceCode c">Match* Match_Empty(Element* element, ParsingContext* context);</code></pre>
+</div>
+<div id="operation-match_success" class="section level4">
+<h4><a name="Match_Success_operation"><span class="classifier">operation</span> <code>Match_Success</code></a></h4>
+<p>Creates a new successful match of the given length</p>
+<pre class="sourceCode c"><code class="sourceCode c">Match* Match_Success(size_t length, Element* element, ParsingContext* context);</code></pre>
+</div>
+<div id="constructor-match" class="section level4">
+<h4><a name="Match_constructor"><span class="classifier">constructor</span> <code>Match</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c">Match* Match_new(<span class="dt">void</span>);</code></pre>
+</div>
+<div id="destructor-match_free" class="section level4">
+<h4><a name="Match_free_destructor"><span class="classifier">destructor</span> <code>Match_free</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="dt">void</span> Match_free(Match* this);</code></pre>
+</div>
+<div id="method-match_issuccess" class="section level4">
+<h4><a name="Match_isSuccess_method"><span class="classifier">method</span> <code>Match_isSuccess</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c">bool Match_isSuccess(Match* this);</code></pre>
+</div>
+<div id="method-match_getoffset" class="section level4">
+<h4><a name="Match_getOffset_method"><span class="classifier">method</span> <code>Match_getOffset</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="dt">int</span> Match_getOffset(Match* this);</code></pre>
+</div>
+<div id="method-match_getlength" class="section level4">
+<h4><a name="Match_getLength_method"><span class="classifier">method</span> <code>Match_getLength</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="dt">int</span> Match_getLength(Match* this);</code></pre>
+</div>
+<div id="method-match__walk" class="section level4">
+<h4><a name="Match__walk_method"><span class="classifier">method</span> <code>Match__walk</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="dt">int</span> Match__walk(Match* this, WalkingCallback callback, <span class="dt">int</span> step, <span class="dt">void</span>* context );</code></pre>
+</div>
+<div id="type-parsingelement" class="section level4">
+<h4><a name="ParsingElement_type"><span class="classifier">type</span> <code>ParsingElement</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="kw">typedef</span> <span class="kw">struct</span> ParsingElement {
+    <span class="dt">char</span>           type;       <span class="co">// Type is used du differentiate ParsingElement from Reference</span>
+    <span class="dt">int</span>            id;         <span class="co">// The ID, assigned by the grammar, as the relative distance to the axiom</span>
+    <span class="dt">const</span> <span class="dt">char</span>*    name;       <span class="co">// The parsing element&#39;s name, for debugging</span>
+    <span class="dt">void</span>*          config;     <span class="co">// The configuration of the parsing element</span>
+    <span class="kw">struct</span> Reference*     children;   <span class="co">// The parsing element&#39;s children, if any</span>
+    <span class="kw">struct</span> Match*         (*recognize) (<span class="kw">struct</span> ParsingElement*, ParsingContext*);
+    <span class="kw">struct</span> Match*         (*process)   (<span class="kw">struct</span> ParsingElement*, ParsingContext*, Match*);
+    <span class="dt">void</span>                  (*freeMatch) (Match*);
+} ParsingElement;</code></pre>
+</div>
+<div id="operation-parsingelement_is" class="section level4">
+<h4><a name="ParsingElement_Is_operation"><span class="classifier">operation</span> <code>ParsingElement_Is</code></a></h4>
+<p>Tells if the given pointer is a pointer to a ParsingElement.</p>
+<pre class="sourceCode c"><code class="sourceCode c">bool         ParsingElement_Is(<span class="dt">void</span> *);</code></pre>
+</div>
+<div id="constructor-parsingelement" class="section level4">
+<h4><a name="ParsingElement_constructor"><span class="classifier">constructor</span> <code>ParsingElement</code></a></h4>
+<p>Creates a new parsing element and adds the given referenced parsing elements as children. Note that this is an internal constructor, and you should use the specialized versions instead.</p>
+<pre class="sourceCode c"><code class="sourceCode c">ParsingElement* ParsingElement_new(Reference* children[]);</code></pre>
+</div>
+<div id="destructor-parsingelement_free" class="section level4">
+<h4><a name="ParsingElement_free_destructor"><span class="classifier">destructor</span> <code>ParsingElement_free</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="dt">void</span> ParsingElement_free(ParsingElement* this);</code></pre>
+</div>
+<div id="method-parsingelement_add" class="section level4">
+<h4><a name="ParsingElement_add_method"><span class="classifier">method</span> <code>ParsingElement_add</code></a></h4>
+<p>Adds a new reference as child of this parsing element. This will only be effective for composite parsing elements such as <code>Rule</code> or <code>Token</code>.</p>
+<pre class="sourceCode c"><code class="sourceCode c">ParsingElement* ParsingElement_add(ParsingElement *this, Reference *child);</code></pre>
+</div>
+<div id="method-parsingelement_add-1" class="section level4">
+<h4><a name="ParsingElement_add_method"><span class="classifier">method</span> <code>ParsingElement_add</code></a></h4>
+<p>Returns the match for this parsing element for the given iterator's state. inline Match* ParsingElement_recognize( ParsingElement* this, ParsingContext* context );</p>
+</div>
+<div id="method-parsingelement_process" class="section level4">
+<h4><a name="ParsingElement_process_method"><span class="classifier">method</span> <code>ParsingElement_process</code></a></h4>
+<p>Processes the given match once the parsing element has fully succeeded. This is where user-bound actions will be applied, and where you're most likely to do things such as construct an AST.</p>
+<pre class="sourceCode c"><code class="sourceCode c">Match* ParsingElement_process( ParsingElement* this, Match* match );</code></pre>
+</div>
+<div id="method-parsingelement_name" class="section level4">
+<h4><a name="ParsingElement_name_method"><span class="classifier">method</span> <code>ParsingElement_name</code></a></h4>
+<p>Transparently sets the name of the element</p>
+<pre class="sourceCode c"><code class="sourceCode c">ParsingElement* ParsingElement_name( ParsingElement* this, <span class="dt">const</span> <span class="dt">char</span>* name );</code></pre>
+</div>
+</div>
+<div id="word" class="section level3">
+<h3>Word</h3>
+<p>Words recognize a static string at the current iterator location.</p>
+<div id="type-wordconfig" class="section level4">
+<h4><a name="WordConfig_type"><span class="classifier">type</span> <code>WordConfig</code></a></h4>
+<p>The parsing element configuration information that is used by the <code>Token</code> methods.</p>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="kw">typedef</span> <span class="kw">struct</span> WordConfig {
+    <span class="dt">const</span> <span class="dt">char</span>* word;
+    size_t      length;
+} WordConfig;</code></pre>
+</div>
+<div id="constructor-parsingelement-1" class="section level4">
+<h4><a name="ParsingElement_constructor"><span class="classifier">constructor</span> <code>ParsingElement</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c">ParsingElement* Word_new(<span class="dt">const</span> <span class="dt">char</span>* word);</code></pre>
+</div>
+<div id="destructor-word_free" class="section level4">
+<h4><a name="Word_free_destructor"><span class="classifier">destructor</span> <code>Word_free</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="dt">void</span> Word_free(ParsingElement* this);</code></pre>
+</div>
+<div id="method-word_recognize" class="section level4">
+<h4><a name="Word_recognize_method"><span class="classifier">method</span> <code>Word_recognize</code></a></h4>
+<p>The specialized match function for token parsing elements.</p>
+<pre class="sourceCode c"><code class="sourceCode c">Match*          Word_recognize(ParsingElement* this, ParsingContext* context);</code></pre>
+</div>
+</div>
+<div id="tokens" class="section level3">
+<h3>Tokens</h3>
+<p>Tokens are regular expression based parsing elements. They do not have any children and test if the regular expression matches exactly at the iterator's current location.</p>
+<div id="type-tokenconfig" class="section level4">
+<h4><a name="TokenConfig_type"><span class="classifier">type</span> <code>TokenConfig</code></a></h4>
+<p>The parsing element configuration information that is used by the <code>Token</code> methods.</p>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="kw">typedef</span> <span class="kw">struct</span> TokenConfig {
+    <span class="dt">const</span> <span class="dt">char</span>* expr;
+<span class="ot">#ifdef WITH_PCRE</span>
+    pcre*       regexp;
+    pcre_extra* extra;
+<span class="ot">#endif</span>
+} TokenConfig;</code></pre>
+</div>
+<div id="type-tokenmatch" class="section level4">
+<h4><a name="TokenMatch_type"><span class="classifier">type</span> <code>TokenMatch</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="kw">typedef</span> <span class="kw">struct</span> TokenMatch {
+    <span class="dt">int</span>             count;
+    <span class="dt">const</span> <span class="dt">char</span>**    groups;
+} TokenMatch;</code></pre>
+</div>
+<div id="method-token_new" class="section level4">
+<h4><a name="Token_new_method"><span class="classifier">method</span> <code>Token_new</code></a></h4>
+<p>Creates a new token with the given POSIX extended regular expression</p>
+<pre class="sourceCode c"><code class="sourceCode c">ParsingElement* Token_new(<span class="dt">const</span> <span class="dt">char</span>* expr);</code></pre>
+</div>
+<div id="destructor-token_free" class="section level4">
+<h4><a name="Token_free_destructor"><span class="classifier">destructor</span> <code>Token_free</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="dt">void</span> Token_free(ParsingElement*);</code></pre>
+</div>
+<div id="method-token_recognize" class="section level4">
+<h4><a name="Token_recognize_method"><span class="classifier">method</span> <code>Token_recognize</code></a></h4>
+<p>The specialized match function for token parsing elements.</p>
+<pre class="sourceCode c"><code class="sourceCode c">Match*          Token_recognize(ParsingElement* this, ParsingContext* context);</code></pre>
+</div>
+<div id="method-tokenmatch_free" class="section level4">
+<h4><a name="TokenMatch_free_method"><span class="classifier">method</span> <code>TokenMatch_free</code></a></h4>
+<p>Frees the <code>TokenMatch</code> created in <code>Token_recognize</code></p>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="dt">void</span> TokenMatch_free(Match* match);</code></pre>
+</div>
+<div id="method-tokenmatch_group" class="section level4">
+<h4><a name="TokenMatch_group_method"><span class="classifier">method</span> <code>TokenMatch_group</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="dt">const</span> <span class="dt">char</span>* TokenMatch_group(Match* match, <span class="dt">int</span> index);</code></pre>
+</div>
+</div>
+<div id="references" class="section level3">
+<h3>References</h3>
+<p>We've seen that parsing elements can have <code>children</code>. However, a parsing element's children are not directly parsing elements but rather parsing elements' <code>Reference</code>s. This is why the <code>ParsingElement_add</code> takes a <code>Reference</code> object as parameter.</p>
+<p>References allow to share a single parsing element between many different composite parsing elements, while decorating them with additional information such as their cardinality (<code>ONE</code>, <code>OPTIONAL</code>, <code>MANY</code> and <code>MANY_OPTIONAL</code>) and a <code>name</code> that will allow <code>process</code> actions to easily access specific parts of the parsing element.</p>
+<div id="type-reference" class="section level4">
+<h4><a name="Reference_type"><span class="classifier">type</span> <code>Reference</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="kw">typedef</span> <span class="kw">struct</span> Reference {
+    <span class="dt">char</span>            type;            <span class="co">// Set to Reference_T, to disambiguate with ParsingElement</span>
+    <span class="dt">int</span>             id;              <span class="co">// The ID, assigned by the grammar, as the relative distance to the axiom</span>
+    <span class="dt">char</span>            cardinality;     <span class="co">// Either ONE (default), OPTIONAL, MANY or MANY_OPTIONAL</span>
+    <span class="dt">const</span> <span class="dt">char</span>*     name;            <span class="co">// The name of the reference (optional)</span>
+    <span class="kw">struct</span> ParsingElement* element;  <span class="co">// The reference to the parsing element</span>
+    <span class="kw">struct</span> Reference*      next;     <span class="co">// The next child reference in the parsing elements</span>
+} Reference;</code></pre>
+</div>
+<div id="define-cardinality_optional" class="section level4">
+<h4><a name="CARDINALITY_OPTIONAL_define"><span class="classifier">define</span> <code>CARDINALITY_OPTIONAL</code></a></h4>
+<p>The different values for the <code>Reference</code> cardinality.</p>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="ot">#define CARDINALITY_OPTIONAL      &#39;?&#39;</span></code></pre>
+</div>
+<div id="define-cardinality_one" class="section level4">
+<h4><a name="CARDINALITY_ONE_define"><span class="classifier">define</span> <code>CARDINALITY_ONE</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="ot">#define CARDINALITY_ONE           &#39;1&#39;</span></code></pre>
+</div>
+<div id="define-cardinality_many_optional" class="section level4">
+<h4><a name="CARDINALITY_MANY_OPTIONAL_define"><span class="classifier">define</span> <code>CARDINALITY_MANY_OPTIONAL</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="ot">#define CARDINALITY_MANY_OPTIONAL &#39;*&#39;</span></code></pre>
+</div>
+<div id="define-cardinality_many" class="section level4">
+<h4><a name="CARDINALITY_MANY_define"><span class="classifier">define</span> <code>CARDINALITY_MANY</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="ot">#define CARDINALITY_MANY          &#39;+&#39;</span></code></pre>
+</div>
+<div id="operation-reference_is" class="section level4">
+<h4><a name="Reference_Is_operation"><span class="classifier">operation</span> <code>Reference_Is</code></a></h4>
+<p>Tells if the given pointer is a pointer to Reference</p>
+<pre class="sourceCode c"><code class="sourceCode c">bool Reference_Is(<span class="dt">void</span> * this);</code></pre>
+</div>
+<div id="operation-reference_ensure" class="section level4">
+<h4><a name="Reference_Ensure_operation"><span class="classifier">operation</span> <code>Reference_Ensure</code></a></h4>
+<p>Ensures that the given element (or reference) is a reference.</p>
+<pre class="sourceCode c"><code class="sourceCode c">Reference* Reference_Ensure(<span class="dt">void</span>* elementOrReference);</code></pre>
+</div>
+<div id="operation-reference_fromelement" class="section level4">
+<h4><a name="Reference_FromElement_operation"><span class="classifier">operation</span> <code>Reference_FromElement</code></a></h4>
+<p>Returns a new reference wrapping the given parsing element</p>
+<pre class="sourceCode c"><code class="sourceCode c">Reference* Reference_FromElement(ParsingElement* element);</code></pre>
+</div>
+<div id="constructor-reference" class="section level4">
+<h4><a name="Reference_constructor"><span class="classifier">constructor</span> <code>Reference</code></a></h4>
+<p>References are typically owned by their single parent composite element.</p>
+<pre class="sourceCode c"><code class="sourceCode c">Reference* Reference_new(<span class="dt">void</span>);</code></pre>
+</div>
+<div id="method-reference_cardinality" class="section level4">
+<h4><a name="Reference_cardinality_method"><span class="classifier">method</span> <code>Reference_cardinality</code></a></h4>
+<p>Sets the cardinality of this reference, returning it transprently.</p>
+<pre class="sourceCode c"><code class="sourceCode c">Reference* Reference_cardinality(Reference* this, <span class="dt">char</span> cardinality);</code></pre>
+</div>
+<div id="method-reference_name" class="section level4">
+<h4><a name="Reference_name_method"><span class="classifier">method</span> <code>Reference_name</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c">Reference* Reference_name(Reference* this, <span class="dt">const</span> <span class="dt">char</span>* name);</code></pre>
+</div>
+<div id="method-reference__walk" class="section level4">
+<h4><a name="Reference__walk_method"><span class="classifier">method</span> <code>Reference__walk</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="dt">int</span> Reference__walk( Reference* this, WalkingCallback callback, <span class="dt">int</span> step, <span class="dt">void</span>* nothing );</code></pre>
+</div>
+<div id="method-reference_recognize" class="section level4">
+<h4><a name="Reference_recognize_method"><span class="classifier">method</span> <code>Reference_recognize</code></a></h4>
+<p>Returns the matched value corresponding to the first match of this reference. <code>OPTIONAL</code> references might return <code>EMPTY</code>, <code>ONE</code> references will return a match with a <code>next=NULL</code> while <code>MANY</code> may return a match with a <code>next</code> pointing to the next match.</p>
+<pre class="sourceCode c"><code class="sourceCode c">Match* Reference_recognize(Reference* this, ParsingContext* context);</code></pre>
+</div>
+</div>
+<div id="groups" class="section level3">
+<h3>Groups</h3>
+<p>Groups are composite parsing elements that will return the first matching reference's match. Think of it as a logical <code>or</code>.</p>
+<div id="constructor-parsingelement-2" class="section level4">
+<h4><a name="ParsingElement_constructor"><span class="classifier">constructor</span> <code>ParsingElement</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c">ParsingElement* Group_new(Reference* children[]);</code></pre>
+</div>
+<div id="method-group_recognize" class="section level4">
+<h4><a name="Group_recognize_method"><span class="classifier">method</span> <code>Group_recognize</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c">Match*          Group_recognize(ParsingElement* this, ParsingContext* context);</code></pre>
+</div>
+</div>
+<div id="rules" class="section level3">
+<h3>Rules</h3>
+<p>Groups are composite parsing elements that only succeed if all their matching reference's.</p>
+<div id="constructor-parsingelement-3" class="section level4">
+<h4><a name="ParsingElement_constructor"><span class="classifier">constructor</span> <code>ParsingElement</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c">ParsingElement* Rule_new(Reference* children[]);</code></pre>
+</div>
+<div id="method-rule_recognize" class="section level4">
+<h4><a name="Rule_recognize_method"><span class="classifier">method</span> <code>Rule_recognize</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c">Match*          Rule_recognize(ParsingElement* this, ParsingContext* context);</code></pre>
+</div>
+</div>
+<div id="procedures" class="section level3">
+<h3>Procedures</h3>
+<p>Procedures are parsing elements that do not consume any input, always succeed and usually have a side effect, such as setting a variable in the parsing context.</p>
+<div id="callback-procedurecallback" class="section level4">
+<h4><a name="ProcedureCallback_callback"><span class="classifier">callback</span> <code>ProcedureCallback</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="kw">typedef</span> <span class="dt">void</span> (*ProcedureCallback)(ParsingElement* this, ParsingContext* context);</code></pre>
+</div>
+<div id="callback-matchcallback" class="section level4">
+<h4><a name="MatchCallback_callback"><span class="classifier">callback</span> <code>MatchCallback</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="kw">typedef</span> <span class="dt">void</span> (*MatchCallback)(Match* m);</code></pre>
+</div>
+<div id="constructor-parsingelement-4" class="section level4">
+<h4><a name="ParsingElement_constructor"><span class="classifier">constructor</span> <code>ParsingElement</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c">ParsingElement* Procedure_new(ProcedureCallback c);</code></pre>
+</div>
+<div id="method-procedure_recognize" class="section level4">
+<h4><a name="Procedure_recognize_method"><span class="classifier">method</span> <code>Procedure_recognize</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c">Match*          Procedure_recognize(ParsingElement* this, ParsingContext* context);</code></pre>
+</div>
+</div>
+<div id="conditions" class="section level3">
+<h3>Conditions</h3>
+<p>Conditions, like procedures, execute arbitrary code when executed, but they might return a FAILURE.</p>
+<div id="callback-conditioncallback" class="section level4">
+<h4><a name="ConditionCallback_callback"><span class="classifier">callback</span> <code>ConditionCallback</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="kw">typedef</span> Match* (*ConditionCallback)(ParsingElement*, ParsingContext*);</code></pre>
+</div>
+<div id="constructor-parsingelement-5" class="section level4">
+<h4><a name="ParsingElement_constructor"><span class="classifier">constructor</span> <code>ParsingElement</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c">ParsingElement* Condition_new(ConditionCallback c);</code></pre>
+</div>
+<div id="method-condition_recognize" class="section level4">
+<h4><a name="Condition_recognize_method"><span class="classifier">method</span> <code>Condition_recognize</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c">Match*          Condition_recognize(ParsingElement* this, ParsingContext* context);</code></pre>
+</div>
+</div>
+</div>
+<div id="the-parsing-process" class="section level2">
+<h2>The parsing process</h2>
+<p>The parsing itself is the process of taking a <code>grammar</code> and applying it to an input stream of data, represented by the <code>iterator</code>.</p>
+<p>The grammar's <code>axiom</code> will be matched against the <code>iterator</code>'s current position, and if necessary, the grammar's <code>skip</code> parsing element will be applied to advance the iterator.</p>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="kw">typedef</span> <span class="kw">struct</span> ParsingStep    ParsingStep;
+<span class="kw">typedef</span> <span class="kw">struct</span> ParsingOffset  ParsingOffset;</code></pre>
+<div id="type-parsingstats" class="section level4">
+<h4><a name="ParsingStats_type"><span class="classifier">type</span> <code>ParsingStats</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="kw">typedef</span> <span class="kw">struct</span> ParsingStats {
+    size_t  bytesRead;
+    <span class="dt">double</span>  parseTime;
+    size_t  symbolsCount;
+    size_t* successBySymbol;
+    size_t* failureBySymbol;
+} ParsingStats;</code></pre>
+</div>
+<div id="constructor-parsingstats" class="section level4">
+<h4><a name="ParsingStats_constructor"><span class="classifier">constructor</span> <code>ParsingStats</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c">ParsingStats* ParsingStats_new(<span class="dt">void</span>);</code></pre>
+</div>
+<div id="destructor-parsingstats_free" class="section level4">
+<h4><a name="ParsingStats_free_destructor"><span class="classifier">destructor</span> <code>ParsingStats_free</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="dt">void</span> ParsingStats_free(ParsingStats* this);</code></pre>
+</div>
+<div id="method-parsingstats_setsymbolscount" class="section level4">
+<h4><a name="ParsingStats_setSymbolsCount_method"><span class="classifier">method</span> <code>ParsingStats_setSymbolsCount</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="dt">void</span> ParsingStats_setSymbolsCount(ParsingStats* this, size_t t);</code></pre>
+</div>
+<div id="method-parsingstats_registermatch" class="section level4">
+<h4><a name="ParsingStats_registerMatch_method"><span class="classifier">method</span> <code>ParsingStats_registerMatch</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c">Match* ParsingStats_registerMatch(ParsingStats* this, Element* e, Match* m);</code></pre>
+</div>
+<div id="type-parsingcontext" class="section level4">
+<h4><a name="ParsingContext_type"><span class="classifier">type</span> <code>ParsingContext</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="kw">typedef</span> <span class="kw">struct</span> ParsingContext {
+    <span class="kw">struct</span> Grammar*              grammar;      <span class="co">// The grammar used to parse</span>
+    <span class="kw">struct</span> Iterator*             iterator;     <span class="co">// Iterator on the input data</span>
+    <span class="kw">struct</span> ParsingOffset* offsets;      <span class="co">// The parsing offsets, starting at 0</span>
+    <span class="kw">struct</span> ParsingOffset* current;      <span class="co">// The current parsing offset</span>
+    <span class="kw">struct</span> ParsingStats*  stats;
+} ParsingContext;</code></pre>
+</div>
+<div id="constructor-parsingcontext" class="section level4">
+<h4><a name="ParsingContext_constructor"><span class="classifier">constructor</span> <code>ParsingContext</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c">ParsingContext* ParsingContext_new( Grammar* g, Iterator* iterator );</code></pre>
+</div>
+<div id="destructor-parsingcontext_free" class="section level4">
+<h4><a name="ParsingContext_free_destructor"><span class="classifier">destructor</span> <code>ParsingContext_free</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="dt">void</span> ParsingContext_free( ParsingContext* this );</code></pre>
+</div>
+<div id="type-parsingresult" class="section level4">
+<h4><a name="ParsingResult_type"><span class="classifier">type</span> <code>ParsingResult</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="kw">typedef</span> <span class="kw">struct</span> ParsingResult {
+    <span class="dt">char</span>            status;
+    Match*          match;
+    ParsingContext* context;
+} ParsingResult;</code></pre>
+</div>
+<div id="constructor-parsingresult" class="section level4">
+<h4><a name="ParsingResult_constructor"><span class="classifier">constructor</span> <code>ParsingResult</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c">ParsingResult* ParsingResult_new(Match* match, ParsingContext* context);</code></pre>
+</div>
+<div id="method-parsingresult_free" class="section level4">
+<h4><a name="ParsingResult_free_method"><span class="classifier">method</span> <code>ParsingResult_free</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="dt">void</span> ParsingResult_free(ParsingResult* this);</code></pre>
+<p>The result of <em>recognizing</em> parsing elements at given offsets within the input stream is stored in <code>ParsingOffset</code>. Each parsing offset is a stack of <code>ParsingStep</code>, corresponding to successive attempts at matching parsing elements at the current position.</p>
+<p>The parsing offset is a stack of parsing steps, where the tail is the most specific parsing step. By following the tail's previous parsing step, you can unwind the stack.</p>
+<p>The parsing steps each have an offset within the iterated stream. Offsets where data has been fully extracted (ie, a leaf parsing element has matched and processing returned a NOTHING) can be freed as they are not necessary any more.</p>
+</div>
+<div id="type-parsingoffset" class="section level4">
+<h4><a name="ParsingOffset_type"><span class="classifier">type</span> <code>ParsingOffset</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="kw">typedef</span> <span class="kw">struct</span> ParsingOffset {
+    size_t                offset; <span class="co">// The offset matched in the input stream</span>
+    ParsingStep*          last;   <span class="co">// The last matched parsing step (ie. corresponding to the most specialized parsing element)</span>
+    <span class="kw">struct</span> ParsingOffset* next;   <span class="co">// The link to the next offset (if any)</span>
+} ParsingOffset;</code></pre>
+</div>
+<div id="constructor-parsingoffset" class="section level4">
+<h4><a name="ParsingOffset_constructor"><span class="classifier">constructor</span> <code>ParsingOffset</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c">ParsingOffset* ParsingOffset_new( size_t offset );</code></pre>
+</div>
+<div id="destructor-parsingoffset_free" class="section level4">
+<h4><a name="ParsingOffset_free_destructor"><span class="classifier">destructor</span> <code>ParsingOffset_free</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="dt">void</span> ParsingOffset_free( ParsingOffset* this );</code></pre>
+<p>The parsing step allows to memoize the state of a parsing element at a given offset. This is the data structure that will be manipulated and created/destroyed the most during the parsing process.</p>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="kw">typedef</span> <span class="kw">struct</span> ParsingStep {
+    ParsingElement*     element;       <span class="co">// The parsing elemnt we&#39;re matching</span>
+    <span class="dt">char</span>                step;          <span class="co">// The step corresponds to current child&#39;s index (0 for token/word)</span>
+    <span class="dt">unsigned</span> <span class="dt">int</span>        iteration;     <span class="co">// The current iteration (on the step)</span>
+    <span class="dt">char</span>                status;        <span class="co">// Match status `STATUS_{INIT|PROCESSING|FAILED}`</span>
+    Match*              match;         <span class="co">// The corresponding match, if any.</span>
+    <span class="kw">struct</span> ParsingStep* previous;      <span class="co">// The previous parsing step on the parsing offset&#39;s stack</span>
+} ParsingStep;</code></pre>
+</div>
+<div id="constructor-parsingstep" class="section level4">
+<h4><a name="ParsingStep_constructor"><span class="classifier">constructor</span> <code>ParsingStep</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c">ParsingStep* ParsingStep_new( ParsingElement* element );</code></pre>
+</div>
+<div id="destructor-parsingstep_free" class="section level4">
+<h4><a name="ParsingStep_free_destructor"><span class="classifier">destructor</span> <code>ParsingStep_free</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="dt">void</span> ParsingStep_free( ParsingStep* this );</code></pre>
+</div>
+</div>
+<div id="utilities" class="section level2">
+<h2>Utilities</h2>
+<div id="method-utilities_indent" class="section level4">
+<h4><a name="Utilities_indent_method"><span class="classifier">method</span> <code>Utilities_indent</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="dt">void</span> Utilities_indent( ParsingElement* this, ParsingContext* context );</code></pre>
+</div>
+<div id="method-utilities_dedent" class="section level4">
+<h4><a name="Utilities_dedent_method"><span class="classifier">method</span> <code>Utilities_dedent</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="dt">void</span> Utilities_dedent( ParsingElement* this, ParsingContext* context );</code></pre>
+</div>
+<div id="method-utilites_checkindent" class="section level4">
+<h4><a name="Utilites_checkIndent_method"><span class="classifier">method</span> <code>Utilites_checkIndent</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c">Match* Utilites_checkIndent( ParsingElement *this, ParsingContext* context );</code></pre>
+</div>
+</div>
+<div id="syntax-sugar" class="section level2">
+<h2>Syntax Sugar</h2>
+<p>The parsing library provides a set of macros that make defining grammars a much easier task. A grammar is usually defined in the following way:</p>
+<ul>
+<li>leaf symbols (words &amp; tokens) are defined ;</li>
+<li>compound symbolds (rules &amp; groups) are defined.</li>
+</ul>
+<p>Let's take as simple grammar and define it with the straight API:</p>
+<pre><code>// Leaf symbols
+ParsingElement* s_NUMBER   = Token_new(&quot;\\d+&quot;);
+ParsingElement* s_VARIABLE = Token_new(&quot;\\w+&quot;);
+ParsingElement* s_OPERATOR = Token_new(&quot;[\\+\\-\\*\\/]&quot;);
+
+// We also attach names to the symbols so that debugging will be easier
+ParsingElement_name(s_NUMBER,   &quot;NUMBER&quot;);
+ParsingElement_name(s_VARIABLE, &quot;VARIABLE&quot;);
+ParsingElement_name(s_OPERATOR, &quot;OPERATOR&quot;);
+
+// Now we defined the compound symbols
+ParsingElement* s_Value    = Group_new((Reference*[3]),{
+Reference_cardinality(Reference_Ensure(s_NUMBER),   CARDINALITY_ONE),
+Reference_cardinality(Reference_Ensure(s_VARIABLE), CARDINALITY_ONE)
+NULL
+});
+ParsingElement* s_Suffix    = Rule_new((Reference*[3]),{
+Reference_cardinality(Reference_Ensure(s_OPERATOR),  CARDINALITY_ONE),
+Reference_cardinality(Reference_Ensure(s_Value),     CARDINALITY_ONE)
+NULL
+});
+* ParsingElement* s_Expr    = Rule_new((Reference*[3]),{
+Reference_cardinality(Reference_Ensure(s_Value),  CARDINALITY_ONE),
+Reference_cardinality(Reference_Ensure(s_Suffix), CARDINALITY_MANY_OPTIONAL)
+NULL
+});
+
+// We define the names as well
+ParsingElement_name(s_Value,  &quot;Value&quot;);
+ParsingElement_name(s_Suffix, &quot;Suffix&quot;);
+ParsingElement_name(s_Expr, &quot;Expr&quot;);</code></pre>
+<p>As you can see, this is quite verbose and makes reading the grammar declaration a difficult task. Let's introduce a set of macros that will make expressing grammars much easier.</p>
+</div>
+<div id="symbol-declaration-creation" class="section level2">
+<h2>Symbol declaration &amp; creation</h2>
+<div id="macro-symbol" class="section level4">
+<h4><a name="SYMBOL_macro"><span class="classifier">macro</span> <code>SYMBOL</code></a></h4>
+<p>Declares a symbol of name <code>n</code> as being parsing element <code>e</code>.</p>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="ot">#define SYMBOL(n,e)       ParsingElement* s_ ## n = ParsingElement_name(e, #n);</span></code></pre>
+</div>
+<div id="macro-word" class="section level4">
+<h4><a name="WORD_macro"><span class="classifier">macro</span> <code>WORD</code></a></h4>
+<p>Creates a <code>Word</code> parsing element with the given regular expression</p>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="ot">#define WORD(v)           Word_new(v)</span></code></pre>
+</div>
+<div id="macro-token" class="section level4">
+<h4><a name="TOKEN_macro"><span class="classifier">macro</span> <code>TOKEN</code></a></h4>
+<p>Creates a <code>Token</code> parsing element with the given regular expression</p>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="ot">#define TOKEN(v)          Token_new(v)</span></code></pre>
+</div>
+<div id="macro-rule" class="section level4">
+<h4><a name="RULE_macro"><span class="classifier">macro</span> <code>RULE</code></a></h4>
+<p>Creates a <code>Rule</code> parsing element with the references or parsing elements as children.</p>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="ot">#define RULE(...)         Rule_new((Reference*[(VA_ARGS_COUNT(__VA_ARGS__)+1)]){__VA_ARGS__,NULL})</span></code></pre>
+</div>
+<div id="macro-group" class="section level4">
+<h4><a name="GROUP_macro"><span class="classifier">macro</span> <code>GROUP</code></a></h4>
+<p>Creates a <code>Group</code> parsing element with the references or parsing elements as children.</p>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="ot">#define GROUP(...)        Group_new((Reference*[(VA_ARGS_COUNT(__VA_ARGS__)+1)]){__VA_ARGS__,NULL})</span></code></pre>
+</div>
+<div id="macro-procedure" class="section level4">
+<h4><a name="PROCEDURE_macro"><span class="classifier">macro</span> <code>PROCEDURE</code></a></h4>
+<p>Creates a <code>Procedure</code> parsing element</p>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="ot">#define PROCEDURE(f)      Procedure_new(f)</span></code></pre>
+</div>
+<div id="macro-condition" class="section level4">
+<h4><a name="CONDITION_macro"><span class="classifier">macro</span> <code>CONDITION</code></a></h4>
+<p>Creates a <code>Condition</code> parsing element</p>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="ot">#define CONDITION(f)      Condition_new(f)</span></code></pre>
+</div>
+</div>
+<div id="symbol-reference-cardinality" class="section level2">
+<h2>Symbol reference &amp; cardinality</h2>
+<div id="macro-_s" class="section level4">
+<h4><a name="_S_macro"><span class="classifier">macro</span> <code>_S</code></a></h4>
+<p>Refers to symbol <code>n</code>, wrapping it in a <code>CARDINALITY_ONE</code> reference</p>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="ot">#define _S(n)             ONE(s_ ## n)</span></code></pre>
+</div>
+<div id="macro-_o" class="section level4">
+<h4><a name="_O_macro"><span class="classifier">macro</span> <code>_O</code></a></h4>
+<p>Refers to symbol <code>n</code>, wrapping it in a <code>CARDINALITY_OPTIONAL</code> reference</p>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="ot">#define _O(n)             OPTIONAL(s_ ## n)</span></code></pre>
+</div>
+<div id="macro-_m" class="section level4">
+<h4><a name="_M_macro"><span class="classifier">macro</span> <code>_M</code></a></h4>
+<p>Refers to symbol <code>n</code>, wrapping it in a <code>CARDINALITY_MANY</code> reference</p>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="ot">#define _M(n)             MANY(s_ ## n)</span></code></pre>
+</div>
+<div id="macro-_mo" class="section level4">
+<h4><a name="_MO_macro"><span class="classifier">macro</span> <code>_MO</code></a></h4>
+<p>Refers to symbol <code>n</code>, wrapping it in a <code>CARDINALITY_MANY_OPTIONAL</code> reference</p>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="ot">#define _MO(n)            MANY_OPTIONAL(s_ ## n)</span></code></pre>
+</div>
+<div id="macro-_as" class="section level4">
+<h4><a name="_AS_macro"><span class="classifier">macro</span> <code>_AS</code></a></h4>
+<p>Sets the name of reference <code>r</code> to be v</p>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="ot">#define _AS(r,v)          Reference_name(Reference_Ensure(r), v)</span></code></pre>
+</div>
+</div>
+<div id="supporting-macros" class="section level2">
+<h2>Supporting macros</h2>
+<p>The following set of macros is mostly used by the set of macros above. You probably won't need to use them directly.</p>
+<div id="macro-name" class="section level4">
+<h4><a name="NAME_macro"><span class="classifier">macro</span> <code>NAME</code></a></h4>
+<p>Sets the name of the given parsing element <code>e</code> to be the name <code>n</code>.</p>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="ot">#define NAME(n,e)         ParsingElement_name(e,n)</span></code></pre>
+</div>
+<div id="macro-one" class="section level4">
+<h4><a name="ONE_macro"><span class="classifier">macro</span> <code>ONE</code></a></h4>
+<p>Sets the given reference or parsing element's reference to CARDINALITY_ONE If a parsing element is given, it will be automatically wrapped in a reference.</p>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="ot">#define ONE(v)            Reference_cardinality(Reference_Ensure(v), CARDINALITY_ONE)</span></code></pre>
+</div>
+<div id="macro-optional" class="section level4">
+<h4><a name="OPTIONAL_macro"><span class="classifier">macro</span> <code>OPTIONAL</code></a></h4>
+<p>Sets the given reference or parsing element's reference to CARDINALITY_OPTIONAL If a parsing element is given, it will be automatically wrapped in a reference.</p>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="ot">#define OPTIONAL(v)       Reference_cardinality(Reference_Ensure(v), CARDINALITY_OPTIONAL)</span></code></pre>
+</div>
+<div id="macro-many" class="section level4">
+<h4><a name="MANY_macro"><span class="classifier">macro</span> <code>MANY</code></a></h4>
+<p>Sets the given reference or parsing element's reference to CARDINALITY_MANY If a parsing element is given, it will be automatically wrapped in a reference.</p>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="ot">#define MANY(v)           Reference_cardinality(Reference_Ensure(v), CARDINALITY_MANY)</span></code></pre>
+</div>
+<div id="macro-many_optional" class="section level4">
+<h4><a name="MANY_OPTIONAL_macro"><span class="classifier">macro</span> <code>MANY_OPTIONAL</code></a></h4>
+<p>Sets the given reference or parsing element's reference to CARDINALITY_MANY_OPTIONAL If a parsing element is given, it will be automatically wrapped in a reference.</p>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="ot">#define MANY_OPTIONAL(v)  Reference_cardinality(Reference_Ensure(v), CARDINALITY_MANY_OPTIONAL)</span></code></pre>
+</div>
+</div>
+<div id="grammar-declaration-with-macros" class="section level2">
+<h2>Grammar declaration with macros</h2>
+<p>The same grammar that we defined previously can now be expressed in the following way:</p>
+<pre><code>SYMBOL(NUMBER,   TOKEN(&quot;\\d+&quot;))
+SYMBOL(VAR,      TOKEN(&quot;\\w+&quot;))
+SYMBOL(OPERATOR, TOKEN(&quot;[\\+\\-\\*\\/]&quot;))
+
+SYMBOL(Value,  GROUP( _S(NUMBER),   _S(VAR)     ))
+SYMBOL(Suffix, RULE(  _S(OPERATOR), _S(Value)   ))
+SYMBOL(Expr,   RULE(  _S(Value),    _MO(Suffix) ))</code></pre>
+<p>All symbols will be define as <code>s_XXX</code>, so that you can do:</p>
+<pre><code>ParsingGrammar* g = Grammar_new();
+g-&gt;axiom = s_Expr;</code></pre>
+</div>
+</div>
+<div id="license" class="section level1">
+<h1>License</h1>
+<p>Revised BSD License Copyright (c) 2014, FFunction inc (1165373771 Quebec inc) All rights reserved.</p>
+<p>Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:</p>
+<p>Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution. Neither the name of the FFunction inc (CANADA) nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.</p>
+<p>THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS &quot;AS IS&quot; AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.</p>
+</div>
+
 				</div>
 			</div>
 		</div>

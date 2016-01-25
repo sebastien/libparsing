@@ -1,4 +1,4 @@
-import ctypes, os
+import ctypes, os, re
 
 NOTHING = ctypes
 C_API   = None
@@ -15,6 +15,8 @@ class C:
 	to smart unwrapping functions, this library also offers functions to
 	parse simple C structure and prototype definitions.
 	"""
+
+	RE_AS = re.compile("@as\s+([_\w]+)\s*$")
 
 	TYPES = {
 		"void"            : None,
@@ -106,6 +108,7 @@ class C:
 			c_name = c_name[1:] + "*"
 			types[c_name] = ctypes.POINTER(_)
 			# It's important to update the type directly here
+			print ("C.Register: type {0} from {1}".format(c_name, _))
 			cls.TYPES[c_name] = types[c_name]
 		return types
 
@@ -119,7 +122,9 @@ class C:
 	@classmethod
 	def ParsePrototype( cls, prototype, selfType=None ):
 		"""Parses a function prototype, returning `(name, argument ctypes, return ctype)`"""
-		# print "C:Parsing prototype", prototype
+		print "C:Parsing prototype", prototype
+		as_name   = cls.RE_AS.search(prototype)
+		prototype = prototype.replace(" *", "* ")
 		prototype = prototype.split("//",1)[0].split(";",1)[0]
 		ret_name, params = prototype.split("(", 1)
 		params           = params.rsplit(")",1)[0]
@@ -127,7 +132,7 @@ class C:
 		params           = [_.strip().rsplit(" ", 1) for _ in params.split(",",) if _.strip()]
 		# We convert the type, preserving its name and its original type name
 		params           = [(cls.GetType(_[0], selfType),_[1],_[0]) for _ in params if _ != ["void"]]
-		return (name, params, [cls.GetType(ret, selfType), None, ret])
+		return ([name,as_name.group(1) if as_name else None] , params, [cls.GetType(ret, selfType), None, ret])
 
 	@classmethod
 	def ParsePrototypes( cls, declarations, selfType=None ):
@@ -143,6 +148,8 @@ class C:
 		res = []
 		for proto in cls.ParsePrototypes(declarations, selfType):
 			name, argtypes, restype = proto
+			name, alias             = name
+			print ("C:Loading function {0} with {1} -> {2}".format( name, argtypes, restype))
 			func = library[name]
 			func.argtypes = [_[0] for _ in argtypes]
 			func.restype  = restype[0]
@@ -194,7 +201,7 @@ class CLibrary:
 		"""Register the given `CObjectWrapper` in this library, loading the
 		corresponding functions and binding them to the class."""
 		for _ in wrapperClasses:
-			_._library = self
+			_.LIBRARY = self
 			assert issubclass(_, CObjectWrapper)
 			# We load the functions from the library
 			functions = C.LoadFunctions(self.lib, _.GetFunctions(), _.WRAPPED)
@@ -215,6 +222,12 @@ class CLibrary:
 			if isinstance(cValue, t): return f(cValue)
 		return cValue
 
+	def unwrap( self, value):
+		return C.Unwrap(value)
+
+	def unwrapCast( self, value, type ):
+		return C.UnwrapCast(value, type)
+
 # -----------------------------------------------------------------------------
 #
 # OBJECT WRAPPER
@@ -230,6 +243,7 @@ class CObjectWrapper(object):
 
 	WRAPPED   = None
 	FUNCTIONS = None
+	LIBRARY   = None
 
 	@classmethod
 	def GetFunctions( cls ):
@@ -256,11 +270,11 @@ class CObjectWrapper(object):
 		c = C
 		def getter( self ):
 			value = getattr(self._wrapped.contents, name)
-			# print "g: ", cls.__name__ + "." + name, type, "=", value
-			return self._library.wrap(value)
+			print "g: ", cls.__name__ + "." + name, type, "=", value
+			return self.LIBRARY.wrap(value)
 		def setter( self, value ):
-			value = c.UnwrapCast(value, type)
-			# print "s: ", cls.__name__ + "." + name, type, "<=", value
+			value = self.LIBRARY.unwrapCast(value, type)
+			print "s: ", cls.__name__ + "." + name, type, "<=", value
 			return setattr(self._wrapped.contents, name, value)
 		return property(getter, setter)
 
@@ -277,27 +291,29 @@ class CObjectWrapper(object):
 	@classmethod
 	def _CreateFunction( cls, ctypesFunction, proto):
 		c = C
-		def method(self, *args):
+		assert proto[2][2] != "this*", "Function cannot return this"
+		def function(cls, *args):
 			# We unwrap the arguments, meaning that the arguments are now
 			# pure C types values
 			print "F: ", proto[0], args
-			args = [c.Unwrap(_) for _ in args]
+			args = [cls.LIBRARY.unwrap(_) for _ in args]
 			res  = ctypesFunction(*args)
-			res  = self._library.wrap(res)
+			res  = cls.LIBRARY.wrap(res)
 			print "F=>", res
 			return res
-		return method
+		return function
 
 	@classmethod
 	def _CreateMethod( cls, ctypesFunction, proto):
 		c = C
+		returns_this = proto[2][2] == "this*"
 		def method(self, *args):
 			# We unwrap the arguments, meaning that the arguments are now
 			# pure C types values
-			args = [c.Unwrap(self)] + [c.Unwrap(_) for _ in args]
+			args = [self.LIBRARY.unwrap(self)] + [self.LIBRARY.unwrap(_) for _ in args]
 			assert args[0], "CObjectWrapper: method {0} `this` is None in {1}".format(proto[0], self)
 			res  = ctypesFunction(*args)
-			res  = self._library.wrap(res)
+			res  = self if returns_this else self.LIBRARY.wrap(res)
 			print "M=>", res
 			return res
 		return method
@@ -306,16 +322,27 @@ class CObjectWrapper(object):
 	def BindFunction( cls, ctypesFunction, proto ):
 		class_name = cls.__name__.rsplit(".",1)[-1]
 		# We need to keep a reference to C as otherwise it might
-		# be freed before we invoke c.Unwrap.
-		method = None
-		if len(proto[1]) >= 1 and proto[1][0][1] == "this":
+		# be freed before we invoke self.LIBRARY.unwrap.
+		method    = None
+		is_method = len(proto[1]) >= 1 and proto[1][0][1] == "this"
+		if is_method:
 			method = cls._CreateMethod(ctypesFunction, proto)
 		else:
 			method = cls._CreateFunction(ctypesFunction, proto)
 		# We assume the convention is <Classname>_methodName, but in practice
 		# Classname could be the name of a super class.
 		#assert proto[0].startswith(class_name + "_"), "Prototype does not start with class name: {0} != {1}".format(proto[0], class_name)
-		name = proto[0].split("_", 1)[1]
+		name = proto[0][1] or proto[0][0].split("_", 1)[1]
+		# If we're not binding a method, we bind it as a static method
+		if name == "new":
+			# Any method called "new" will be bound as the constructor
+			assert not is_method
+			name   = "_constructor"
+			method = classmethod(method)
+		elif not is_method:
+			assert proto[0][0][0].upper() == proto[0][0][0], "Class functions must start be CamelCase: {0}".format(proto[0][0])
+			method = classmethod(method)
+		print ("{1} bound as {3} {0}.{2}".format(cls.__name__, proto[0][0], name, "method" if is_method else "function"))
 		setattr(cls, name, method)
 		assert hasattr(cls, name)
 		return (name, method)
@@ -326,19 +353,24 @@ class CObjectWrapper(object):
 		object must be a ctypes value, usually a pointer to a struct."""
 		return cls( wrappedCObject=wrapped )
 
+	@classmethod
+	def _Create( cls, *args ):
+		return cls._constructor(*args)
+
 	def __init__( self, *args, **kwargs ):
 		self._wrapped = None
 		if "wrappedCObject" in kwargs:
 			self._wrapped = kwargs["wrappedCObject"]
 			assert self._wrapped
 			assert isinstance(self._wrapped, ctypes.POINTER(self.WRAPPED))
-			self._created = False
+			self._mustFree = False
 		else:
 			# We ensure that the _wrapped value returned by the creator is
 			# unwrapped. In fact, we might want to implement a special case
 			# for new that returns directly an unwrapped value.
-			self._wrapped = C.Unwrap(self.new(*args))
-			self._created = True
+			instance       = self.__class__._Create(*args)
+			self._wrapped  = C.Unwrap(instance)
+			self._mustFree = True
 
 	# FIXME: We experience many problems with destructors, ie. segfaults in GC.
 	# Thsi needs to be sorted out.
@@ -363,19 +395,6 @@ class CObjectWrapper(object):
 # a `Libparsing` instance.
 # }}}
 
-class TMatch(ctypes.Structure):
-
-	STRUCTURE = """
-	char            status;     // The status of the match (see STATUS_XXX)
-	size_t          offset;     // The offset of `iterated_t` matched
-	size_t          length;     // The number of `iterated_t` matched
-	Element*        element;
-	ParsingContext* context;
-	void*           data;      // The matched data (usually a subset of the input stream)
-	Match*          next;      // A pointer to the next  match (see `References`)
-	Match*          child;     // A pointer to the child match (see `References`)
-	"""
-
 class TParsingElement(ctypes.Structure):
 
 	STRUCTURE = """
@@ -389,15 +408,35 @@ class TParsingElement(ctypes.Structure):
 	Match*->void freeMatch;
 	"""
 
-class TGrammar(ctypes.Structure):
+class TReference(ctypes.Structure):
 
 	STRUCTURE = """
-	ParsingElement*  axiom;       // The axiom
-	ParsingElement*  skip;        // The skipped element
-	int              axiomCount;  // The count of parsing elemetns in axiom
-	int              skipCount;   // The count of parsing elements in skip
-	Element**        elements;    // The set of all elements in the grammar
-	bool             isVerbose;
+	char            type;            // Set to Reference_T, to disambiguate with ParsingElement
+	int             id;              // The ID, assigned by the grammar, as the relative distance to the axiom
+	char            cardinality;     // Either ONE (default), OPTIONAL, MANY or MANY_OPTIONAL
+	const char*     name;            // The name of the reference (optional)
+	struct ParsingElement* element;  // The reference to the parsing element
+	struct Reference*      next;     // The next child reference in the parsing elements
+	"""
+
+class TMatch(ctypes.Structure):
+
+	STRUCTURE = """
+	char            status;     // The status of the match (see STATUS_XXX)
+	size_t          offset;     // The offset of `iterated_t` matched
+	size_t          length;     // The number of `iterated_t` matched
+	Element*        element;
+	ParsingContext* context;
+	void*           data;      // The matched data (usually a subset of the input stream)
+	Match*          next;      // A pointer to the next  match (see `References`)
+	Match*          child;     // A pointer to the child match (see `References`)
+	"""
+
+class TTokenMatch(ctypes.Structure):
+
+	STRUCTURE = """
+	int             count;
+	const char**    groups;
 	"""
 
 class TParsingContext(ctypes.Structure):
@@ -419,7 +458,6 @@ class TParsingStats(ctypes.Structure):
 	size_t* successBySymbol;
 	size_t* failureBySymbol;
 	"""
-
 class TParsingResult(ctypes.Structure):
 
 	STRUCTURE = """
@@ -428,11 +466,15 @@ class TParsingResult(ctypes.Structure):
 	ParsingContext* context;
 	"""
 
-class TTokenMatch(ctypes.Structure):
+class TGrammar(ctypes.Structure):
 
 	STRUCTURE = """
-	int             count;
-	const char**    groups;
+	ParsingElement*  axiom;       // The axiom
+	ParsingElement*  skip;        // The skipped element
+	int              axiomCount;  // The count of parsing elemetns in axiom
+	int              skipCount;   // The count of parsing elements in skip
+	Element**        elements;    // The set of all elements in the grammar
+	bool             isVerbose;
 	"""
 
 # -----------------------------------------------------------------------------
@@ -445,9 +487,35 @@ class ParsingElement(CObjectWrapper):
 
 	WRAPPED   = TParsingElement
 	FUNCTIONS = """
-	this* ParsingElement_name( ParsingElement* this, const char* name );
+	this* ParsingElement_name( ParsingElement* this, const char* name ); // @as setName
 	"""
 
+class Reference(CObjectWrapper):
+
+	WRAPPED   = TReference
+
+	FUNCTIONS = """
+	Reference* Reference_FromElement(ParsingElement* element); // @as _FromElement
+	Reference* Reference_new(void);
+	Reference* Reference_cardinality(Reference* this, char cardinality); // @as setCardinality
+	Reference* Reference_name(Reference* this, const char* name); // @as setName
+	"""
+
+	@classmethod
+	def Ensure( cls, element ):
+		if isinstance( element, ParsingElement):
+			return cls.FromElement(element)
+		else:
+			assert isinstance(element, Reference)
+			return element
+
+	@classmethod
+	def FromElement( cls, element ):
+		assert isinstance( element, ParsingElement)
+		res = cls._FromElement(element)
+		assert isinstance(res, Reference)
+		res._mustFree = True
+		return res
 
 class Word(ParsingElement):
 
@@ -473,8 +541,16 @@ class CompositeParsingElement(ParsingElement):
 
 	WRAPPED   = TParsingElement
 	FUNCTIONS = """
-	this* ParsingElement_add(ParsingElement* this, Reference* child);
+	this* ParsingElement_add(ParsingElement* this, Reference* child); // @as _add
 	"""
+
+	def add( self, reference ):
+		reference = Reference.Ensure(reference)
+		assert isinstance(reference, Reference)
+		self.LIBRARY.lib.ParsingElement_add(self._wrapped, reference._wrapped)
+		#self._add(reference)
+		assert self.children
+		return self
 
 class Rule(CompositeParsingElement):
 
@@ -524,6 +600,7 @@ class Grammar(CObjectWrapper):
 	ParsingResult* Grammar_parseFromPath( Grammar* this, const char* path );
 	ParsingResult* Grammar_parseFromString( Grammar* this, const char* text );
 	"""
+
 	PROPERTIES = lambda:dict(
 		axiom = Word
 	)
@@ -575,6 +652,7 @@ C.Register(
 	TParsingElement,
 	TTokenMatch,
 	TMatch,
+	TReference,
 	#TParsingContext,
 	#TParsingStats,
 	TParsingResult,
@@ -589,6 +667,7 @@ C.Register(
 C_API = CLibrary(
 	"libparsing"
 ).register(
+	Reference,
 	Match,
 	ParsingResult,
 	Grammar,
@@ -638,7 +717,7 @@ class Test(unittest.TestCase):
 		self.assertIsNone(m.next)
 		self.assertIsNone(m.child)
 
-	def testCompositGrammar( self ):
+	def testCompositeGrammar( self ):
 		pass
 
 # -----------------------------------------------------------------------------
@@ -652,9 +731,8 @@ text    = "ab"
 a       = Word("a")
 b       = Word("b")
 ab      = Rule(None)
-print "AB", ab
-print "add", ab.add(a)
 print "ab"
+ab.add(a)
 ab.add(b)
 g.axiom = ab
 g.isVerbose = True

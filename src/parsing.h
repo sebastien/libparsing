@@ -23,14 +23,14 @@
 
 #ifndef __PARSING_H__
 #define __PARSING_H__
-#define __PARSING_VERSION__ "0.5.1"
+#define __PARSING_VERSION__ "0.6.0"
 
 /**
  * #  libparsing
  * ## C & Python Parsing Elements Grammar Library
  *
  * ```
- * Version :  0.5.0
+ * Version :  0.6.0
  * URL     :  http://github.com/sebastien/parsing
  * README  :  https://cdn.rawgit.com/sebastien/libparsing/master/README.html
  * ```
@@ -589,7 +589,7 @@ Reference* Reference_Ensure(void* elementOrReference);
 
 // @operation
 // Returns a new reference wrapping the given parsing element
-Reference* Reference_New(ParsingElement *);
+Reference* Reference_FromElement(ParsingElement* element);
 
 // @constructor
 // References are typically owned by their single parent composite element.

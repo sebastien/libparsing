@@ -5,7 +5,7 @@
 // License           : BSD License
 // ----------------------------------------------------------------------------
 // Creation date     : 12-Dec-2014
-// Last modification : 21-Oct-2015
+// Last modification : 25-Jan-2016
 // ----------------------------------------------------------------------------
 
 #include "parsing.h"
@@ -512,15 +512,15 @@ Reference* Reference_Ensure(void* elementOrReference) {
 	void * element = elementOrReference;
 	assert(element!=NULL);
 	assert(Reference_Is(element) || ParsingElement_Is(element));
-	return ParsingElement_Is(element) ? Reference_New(element) : element;
+	return ParsingElement_Is(element) ? Reference_FromElement(element) : element;
 }
 
-Reference* Reference_New(ParsingElement* element){
+Reference* Reference_FromElement(ParsingElement* element){
 	NEW(Reference, this);
 	assert(element!=NULL);
 	this->element = element;
 	this->name    = NULL;
-	ASSERT(element->recognize, "Reference_New: Element %s has no recognize callback", element->name);
+	ASSERT(element->recognize, "Reference_FromElement: Element %s has no recognize callback", element->name);
 	return this;
 }
 
@@ -863,7 +863,9 @@ ParsingElement* Rule_new(Reference* children[]) {
 Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 	LOG_IF(context->grammar->isVerbose && strcmp(this->name, "_") != 0, "--- Rule:%s at %zd", this->name, context->iterator->offset);
 	Reference* child  = this->children;
-	Match*     result = NULL;
+	// An empty rule will fail. Not sure if this is the right thing to do, but
+	// if we don't set the result, it will return NULL and break assertions
+	Match*     result = FAILURE;
 	Match*     last   = NULL;
 	int        step   = 0;
 	const char*   step_name = NULL;
