@@ -592,8 +592,8 @@ Match* Reference_recognize(Reference* this, ParsingContext* context) {
 		if (Match_isSuccess(match)) {
 			// DEBUG("Reference_recognize: Matched %s at %zd-%zd", this->element->name, context->iterator->offset, context->iterator->offset + match->length);
 			if (count == 0) {
-				// If it's the first match and we're in a ONE reference
-				// we force has_more to FALSE and exit the loop.
+				// If it's the first match and we're in a ONE reference, we break
+				// the loop.
 				result = match;
 				head   = result;
 				if (this->cardinality == CARDINALITY_ONE ) {
@@ -616,8 +616,8 @@ Match* Reference_recognize(Reference* this, ParsingContext* context) {
 		case CARDINALITY_ONE:
 			break;
 		case CARDINALITY_OPTIONAL:
-			// For optional, we return the an empty match if
-			// the match fails.
+			// For optional, we return an empty match if the match fails, which
+			// will make the reference succeed.
 			result = result == FAILURE ? Match_Empty((ParsingElement*)this, context) : result;
 			break;
 		case CARDINALITY_MANY:

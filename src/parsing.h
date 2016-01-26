@@ -267,13 +267,17 @@ bool FileInput_move   ( Iterator* this, int n );
  * The `axiom` and `skip` properties are both references to _parsing elements_.
 */
 
-
 typedef struct ParsingContext ParsingContext;
 typedef struct ParsingElement ParsingElement;
 typedef struct ParsingResult  ParsingResult;
 typedef struct Reference      Reference;
 typedef struct Match          Match;
 typedef void                  Element;
+
+// typedef struct Element {
+// 	char           type;       // Type is used du differentiate ParsingElement from Reference
+// 	int            id;         // The ID, assigned by the grammar, as the relative distance to the axiom
+// } Element;
 
 // @type Grammar
 typedef struct Grammar {
@@ -308,7 +312,6 @@ ParsingResult* Grammar_parseFromString( Grammar* this, const char* text );
  * Elements
  * --------
 */
-
 
 // @callback
 typedef int (*WalkingCallback)(Element* this, int step, void* context);
@@ -427,6 +430,7 @@ int Match_getLength(Match* this);
 
 // @method
 int Match__walk(Match* this, WalkingCallback callback, int step, void* context );
+
 
 // @type ParsingElement
 typedef struct ParsingElement {

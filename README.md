@@ -329,6 +329,10 @@ typedef struct Match          Match;
 typedef void                  Element;
 ```
 
+ typedef struct Element {
+ 	char           type;       // Type is used du differentiate ParsingElement from Reference
+ 	int            id;         // The ID, assigned by the grammar, as the relative distance to the axiom
+ } Element;
 
 #### <a name="Grammar_type"><span class="classifier">type</span> `Grammar`</a>
 

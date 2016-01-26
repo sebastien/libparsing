@@ -17,6 +17,31 @@ import ctypes, os, re
 NOTHING = ctypes
 C_API   = None
 
+
+# -----------------------------------------------------------------------------
+#
+# DEFINES/LIBRARY
+#
+# -----------------------------------------------------------------------------
+
+CARDINALITY_OPTIONAL      = '?'
+CARDINALITY_ONE           = '1'
+CARDINALITY_MANY_OPTIONAL = '*'
+CARDINALITY_MANY          = '+'
+TYPE_WORD                 = 'W'
+TYPE_TOKEN                = 'T'
+TYPE_GROUP                = 'G'
+TYPE_RULE                 = 'R'
+TYPE_CONDITION            = 'c'
+TYPE_PROCEDURE            = 'p'
+TYPE_REFERENCE            = '#'
+STATUS_INIT               = '-'
+STATUS_PROCESSING         = '~'
+STATUS_MATCHED            = 'Y'
+STATUS_FAILED             = 'X'
+STATUS_INPUT_ENDED        = '.'
+STATUS_ENDED              = 'E'
+
 # -----------------------------------------------------------------------------
 #
 # C INTERFACE
@@ -65,8 +90,11 @@ class C:
 		value = cls.Unwrap(value)
 		if issubclass(value.__class__, type):
 			return value
-		else:
-			return ctypes.cast(value, type)
+		# The cast does not always work
+		#elif issubclass(value, ctypes.pointer):
+		#	return ctypes.cast(value, type)
+		#else:
+		return value
 
 	@classmethod
 	def ParseStructure( cls, text ):
@@ -436,6 +464,13 @@ class CObjectWrapper(object):
 # a `Libparsing` instance.
 # }}}
 
+class TElement(ctypes.Structure):
+
+	STRUCTURE = """
+	char           type;
+	int            id;
+	"""
+
 class TParsingElement(ctypes.Structure):
 
 	STRUCTURE = """
@@ -510,6 +545,26 @@ class TParsingResult(ctypes.Structure):
 	char            status;
 	Match*          match;
 	ParsingContext* context;
+	"""
+
+class TParsingStats(ctypes.Structure):
+
+	STRUCTURE = """
+	size_t  bytesRead;
+	double  parseTime;
+	size_t  symbolsCount;
+	size_t* successBySymbol;
+	size_t* failureBySymbol;
+	"""
+
+class TParsingContext(ctypes.Structure):
+
+	STRUCTURE = """
+	struct Grammar*              grammar;      // The grammar used to parse
+	struct Iterator*             iterator;     // Iterator on the input data
+	struct ParsingOffset* offsets;      // The parsing offsets, starting at 0
+	struct ParsingOffset* current;      // The current parsing offset
+	struct ParsingStats*  stats;
 	"""
 
 class TGrammar(ctypes.Structure):
@@ -603,8 +658,7 @@ class CompositeParsingElement(ParsingElement):
 		# assert isinstance(reference, ctypes.POINTER(TReference))
 		# print reference.contents.next
 		reference = self.LIBRARY.symbols.Reference_Ensure(reference._wrapped)
-		self.LIBRARY.cdll["ParsingElement_add"](self._wrapped, reference)
-		#self._add(reference)
+		self._add(reference)
 		assert self.children
 		return self
 
@@ -617,7 +671,7 @@ class Rule(CompositeParsingElement):
 
 # -----------------------------------------------------------------------------
 #
-# PARSING RESULTS
+# MATCH OBJECTS
 #
 # -----------------------------------------------------------------------------
 
@@ -630,6 +684,73 @@ class Match(CObjectWrapper):
 	int Match_getLength(Match* this);
 	int Match__walk(Match* this, WalkingCallback callback, int step, void* context );
 	"""
+
+	@classmethod
+	def Wrap( cls, wrapped ):
+		"""This classmethod acts as a factory to produce specialized instances
+		of `Match` subclasses based on the match's element's type."""
+		# We return None if it's a reference to a NULL pointer
+		if not wrapped: return None
+		# Otherwise we access the type and return new specific instances
+		element_type = wrapped.contents.element.contents.type
+		if element_type == TYPE_REFERENCE:
+			return ReferenceMatch(wrappedCObject=wrapped)
+		elif element_type == TYPE_WORD:
+			return WordMatch(wrappedCObject=wrapped)
+		elif element_type == TYPE_TOKEN:
+			return TokenMatch(wrappedCObject=wrapped)
+		elif element_type == TYPE_RULE:
+			return RuleMatch(wrappedCObject=wrapped)
+		else:
+			raise ValueError
+
+	def getType( self ):
+		return self._wrapped.contents.element.contents.type
+
+	def getRange( self ):
+		"""Returns the range (start, end) of the match."""
+		return (self.offset, self.offset + self.length)
+
+	def isReference( self ):
+		"""A utility shorthand to know if a match is a reference."""
+		return self.getType() == TYPE_REFERENCE
+
+class ReferenceMatch(Match):
+	pass
+
+class WordMatch(Match):
+
+	def group( self ):
+		element = ctypes.cast(self._wrapped.element, C.TYPES["ParsingElement*"])
+		config  = ctypes.cast(element.contents.config, C.TYPES["WordConfig*"])
+		return config.word
+
+class TokenMatch(Match):
+
+	def getCount( self ):
+		return TokenMatch.from_address(ctypes.addressof(this._wrapped.data.contents)).count
+
+	def getGroups( self ):
+		return TokenMatch.from_address(ctypes.addressof(this._wrapped.data.contents)).groups
+
+class CompositeMatch(Match):
+
+	def children( self ):
+		"""Iterates throught the children of this composite match."""
+		child = self.child
+		while child:
+			assert isinstance(child, Match)
+			yield child
+			child = child.next
+
+class RuleMatch(CompositeMatch):
+	pass
+
+# -----------------------------------------------------------------------------
+#
+# PARSING RESULTS
+#
+# -----------------------------------------------------------------------------
 
 class ParsingResult(CObjectWrapper):
 
@@ -692,19 +813,19 @@ C.TYPES.update({
 	"Element**"       : ctypes.POINTER(ctypes.c_void_p),
 	"ParsingContext*" : ctypes.c_void_p,
 	"ParsingOffset*"  : ctypes.c_void_p,
-	"ParsingStats*"   : ctypes.c_void_p,
 	"WalkingCallback" : ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p),
 })
 
 # We register structure definitions that we want to be accessible
 # through C types
 C.Register(
+	TElement,
 	TParsingElement,
 	TReference,
 	TTokenMatch,
 	TMatch,
-	#TParsingContext,
-	#TParsingStats,
+	TParsingContext,
+	TParsingStats,
 	TParsingResult,
 	TGrammar,
 )
@@ -752,6 +873,66 @@ import unittest
 
 class Test(unittest.TestCase):
 
+	def testCTypesBehaviour():
+		"""A few assertions about what to expect from CTypes."""
+		# We retrieve the TReference type
+		ref = C.TYPES["Reference*"]
+		assert ref.__name__.endswith("LP_TReference")
+		# We create a new reference pointer, which is a NULL pointer
+		r = ref()
+		# NULL pointers have a False boolean value
+		assert not r
+		assert not bool(r)
+		assert r is not False
+		assert r is not None
+		# And raise a ValueError when accessed
+		was_null = False
+		try:
+			r.contents
+		except ValueError as e:
+			assert "NULL pointer access" in str(e)
+			was_null = True
+		assert was_null
+
+	def testReference():
+		# We're trying to assert that Reference objects created from C
+		# work as expected.
+		libparsing = C_API.symbols
+		r = libparsing.Reference_new()
+		assert not libparsing.Reference_hasElement(r)
+		assert not libparsing.Reference_hasNext(r)
+		assert r.contents._b_needsfree_ is 0
+		# SEE: https://docs.python.org/2.5/lib/ctypes-data-types.html
+		assert r.contents.name == "_"
+		assert r.contents.id   == -1, r.contents.id
+		# So that's the surprising stuff about ctypes. Our C code assigns
+		# NULL to element and next. If we had declared TReference with
+		# `next` and `element` as returning `void*`, then we would
+		# get None. But because they're ParsingElement* and Reference*
+		# they return these pointers pointing to NULL.
+		assert not r.contents.element
+		assert not r.contents.next
+		assert r.contents.element is not None
+		assert r.contents.next    is not None
+		# r.contents.element = 0
+		# r.contents.next    = 0
+		assert isinstance(r.contents.element, C.TYPES["ParsingElement*"])
+		assert isinstance(r.contents.next,    C.TYPES["Reference*"])
+		# And the C addresses of the element and next (which are NULL pointers)
+		# is not 0. This is because `addressof` returns the object of the Python
+		# pointer instance, not the address of its contents.
+		assert ctypes.addressof(r.contents.element) != 0
+		assert ctypes.addressof(r.contents.next)    != 0
+		# Anyhow, we now creat an empty rule
+		ab = libparsing.Rule_new(None)
+		assert ab.contents._b_needsfree_ is 0
+		# And we add it the reference
+		C_API._cdll["ParsingElement_add"](ab, r)
+		# DEBUG: This is where we experienced problems, basically due to
+		# incorrect signature.
+		print "Invocation throught symbols"
+		libparsing.ParsingElement_add(ab, r)
+
 	def testSimpleGrammar( self ):
 		g       = Grammar()
 		text    = "pouet"
@@ -770,8 +951,19 @@ class Test(unittest.TestCase):
 		self.assertIsNone(m.next)
 		self.assertIsNone(m.child)
 
-	def testCompositeGrammar( self ):
-		pass
+	def testRuleFlat():
+		libparsing = C_API.symbols
+		g  = libparsing.Grammar_new()
+		a  = libparsing.Word_new("a")
+		b  = libparsing.Word_new("b")
+		ab = libparsing.Rule_new(None)
+		ra = libparsing.Reference_Ensure(a)
+		rb = libparsing.Reference_Ensure(b)
+		libparsing.ParsingElement_add(ab, ra)
+		libparsing.ParsingElement_add(ab, rb)
+		g.contents.axiom     = ab
+		g.contents.isVerbose = 1
+		libparsing.Grammar_parseFromString(g, "abab")
 
 # -----------------------------------------------------------------------------
 #
@@ -779,90 +971,6 @@ class Test(unittest.TestCase):
 #
 # -----------------------------------------------------------------------------
 
-def testCTypesBehaviour():
-	"""A few assertions about what to expect from CTypes."""
-	# We retrieve the TReference type
-	ref = C.TYPES["Reference*"]
-	assert ref.__name__.endswith("LP_TReference")
-	# We create a new reference pointer, which is a NULL pointer
-	r = ref()
-	# NULL pointers have a False boolean value
-	assert not r
-	assert not bool(r)
-	assert r is not False
-	assert r is not None
-	# And raise a ValueError when accessed
-	was_null = False
-	try:
-		r.contents
-	except ValueError as e:
-		assert "NULL pointer access" in str(e)
-		was_null = True
-	assert was_null
-
-def testReference():
-	# We're trying to assert that Reference objects created from C
-	# work as expected.
-	libparsing = C_API.symbols
-	r = libparsing.Reference_new()
-	print "    ctypes.ref   :", hex(ctypes.addressof(r.contents))
-	assert not libparsing.Reference_hasElement(r)
-	assert not libparsing.Reference_hasNext(r)
-	assert r.contents._b_needsfree_ is 0
-	# SEE: https://docs.python.org/2.5/lib/ctypes-data-types.html
-	assert r.contents.name == "_"
-	assert r.contents.id   == -1, r.contents.id
-	# So that's the surprising stuff about ctypes. Our C code assigns
-	# NULL to element and next. If we had declared TReference with
-	# `next` and `element` as returning `void*`, then we would
-	# get None. But because they're ParsingElement* and Reference*
-	# they return these pointers pointing to NULL.
-	assert not r.contents.element
-	assert not r.contents.next
-	assert r.contents.element is not None
-	assert r.contents.next    is not None
-	# r.contents.element = 0
-	# r.contents.next    = 0
-	assert isinstance(r.contents.element, C.TYPES["ParsingElement*"])
-	assert isinstance(r.contents.next,    C.TYPES["Reference*"])
-	# And the C addresses of the element and next (which are NULL pointers)
-	# is not 0. This is because `addressof` returns the object of the Python
-	# pointer instance, not the address of its contents.
-	assert ctypes.addressof(r.contents.element) != 0
-	assert ctypes.addressof(r.contents.next)    != 0
-	# Anyhow, we now creat an empty rule
-	ab = libparsing.Rule_new(None)
-	assert ab.contents._b_needsfree_ is 0
-	print "  ctypes.ref:", hex(ctypes.addressof(ab.contents))
-	# And we add it the reference
-	print libparsing.ParsingElement_add.argtypes
-	print [ab, r]
-	print libparsing.ParsingElement_add.restype
-	print hex(ctypes.addressof(ab.contents))
-	print "REF HAS NEXT", libparsing.Reference_hasNext(r)
-	#libparsing.ParsingElement_add(ab.contents, r)
-	print "Direct invocation"
-	C_API._cdll["ParsingElement_add"](ab, r)
-	# DEBUG: This is whhere the problem happens. The above call without the
-	# type conversions work. The one below does not work!
-	print "Invocation throught symbols"
-	libparsing.ParsingElement_add(ab, r)
-
-
-def testRuleFlat():
-	libparsing = C_API.symbols
-	g  = libparsing.Grammar_new()
-	a  = libparsing.Word_new("a")
-	b  = libparsing.Word_new("b")
-	ab = libparsing.Rule_new(None)
-	ra = libparsing.Reference_Ensure(a)
-	rb = libparsing.Reference_Ensure(b)
-	# NOTE: Somehow, using ParsingElement_add with typing fucks everything.
-	libparsing.ParsingElement_add(ab, ra)
-	libparsing.ParsingElement_add(ab, rb)
-	g.contents.axiom     = ab
-	g.contents.isVerbose = 1
-	libparsing.Grammar_parseFromString(g, "abab")
 
 def testRuleOO():
 	g       = Grammar()
@@ -877,9 +985,12 @@ def testRuleOO():
 	g.axiom = ab
 	g.isVerbose = True
 	r = g.parseFromString(text)
+	assert isinstance(r, ParsingResult)
+	for i,m in enumerate(r.match.children()):
+		print "Match", i, "=", m
 
-#testReference()
-testRuleFlat()
+testRuleOO()
+
 # if __name__ == "__main__":
 # 	unittest.main()
 

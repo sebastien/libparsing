@@ -200,6 +200,7 @@ make install               # You can set PREFIX</code></pre>
 <span class="kw">typedef</span> <span class="kw">struct</span> Reference      Reference;
 <span class="kw">typedef</span> <span class="kw">struct</span> Match          Match;
 <span class="kw">typedef</span> <span class="dt">void</span>                  Element;</code></pre>
+<p>typedef struct Element { char type; // Type is used du differentiate ParsingElement from Reference int id; // The ID, assigned by the grammar, as the relative distance to the axiom } Element;</p>
 <div id="type-grammar" class="section level4">
 <h4><a name="Grammar_type"><span class="classifier">type</span> <code>Grammar</code></a></h4>
 <pre class="sourceCode c"><code class="sourceCode c"><span class="kw">typedef</span> <span class="kw">struct</span> Grammar {
