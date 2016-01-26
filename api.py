@@ -22,6 +22,9 @@ except ImportError as e:
 NOTHING = ctypes
 C_API   = None
 
+# NOTE: This ctypes implementation is noticeably longer than the corresponding
+# CFII equivalent, while also being prone to random segfaults, which need
+# to be investigated (memory management).
 
 # -----------------------------------------------------------------------------
 #
