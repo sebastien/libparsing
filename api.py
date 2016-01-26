@@ -645,6 +645,9 @@ class ParsingElement(CObjectWrapper):
 	def oneOrMore( self ):
 		return Reference(element=self, cardinality=CARDINALITY_MANY)
 
+	def __div__( self, a ):
+		return self._as(name)
+
 class Reference(CObjectWrapper):
 
 	WRAPPED   = TReference
@@ -810,6 +813,9 @@ class Match(CObjectWrapper):
 
 class CompositeMatch(Match):
 
+	def group( self, index=0 ):
+		return self.getChild(index).group()
+
 	def children( self ):
 		"""Iterates throught the children of this composite match."""
 		child = self.child
@@ -960,10 +966,36 @@ class Grammar(CObjectWrapper):
 		axiom = Word
 	)
 
+	@classmethod
+	def Register( cls, *classes ):
+		for _ in classes:
+			cls.RegisterParsingElement(_)
+
+	@classmethod
+	def RegisterParsingElement( cls, parsingClass ):
+		c = parsingClass
+		assert issubclass(c, ParsingElement)
+		def anonymous_creator( self, *args, **kwargs ):
+			element = c(*args, **kwargs)
+			self._symbols["_" + str(element.id)] = element
+			return element
+		def named_creator( self, name, *args, **kwargs ):
+			element = c(*args, **kwargs)
+			element.name = name
+			self._symbols[name] = element
+			assert name in self._symbols
+			assert hasattr(self.symbols, name)
+			return element
+		name = c.__name__.rsplit(".", 1)[-1].lower()
+		setattr(cls, name,       named_creator)
+		setattr(cls, "a" + name, anonymous_creator)
+
 	def _new( self, isVerbose=False, axiom=None ):
 		CObjectWrapper._new(self)
 		self.isVerbose = isVerbose and 1 or 0
 		self.axiom     = axiom
+		self.symbols   = CLibrary.Symbols()
+		self._symbols  = self.symbols.__dict__
 
 # -----------------------------------------------------------------------------
 #
@@ -1033,19 +1065,11 @@ C_API = CLibrary(
 	Group,
 )
 
+
+
 # We dynamically register shorthand factory methods for parsing elements in
 # the Grammar.
-for _ in [Word]:
-	name = _.__name__.rsplit(".", 1)[-1]
-	name = name.lower()
-	def creator( self, *args, **kwargs ):
-		element = _(*args, **kwargs)
-	def named_creator( self, name, *args, **kwargs ):
-		element = _(*args, **kwargs)
-		element.name = name
-	setattr(Grammar, name,       named_creator)
-	setattr(Grammar, "a" + name, creator)
-
+Grammar.Register(Word, Token, Group, Rule)
 # NOTE: Useful for debugging
 # for k in sorted(C.TYPES.keys()):
 # 	print "C.TYPES[{0}] = {1}".format(k, C.TYPES[k])
@@ -1058,9 +1082,10 @@ for _ in [Word]:
 
 import unittest
 
-class Test():#(unittest.TestCase):
+#class TestCollection(unittest.TestCase):
+class TestCollection:
 
-	def testCTypesBehaviour():
+	def testCTypesBehaviour( self ):
 		"""A few assertions about what to expect from CTypes."""
 		# We retrieve the TReference type
 		ref = C.TYPES["Reference*"]
@@ -1081,7 +1106,7 @@ class Test():#(unittest.TestCase):
 			was_null = True
 		assert was_null
 
-	def testReference():
+	def testReference( self ):
 		# We're trying to assert that Reference objects created from C
 		# work as expected.
 		libparsing = C_API.symbols
@@ -1138,7 +1163,7 @@ class Test():#(unittest.TestCase):
 		self.assertIsNone(m.next)
 		self.assertIsNone(m.child)
 
-	def testRuleFlat():
+	def testRuleFlat( self ):
 		libparsing = C_API.symbols
 		g  = libparsing.Grammar_new()
 		a  = libparsing.Word_new("a")
@@ -1152,8 +1177,7 @@ class Test():#(unittest.TestCase):
 		g.contents.isVerbose = 1
 		libparsing.Grammar_parseFromString(g, "abab")
 
-
-	def testRuleOO():
+	def testRuleOO( self ):
 		g       = Grammar()
 		text    = "abab"
 		a       = Word("a")
@@ -1217,10 +1241,9 @@ class Test():#(unittest.TestCase):
 		#for i,m in enumerate(r.match.children()):
 		#	print "Match", i, "=", m, m.name(), m.element(), m.cardinality(), list(m.children()), m.group(), m.range()
 
-
-class Test(unittest.TestCase):
-
-	def testGrammar(self):
+	def testReferenceMatch(self):
+		"""Reference matches are probably the hardest thing to understand
+		in therms of API. They wrap parsing element matches."""
 		NUMBER     = Token("\d+")
 		VARIABLE   = Token("\w+")
 		OPERATOR   = Token("[\+\-*\/]")
@@ -1242,6 +1265,12 @@ class Test(unittest.TestCase):
 		op    = r.match.get("op")
 		right = r.match.get("right")
 
+		# We also assert the querying as a whole dictionary
+		v     = r.match.get()
+		assert "left"  in v
+		assert "op"    in v
+		assert "right" in v
+
 		# We have reference matches first
 		assert isinstance(left,     ReferenceMatch)
 		assert isinstance(op,       ReferenceMatch)
@@ -1252,20 +1281,33 @@ class Test(unittest.TestCase):
 		assert isinstance(op[0],    TokenMatch)
 		assert isinstance(right[0], GroupMatch)
 
-
-		print left.groups()
-		print op.groups()
-		print right.groups()
+		self.assertEquals(left.group(),  "1")
+		self.assertEquals(op.group(),    "+")
+		self.assertEquals(right.group(), "10")
 
 		# We decompose the operator
 		self.assertEquals(op[0].group(), "+")
 		self.assertEquals(op.group(),    "+")
 		self.assertEquals(op.groups(),  ["+"])
 
-		v     = r.match.get()
-		assert "left"  in v
-		assert "op"    in v
-		assert "right" in v
+class Test(unittest.TestCase):
+
+	def testGrammarSymbols(self):
+		g = Grammar(isVerbose = False)
+		s = g.symbols
+		g.token("NUMBER",   "\d+")
+		g.token("VARIABLE", "\w+")
+		g.token("OPERATOR", "[\+\-*\/]")
+		g.group("Value",    s.NUMBER, s.VARIABLE)
+		g.rule ("Operation",
+			s.Value._as("left"), s.OPERATOR._as("op"), s.Value._as("right")
+		)
+		g.axiom = s.Operation
+
+		# # We parse, and make sure it completes
+		# r = g.parseFromString("1+10")
+		# self.assertTrue(r.isSuccess())
+		# self.assertTrue(r.isComplete())
 
 
 if __name__ == "__main__":
