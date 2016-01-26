@@ -198,7 +198,7 @@ class C:
 			func          = symbols[name]
 			func.argtypes = argtypes = [_[0] for _ in argtypes]
 			func.restype  = restype  = restype[0]
-			print ("C:Loaded {0} with {1} → {2}".format(name, argtypes, restype))
+			# print ("C:Loaded {0} with {1} → {2}".format(name, argtypes, restype))
 			assert func.argtypes == argtypes, "ctypes: argtypes do not match {0} != {1}".format(func.argtypes, argtypes)
 			assert func.restype  == restype , "ctypes: restype does not match {0} != {1}".format(func.restype , restype)
 			res.append((func, proto))
@@ -328,11 +328,11 @@ class CObjectWrapper(object):
 		c = C
 		def getter( self ):
 			value = getattr(self._wrapped.contents, name)
-			print "g: ", cls.__name__ + "." + name, type, "=", value
+			# print "g: ", cls.__name__ + "." + name, type, "=", value
 			return self.LIBRARY.wrap(value)
 		def setter( self, value ):
 			value = self.LIBRARY.unwrapCast(value, type)
-			print "s: ", cls.__name__ + "." + name, type, "<=", value
+			# print "s: ", cls.__name__ + "." + name, type, "<=", value
 			return setattr(self._wrapped.contents, name, value)
 		return property(getter, setter)
 
@@ -354,13 +354,13 @@ class CObjectWrapper(object):
 		def function(cls, *args):
 			# We unwrap the arguments, meaning that the arguments are now
 			# pure C types values
-			print "F: ", proto[0], args
+			# print "F: ", proto[0], args
 			args = [cls.LIBRARY.unwrap(_) for _ in args]
 			res  = ctypesFunction(*args)
 			if not is_constructor:
 				# Non-constructors must wrap the result
 				res  = cls.LIBRARY.wrap(res)
-			print "F=>", res
+			# print "F=>", res
 			return res
 		return function
 
@@ -371,16 +371,15 @@ class CObjectWrapper(object):
 		def method(self, *args):
 			# We unwrap the arguments, meaning that the arguments are now
 			# pure C types values
-			print "M: ", proto[0], args
+			# print "M: ", proto[0], args
 			args = [self.LIBRARY.unwrap(self)] + [self.LIBRARY.unwrap(_) for _ in args]
-			print "   ", args
 			assert args[0], "CObjectWrapper: method {0} `this` is None in {1}".format(proto[0], self)
 			try:
 				res  = ctypesFunction(*args)
 			except ctypes.ArgumentError as e:
 				raise ValueError("{1} failed with {2}: {3}".format(cls.__name__, proto[0][0], args, e))
 			res  = self if returns_this else self.LIBRARY.wrap(res)
-			print "M=>", res
+			# print "M=>", res
 			return res
 		return method
 
