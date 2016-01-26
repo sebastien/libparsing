@@ -135,7 +135,7 @@ bool String_move ( Iterator* this, int n ) {
 	if ( n == 0) {
 		// --- STAYING IN PLACE -----------------------------------------------
 		// We're not moving position
-		DEBUG("String_move: did not move (n=%d) offset=%zd/length=%zd, available=%zd, current-buffer=%ld\n", n, this->offset, this->length, this->available, this->current - this->buffer);
+		// DEBUG("String_move: did not move (n=%d) offset=%zd/length=%zd, available=%zd, current-buffer=%ld\n", n, this->offset, this->length, this->available, this->current - this->buffer);
 		return TRUE;
 	} else if ( n >= 0 ) {
 		// --- MOVING FORWARD -------------------------------------------------
@@ -145,7 +145,6 @@ bool String_move ( Iterator* this, int n ) {
 		// `c` is the number of elements we're actually agoing to move, which
 		// is either `n` or the number of elements left.
 		size_t c    = n <= left ? n : left;
-		size_t c_copy = c;
 		// This iterates throught the characters and counts line separators.
 		while (c > 0) {
 			this->current++;
@@ -155,7 +154,7 @@ bool String_move ( Iterator* this, int n ) {
 		}
 		// We then store the amount of available
 		this->available = this->length - this->offset;
-		DEBUG("String_move: moved forward by c=%zd, n=%d offset=%zd length=%zd, available=%zd, current-buffer=%ld", c_copy, n, this->offset, this->length, this->available, this->current - this->buffer);
+		// DEBUG("String_move: moved forward by c=%zd, n=%d offset=%zd length=%zd, available=%zd, current-buffer=%ld", c_copy, n, this->offset, this->length, this->available, this->current - this->buffer);
 		if (this->available == 0) {
 			// If we have no more available elements, then the status of
 			// the stream is STATUS_ENDED
@@ -179,7 +178,7 @@ bool String_move ( Iterator* this, int n ) {
 			this->status  = STATUS_PROCESSING;
 		}
 		assert(Iterator_remaining(this) >= 0 - n);
-		DEBUG("String_move: moved backwards by n=%d offset=%zd/length=%zd, available=%zd, current-buffer=%ld", n, this->offset, this->length, this->available, this->current - this->buffer);
+		// DEBUG("String_move: moved backwards by n=%d offset=%zd/length=%zd, available=%zd, current-buffer=%ld", n, this->offset, this->length, this->available, this->current - this->buffer);
 		return TRUE;
 	}
 }
@@ -815,8 +814,18 @@ const char* TokenMatch_group(Match* match, int index) {
 	assert (match->context       != NULL);
 	assert (((ParsingElement*)(match->element))->type == TYPE_TOKEN);
 	TokenMatch* m = (TokenMatch*)match->data;
-	assert (index - m->count);
+	assert (index >= 0);
+	assert (index < m->count);
 	return m->groups[index];
+}
+
+int TokenMatch_count(Match* match) {
+	assert (match                != NULL);
+	assert (match->data          != NULL);
+	assert (match->context       != NULL);
+	assert (((ParsingElement*)(match->element))->type == TYPE_TOKEN);
+	TokenMatch* m = (TokenMatch*)match->data;
+	return m->count;
 }
 
 void TokenMatch_free(Match* match) {

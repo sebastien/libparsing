@@ -424,22 +424,32 @@ class CObjectWrapper(object):
 
 	def __init__( self, *args, **kwargs ):
 		self._wrapped = None
+		self._init()
 		if "wrappedCObject" in kwargs:
-			assert not self._wrapped
-			self._wrapped = kwargs["wrappedCObject"]
-			assert isinstance(self._wrapped, ctypes.POINTER(self.WRAPPED))
-			assert self._wrapped != None, "{0}(wrappedCObject): wrappedCObject expected, got: {1}".format(self.__class__.__name__, self._wrapped)
-			self._mustFree = False
+			self._wrap(kwargs["wrappedCObject"])
 		else:
-			# We ensure that the _wrapped value returned by the creator is
-			# unwrapped. In fact, we might want to implement a special case
-			# for new that returns directly an unwrapped value.
-			instance       = self.__class__._Create(*args)
-			assert isinstance( instance, ctypes.POINTER(self.WRAPPED)), "{0}(): {1} pointer expected, got {2}".format(self.__class__.__name__, self.WRAPPED, instance)
-			assert not self._wrapped
-			assert instance != None, "{0}(): created instance seems to have no value: {1}".format(self.__class__.__name__, self._wrapped)
-			self._wrapped  = instance
-			self._mustFree = True
+			self._new(*args, **kwargs)
+
+	def _wrap( self, wrapped ):
+		assert not self._wrapped
+		self._wrapped = wrapped
+		assert isinstance(self._wrapped, ctypes.POINTER(self.WRAPPED))
+		assert self._wrapped != None, "{0}(wrappedCObject): wrappedCObject expected, got: {1}".format(self.__class__.__name__, self._wrapped)
+		self._mustFree = False
+
+	def _new( self, *args, **kwargs ):
+		# We ensure that the _wrapped value returned by the creator is
+		# unwrapped. In fact, we might want to implement a special case
+		# for new that returns directly an unwrapped value.
+		instance       = self.__class__._Create(*args)
+		assert isinstance( instance, ctypes.POINTER(self.WRAPPED)), "{0}(): {1} pointer expected, got {2}".format(self.__class__.__name__, self.WRAPPED, instance)
+		assert not self._wrapped
+		assert instance != None, "{0}(): created instance seems to have no value: {1}".format(self.__class__.__name__, self._wrapped)
+		self._wrapped  = instance
+		self._mustFree = True
+
+	def _init ( self ):
+		pass
 
 	# FIXME: We experience many problems with destructors, ie. segfaults in GC.
 	# This needs to be sorted out.
@@ -447,8 +457,8 @@ class CObjectWrapper(object):
 	# 	if self._wrapped and self._mustFree:
 	# 		# FIXME: There are some issues with the __DEL__ when other stuff is not available
 	# 		if hasattr(self, "free") and getattr(self, "free"):
+	# 			print ("FREEING", self)
 	# 			self.free(self._wrapped)
-	# 	object.__del__(self)
 
 # -----------------------------------------------------------------------------
 #
@@ -481,6 +491,14 @@ class TParsingElement(ctypes.Structure):
 	ParsingElement*->ParsingContext*->Match* recognize;
 	ParsingElement*->ParsingContext*->Match*->Match* process;
 	Match*->void freeMatch;
+	"""
+
+
+class TWordConfig(ctypes.Structure):
+
+	STRUCTURE = """
+	const char* word;
+	size_t      length;
 	"""
 
 class TReference(ctypes.Structure):
@@ -589,6 +607,43 @@ class ParsingElement(CObjectWrapper):
 	FUNCTIONS = """
 	this* ParsingElement_name( ParsingElement* this, const char* name ); // @as setName
 	"""
+	@classmethod
+	def Wrap( cls, wrapped ):
+		"""This classmethod acts as a factory to produce specialized instances
+		of `ParsingElement` subclasses based on the element's type."""
+		# We return None if it's a reference to a NULL pointer
+		if not wrapped: return None
+		# Otherwise we access the type and return new specific instances
+		element_type = wrapped.contents.type
+		if element_type == TYPE_REFERENCE:
+			return Reference(wrappedCObject=wrapped)
+		elif element_type == TYPE_WORD:
+			return Word(wrappedCObject=wrapped)
+		elif element_type == TYPE_TOKEN:
+			return Token(wrappedCObject=wrapped)
+		elif element_type == TYPE_RULE:
+			return Rule(wrappedCObject=wrapped)
+		elif element_type == TYPE_GROUP:
+			return Group(wrappedCObject=wrapped)
+		else:
+			raise ValueError
+
+	def _as( self, name ):
+		"""Returns a new Reference wrapping this parsing element."""
+		ref = Reference(element=self, name=name)
+		return ref
+
+	def one( self ):
+		return Reference(element=self, cardinality=CARDINALITY_ONE)
+
+	def optional( self ):
+		return Reference(element=self, cardinality=CARDINALITY_OPTIONAL)
+
+	def zeroOrMore( self ):
+		return Reference(element=self, cardinality=CARDINALITY_MANY_OPTIONAL)
+
+	def oneOrMore( self ):
+		return Reference(element=self, cardinality=CARDINALITY_MANY)
 
 class Reference(CObjectWrapper):
 
@@ -620,6 +675,27 @@ class Reference(CObjectWrapper):
 		res._mustFree = True
 		return res
 
+	def _new( self, element=None, name=None ):
+		CObjectWrapper._new(self)
+		self.element = element
+		self.name    = name
+
+	def one( self ):
+		self._wrapped.cardinality = CARDINALITY_ONE
+		return self
+
+	def optional( self ):
+		self._wrapped.cardinality = CARDINALITY_OPTIONAL
+		return self
+
+	def zeroOrMore( self ):
+		self._wrapped.cardinality = CARDINALITY_MANY_OPTIONAL
+		return self
+
+	def oneOrMore( self ):
+		self._wrapped.cardinality = CARDINALITY_MANY
+		return self
+
 class Word(ParsingElement):
 
 	FUNCTIONS = """
@@ -640,32 +716,45 @@ class Token(ParsingElement):
 #
 # -----------------------------------------------------------------------------
 
-class CompositeParsingElement(ParsingElement):
+class CompositeElement(ParsingElement):
 
 	WRAPPED   = TParsingElement
 	FUNCTIONS = """
 	this* ParsingElement_add(ParsingElement* this, Reference* child); // @as _add
 	"""
 
+	# NOTE: This is an attempt at memory management
+	# def _init( self ):
+	# 	self._children = []
+
+	def _new(self, *args):
+		ParsingElement._new(self, None)
+		for _ in args:
+			self.add(_)
+
 	def add( self, reference ):
-		#reference = Reference.Ensure(reference)
-		#assert isinstance(reference, Reference)
-		# FIXME: Somehow, using _add does not work! This is potentially a
-		# major source of problems down the road.
-		#self._add(reference)
-		# reference = self.LIBRARY.symbols.Reference_Ensure(reference._wrapped)
-		# assert isinstance(reference, ctypes.POINTER(TReference))
-		# print reference.contents.next
-		reference = self.LIBRARY.symbols.Reference_Ensure(reference._wrapped)
+		# argument = reference
+		assert reference
+		assert isinstance(reference, ParsingElement) or isinstance(reference, Reference), "{0}.add: Expected ParsingElement or Reference, got {1}".format(self.__class__, reference)
+		reference = Reference.Ensure(reference)
+		assert isinstance(reference, Reference)
 		self._add(reference)
+		# self._children.append((reference, argument))
 		assert self.children
 		return self
 
-class Rule(CompositeParsingElement):
+class Rule(CompositeElement):
 
 	# FIXME: No free method here
 	FUNCTIONS = """
 	ParsingElement* Rule_new(void* children);
+	"""
+
+class Group(CompositeElement):
+
+	# FIXME: No free method here
+	FUNCTIONS = """
+	ParsingElement* Group_new(void* children);
 	"""
 
 # -----------------------------------------------------------------------------
@@ -700,49 +789,24 @@ class Match(CObjectWrapper):
 			return TokenMatch(wrappedCObject=wrapped)
 		elif element_type == TYPE_RULE:
 			return RuleMatch(wrappedCObject=wrapped)
+		elif element_type == TYPE_GROUP:
+			return GroupMatch(wrappedCObject=wrapped)
 		else:
 			raise ValueError
 
-	def getType( self ):
+	def group( self, index=0 ):
+		raise NotImplementedError
+
+	def type( self ):
 		return self._wrapped.contents.element.contents.type
 
-	def getRange( self ):
+	def range( self ):
 		"""Returns the range (start, end) of the match."""
 		return (self.offset, self.offset + self.length)
 
 	def isReference( self ):
 		"""A utility shorthand to know if a match is a reference."""
 		return self.getType() == TYPE_REFERENCE
-
-class ReferenceMatch(Match):
-
-	def getReference( self ):
-		return ctypes.cast(self._wrapped.contents, C.TYPEs["Reference*"])
-
-	def getName( self ):
-		return self.getReference().name
-
-	def getCardinality( self ):
-		return self.getReference().cardinality
-
-	def getNextReference( self ):
-		return self.getReference().next
-
-
-class WordMatch(Match):
-
-	def group( self ):
-		element = ctypes.cast(self._wrapped.element, C.TYPES["ParsingElement*"])
-		config  = ctypes.cast(element.contents.config, C.TYPES["WordConfig*"])
-		return config.word
-
-class TokenMatch(Match):
-
-	def getCount( self ):
-		return TokenMatch.from_address(ctypes.addressof(this._wrapped.data.contents)).count
-
-	def getGroups( self ):
-		return TokenMatch.from_address(ctypes.addressof(this._wrapped.data.contents)).groups
 
 class CompositeMatch(Match):
 
@@ -754,7 +818,106 @@ class CompositeMatch(Match):
 			yield child
 			child = child.next
 
+	def getChild( self, index=0 ):
+		for i,_ in enumerate(self.children()):
+			if i == index:
+				return _
+		raise IndexError
+
+	def get( self, name=NOTHING ):
+		if name is NOTHING:
+			return dict((_.name(), _) for _ in self.children() if _.name())
+		else:
+			for _ in self.children():
+				if _.name() == name:
+					return _
+			raise IndexError
+
+	def __iter__( self ):
+		for _ in self.children():
+			yield _
+
+	def __getitem__( self, index ):
+		if isinstance(index, str):
+			return self.get(index)
+		else:
+			return self.getChild(index)
+
+	def __len__( self ):
+		return len(list(self.children()))
+
+class ReferenceMatch(CompositeMatch):
+
+	def reference( self ):
+		"""The reference wrapping the parsing element."""
+		# if not self._reference:
+		# 	self._reference = ctypes.cast(self._wrapped.contents.element, C.TYPES["Reference*"]).contents
+		# print "REFERENENCE", self._reference
+		# return self._reference
+		return ctypes.cast(self._wrapped.contents.element, C.TYPES["Reference*"]).contents
+
+	def element( self ):
+		"""The parsing element wrapped by the reference"""
+		return self.reference().element
+
+	def name( self ):
+		"""The name of the reference."""
+		return self.reference().name
+
+	def group( self, index=0 ):
+		if self.isOne():
+			return self.child.group(0)
+		else:
+			return self.getChild(index).group()
+
+	def groups( self ):
+		return [_.group() for _ in self]
+
+	def cardinality( self ):
+		return self.reference().cardinality
+
+	def isOne( self ):
+		return self.cardinality() == CARDINALITY_ONE
+
+	def isOptional( self ):
+		return self.cardinality() == CARDINALITY_OPTIONAL
+
+	def isZeroOrMore( self ):
+		return self.cardinality() == CARDINALITY_MANY_OPTIONAL
+
+	def isOneOrMore( self ):
+		return self.cardinality() == CARDINALITY_MANY
+
+class WordMatch(Match):
+
+	def group( self, index=0 ):
+		"""Returns the word matched"""
+		if index != 0: raise IndexError
+		assert index == 0
+		element = ctypes.cast(self._wrapped.contents.element,   C.TYPES["ParsingElement*"])
+		config  = ctypes.cast(element.contents.config, C.TYPES["WordConfig*"])
+		return config.contents.word
+
+class TokenMatch(Match):
+
+	FUNCTIONS = """
+	const char* TokenMatch_group(Match* this, int index); // @as _group
+	int TokenMatch_count(Match* this);
+	"""
+
+	def group( self, index=0 ):
+		return self._group(index)
+
+	def groups( self ):
+		element = ctypes.cast(self._wrapped.contents.element, C.TYPES["ParsingElement*"]).contents
+		match   = ctypes.cast(self._wrapped.contents.data,    C.TYPES["TokenMatch*"]).contents
+		return [self.group(i) for i in range(match.count)]
+
 class RuleMatch(CompositeMatch):
+	pass
+
+class GroupMatch(CompositeMatch):
+
 	pass
 
 # -----------------------------------------------------------------------------
@@ -768,6 +931,10 @@ class ParsingResult(CObjectWrapper):
 	WRAPPED   = TParsingResult
 	FUNCTIONS = """
 	void ParsingResult_free(ParsingResult* this);
+	bool ParsingResult_isFailure(ParsingResult* this);
+	bool ParsingResult_isPartial(ParsingResult* this);
+	bool ParsingResult_isSuccess(ParsingResult* this);
+	bool ParsingResult_isComplete(ParsingResult* this);
 	"""
 
 # -----------------------------------------------------------------------------
@@ -792,6 +959,11 @@ class Grammar(CObjectWrapper):
 	PROPERTIES = lambda:dict(
 		axiom = Word
 	)
+
+	def _new( self, isVerbose=False, axiom=None ):
+		CObjectWrapper._new(self)
+		self.isVerbose = isVerbose and 1 or 0
+		self.axiom     = axiom
 
 # -----------------------------------------------------------------------------
 #
@@ -833,6 +1005,7 @@ C.Register(
 	TElement,
 	TParsingElement,
 	TReference,
+	TWordConfig,
 	TTokenMatch,
 	TMatch,
 	TParsingContext,
@@ -854,7 +1027,10 @@ C_API = CLibrary(
 	ParsingResult,
 	Grammar,
 	Word,
+	Token,
+	TokenMatch,
 	Rule,
+	Group,
 )
 
 # We dynamically register shorthand factory methods for parsing elements in
@@ -882,7 +1058,7 @@ for _ in [Word]:
 
 import unittest
 
-class Test(unittest.TestCase):
+class Test():#(unittest.TestCase):
 
 	def testCTypesBehaviour():
 		"""A few assertions about what to expect from CTypes."""
@@ -976,33 +1152,123 @@ class Test(unittest.TestCase):
 		g.contents.isVerbose = 1
 		libparsing.Grammar_parseFromString(g, "abab")
 
-# -----------------------------------------------------------------------------
-#
-# DIRECTIVES
-#
-# -----------------------------------------------------------------------------
+
+	def testRuleOO():
+		g       = Grammar()
+		text    = "abab"
+		a       = Word("a")
+		b       = Word("b")
+		ab      = Rule(None)
+		ra      = Reference.Ensure(a)
+		rb      = Reference.Ensure(b)
+		assert a._wrapped._b
+		ab.add(ra)
+		ab.add(rb)
+		g.axiom = ab
+		g.isVerbose = True
+		r = g.parseFromString(text)
+
+	def testMemory( self ):
+		# In this case Word and Grammar should all be freed upon deletion.
+		a = Word("a")
+		b = Word("b")
+		g = Grammar(
+			isVerbose = True,
+			axiom     = Rule(a, b)
+		)
+		self.assertEquals(g._wrapped.contents._b_needsfree_, 0)
+		self.assertTrue(g._mustFree)
+		self.assertEquals(a._wrapped.contents._b_needsfree_, 0)
+		self.assertTrue(a._mustFree)
+		self.assertEquals(a._wrapped.contents._b_needsfree_, 0)
+		self.assertTrue(a._mustFree)
+
+	def testMatch(self):
+		# We use the fancier shorthands
+		g = Grammar(
+			isVerbose = False,
+			axiom     = Rule(Word("a"), Word("b"))
+		)
+		r = g.parseFromString("abab")
+		# We test the parsing result
+		assert isinstance(r, ParsingResult)
+		assert not r.isFailure()
+		assert r.isSuccess()
+		assert r.isPartial()
+		assert not r.isComplete()
+		# We ensure that the over offset matches
+		assert isinstance(r.match, RuleMatch)
+		assert r.match.offset  == 0
+		assert r.match.length  == 2
+		assert r.match.range() == (0, 2)
+		assert len(r.match) == 2
+		self.assertEquals([_.group() for _ in r.match], ["a", "b"])
+		# We test child 1
+		ma = r.match[0]
+		# NOTE: The following assertions will fail for now
+		# print ma.element()
+		# assert isinstance(ma.element(), Word)
+		self.assertEquals(ma.group(), "a")
+		self.assertEquals(ma.range(), (0,1))
+		mb = r.match[1]
+		self.assertEquals(mb.group(), "b")
+		self.assertEquals(mb.range(), (1,2))
+		# NOTE: The following creates core dump... ahem
+		#for i,m in enumerate(r.match.children()):
+		#	print "Match", i, "=", m, m.name(), m.element(), m.cardinality(), list(m.children()), m.group(), m.range()
 
 
-def testRuleOO():
-	g       = Grammar()
-	text    = "abab"
-	a       = Word("a")
-	b       = Word("b")
-	ab      = Rule(None)
-	ra      = Reference.Ensure(a)
-	rb      = Reference.Ensure(b)
-	ab.add(ra)
-	ab.add(rb)
-	g.axiom = ab
-	g.isVerbose = True
-	r = g.parseFromString(text)
-	assert isinstance(r, ParsingResult)
-	for i,m in enumerate(r.match.children()):
-		print "Match", i, "=", m
+class Test(unittest.TestCase):
 
-testRuleOO()
+	def testGrammar(self):
+		NUMBER     = Token("\d+")
+		VARIABLE   = Token("\w+")
+		OPERATOR   = Token("[\+\-*\/]")
+		Value      = Group(NUMBER, VARIABLE)
+		Operation  = Rule(
+			Value._as("left"), OPERATOR._as("op"), Value._as("right")
+		)
+		g = Grammar(
+			isVerbose = False,
+			axiom     = Operation
+		)
+		# We parse, and make sure it completes
+		r = g.parseFromString("1+10")
+		self.assertTrue(r.isSuccess())
+		self.assertTrue(r.isComplete())
 
-# if __name__ == "__main__":
-# 	unittest.main()
+		# The individual retrieval of object is slower than the one shot
+		left  = r.match.get("left")
+		op    = r.match.get("op")
+		right = r.match.get("right")
+
+		# We have reference matches first
+		assert isinstance(left,     ReferenceMatch)
+		assert isinstance(op,       ReferenceMatch)
+		assert isinstance(right,    ReferenceMatch)
+
+		# Which themselves hold group matches
+		assert isinstance(left[0],  GroupMatch)
+		assert isinstance(op[0],    TokenMatch)
+		assert isinstance(right[0], GroupMatch)
+
+
+		print left.groups()
+		print op.groups()
+		print right.groups()
+
+		# We decompose the operator
+		self.assertEquals(op[0].group(), "+")
+		self.assertEquals(op.group(),    "+")
+		self.assertEquals(op.groups(),  ["+"])
+
+		v     = r.match.get()
+		assert "left"  in v
+		assert "op"    in v
+		assert "right" in v
+
+
+if __name__ == "__main__":
+	unittest.main()
 
 # EOF - vim: ts=4 sw=4 noet

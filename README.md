@@ -892,6 +892,14 @@ const char* TokenMatch_group(Match* match, int index);
 ```
 
 
+#### <a name="TokenMatch_count_method"><span class="classifier">method</span> `TokenMatch_count`</a>
+
+
+```c
+int TokenMatch_count(Match* match);
+```
+
+
 ### References
 
 We've seen that parsing elements can have `children`. However, a parsing

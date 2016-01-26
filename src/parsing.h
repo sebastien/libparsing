@@ -551,6 +551,9 @@ void TokenMatch_free(Match* match);
 // @method
 const char* TokenMatch_group(Match* match, int index);
 
+// @method
+int TokenMatch_count(Match* match);
+
 /**
  * ### References
  *
