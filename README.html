@@ -369,6 +369,7 @@ make install               # You can set PREFIX</code></pre>
 </div>
 <div id="destructor-match_free" class="section level4">
 <h4><a name="Match_free_destructor"><span class="classifier">destructor</span> <code>Match_free</code></a></h4>
+<p>Frees the given match. If the match is <code>MATCH_FAILURE</code>, then it won't be feed. This means that most of the times you won't need to free a failed match, as it's likely to be the <code>MATCH_FAILURE</code> singleton.</p>
 <pre class="sourceCode c"><code class="sourceCode c"><span class="dt">void</span> Match_free(Match* this);</code></pre>
 </div>
 <div id="method-match_issuccess" class="section level4">
@@ -709,6 +710,18 @@ make install               # You can set PREFIX</code></pre>
 <div id="method-parsingresult_free" class="section level4">
 <h4><a name="ParsingResult_free_method"><span class="classifier">method</span> <code>ParsingResult_free</code></a></h4>
 <pre class="sourceCode c"><code class="sourceCode c"><span class="dt">void</span> ParsingResult_free(ParsingResult* this);</code></pre>
+</div>
+<div id="method-parsingresult_isfailure" class="section level4">
+<h4><a name="ParsingResult_isFailure_method"><span class="classifier">method</span> <code>ParsingResult_isFailure</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c">bool ParsingResult_isFailure(ParsingResult* this);</code></pre>
+</div>
+<div id="method-parsingresult_ispartial" class="section level4">
+<h4><a name="ParsingResult_isPartial_method"><span class="classifier">method</span> <code>ParsingResult_isPartial</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c">bool ParsingResult_isPartial(ParsingResult* this);</code></pre>
+</div>
+<div id="method-parsingresult_iscomplete" class="section level4">
+<h4><a name="ParsingResult_isComplete_method"><span class="classifier">method</span> <code>ParsingResult_isComplete</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c">bool ParsingResult_isComplete(ParsingResult* this);</code></pre>
 <p>The result of <em>recognizing</em> parsing elements at given offsets within the input stream is stored in <code>ParsingOffset</code>. Each parsing offset is a stack of <code>ParsingStep</code>, corresponding to successive attempts at matching parsing elements at the current position.</p>
 <p>The parsing offset is a stack of parsing steps, where the tail is the most specific parsing step. By following the tail's previous parsing step, you can unwind the stack.</p>
 <p>The parsing steps each have an offset within the iterated stream. Offsets where data has been fully extracted (ie, a leaf parsing element has matched and processing returned a NOTHING) can be freed as they are not necessary any more.</p>

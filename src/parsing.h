@@ -5,7 +5,7 @@
 // License           : BSD License
 // ----------------------------------------------------------------------------
 // Creation date     : 12-Dec-2014
-// Last modification : 29-Jan-2015
+// Last modification : 26-Jan-2016
 // ----------------------------------------------------------------------------
 
 #include <stdlib.h>
@@ -417,6 +417,9 @@ Match* Match_Success(size_t length, Element* element, ParsingContext* context);
 Match* Match_new(void);
 
 // @destructor
+// Frees the given match. If the match is `MATCH_FAILURE`, then it won't
+// be feed. This means that most of the times you won't need to free
+// a failed match, as it's likely to be the `MATCH_FAILURE` singleton.
 void Match_free(Match* this);
 
 // @method
@@ -747,6 +750,15 @@ ParsingResult* ParsingResult_new(Match* match, ParsingContext* context);
 
 // @method
 void ParsingResult_free(ParsingResult* this);
+
+// @method
+bool ParsingResult_isFailure(ParsingResult* this);
+
+// @method
+bool ParsingResult_isPartial(ParsingResult* this);
+
+// @method
+bool ParsingResult_isComplete(ParsingResult* this);
 
 /*
  * The result of _recognizing_ parsing elements at given offsets within the

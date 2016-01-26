@@ -651,6 +651,9 @@ Match* Match_new(void);
 
 #### <a name="Match_free_destructor"><span class="classifier">destructor</span> `Match_free`</a>
 
+ Frees the given match. If the match is `MATCH_FAILURE`, then it won't
+	 be feed. This means that most of the times you won't need to free
+	 a failed match, as it's likely to be the `MATCH_FAILURE` singleton.
 
 ```c
 void Match_free(Match* this);
@@ -1266,6 +1269,30 @@ ParsingResult* ParsingResult_new(Match* match, ParsingContext* context);
 
 ```c
 void ParsingResult_free(ParsingResult* this);
+```
+
+
+#### <a name="ParsingResult_isFailure_method"><span class="classifier">method</span> `ParsingResult_isFailure`</a>
+
+
+```c
+bool ParsingResult_isFailure(ParsingResult* this);
+```
+
+
+#### <a name="ParsingResult_isPartial_method"><span class="classifier">method</span> `ParsingResult_isPartial`</a>
+
+
+```c
+bool ParsingResult_isPartial(ParsingResult* this);
+```
+
+
+#### <a name="ParsingResult_isComplete_method"><span class="classifier">method</span> `ParsingResult_isComplete`</a>
+
+
+```c
+bool ParsingResult_isComplete(ParsingResult* this);
 ```
 
 
