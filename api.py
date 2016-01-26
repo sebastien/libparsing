@@ -716,7 +716,19 @@ class Match(CObjectWrapper):
 		return self.getType() == TYPE_REFERENCE
 
 class ReferenceMatch(Match):
-	pass
+
+	def getReference( self ):
+		return ctypes.cast(self._wrapped.contents, C.TYPEs["Reference*"])
+
+	def getName( self ):
+		return self.getReference().name
+
+	def getCardinality( self ):
+		return self.getReference().cardinality
+
+	def getNextReference( self ):
+		return self.getReference().next
+
 
 class WordMatch(Match):
 
