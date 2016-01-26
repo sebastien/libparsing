@@ -1304,6 +1304,14 @@ bool ParsingResult_isComplete(ParsingResult* this);
 ```
 
 
+#### <a name="ParsingResult_text_method"><span class="classifier">method</span> `ParsingResult_text`</a>
+
+
+```c
+iterated_t* ParsingResult_text(ParsingResult* this);
+```
+
+
 The result of _recognizing_ parsing elements at given offsets within the
 input stream is stored in `ParsingOffset`. Each parsing offset is a stack
 of `ParsingStep`, corresponding to successive attempts at matching

@@ -14,6 +14,11 @@ LICENSE = "http://ffctn.com/doc/licenses/bsd"
 
 import ctypes, os, re
 
+try:
+	import reporter as logging
+except ImportError as e:
+	import logging
+
 NOTHING = ctypes
 C_API   = None
 
@@ -806,6 +811,9 @@ class Match(CObjectWrapper):
 	def _value( self ):
 		raise NotImplementedError
 
+	def elementID( self ):
+		return ctypes.cast(self._wrapped.element.contents, C.TYPES["ParsingElement*"]).contents.id
+
 	def value( self ):
 		"""Value is an accessor around this Match's value, which can
 		be transformed by a match processor."""
@@ -883,7 +891,8 @@ class ReferenceMatch(CompositeMatch):
 
 	def element( self ):
 		"""The parsing element wrapped by the reference"""
-		return self.reference().element
+		#return C.UnwrapCast(self.reference().element, C.TYPES["ParsingElement*"]).contents
+		return ctypes.cast(self.reference().element, C.TYPES["ParsingElement*"]).contents
 
 	def name( self ):
 		"""The name of the reference."""
@@ -981,7 +990,16 @@ class ParsingResult(CObjectWrapper):
 	bool ParsingResult_isPartial(ParsingResult* this);
 	bool ParsingResult_isSuccess(ParsingResult* this);
 	bool ParsingResult_isComplete(ParsingResult* this);
+	const char* ParsingResult_text(ParsingResult* this);
 	"""
+
+	def textaround( self, line=None ):
+		if line is None: line = self.line
+		i = self.offset()
+		t = self.text()
+		while i > 1 and t[i] != "\n": i -= 1
+		if i != 0: i += 1
+		return t[i:(i+100)].split("\n")[0]
 
 # -----------------------------------------------------------------------------
 #
@@ -1043,7 +1061,7 @@ class Grammar(CObjectWrapper):
 #
 # -----------------------------------------------------------------------------
 
-class AbstractProcessor( object ):
+class Processor(object):
 	"""The main entry point when using `libparsing` form Python. Subclass
 	the processor and define parsing element handlers using the convention
 	`on<ParsingElement's name`. For instance, if your grammar has a `NAME`
@@ -1053,6 +1071,92 @@ class AbstractProcessor( object ):
 	as first argument as well as the named elements defined in the symbol,
 	if it is a composite symbol (rule, group, etc). The named elements
 	are the ones you declare using `_as`."""
+
+	def __init__( self, grammar ):
+		assert isinstance(grammar, Grammar)
+		self.symbolByName = {}
+		self.symbolByID   = {}
+		self.handlerByID  = {}
+		self._bindSymbols(grammar)
+		self._bindHandlers()
+
+	def _bindSymbols( self, grammar ):
+		"""Registers the symbols from the grammar into this processor. This
+		will create a mapping from the symbol name and the symbol id to the
+		symbol itself."""
+		for name, symbol in grammar._symbols.items():
+			if symbol.id in self.symbolByID:
+				if symbol.id >= 0:
+					raise Exception("Duplicate symbol id: %d, has %s already while trying to assign %s" % (symbol.id, self.symbolByID[symbol.id].name, symbol.name))
+				else:
+					logging.warn("Unused symbol: %s" % (repr(symbol)))
+			self.symbolByID[symbol.id] = symbol
+
+	def _bindHandlers( self ):
+		"""Discovers the handlers"""
+		for k in dir(self):
+			if not k.startswith("on"): continue
+			name = k[2:]
+			if not name:
+				continue
+			assert name in self.symbolByName, "Handler does not match any symbol: {0}, symbols are {1}".format(k, ", ".join(self.symbolByName.keys()))
+			symbol = self.symbolByName[name]
+			self.handlerByID[symbol.id] = getattr(self, k)
+
+	def on( self, symbol, callback ):
+		"""Binds a handler for the given symbol."""
+		if not isinstance(symbol, ParsingElement):
+			symbol = self.symbolByName[symbol]
+		self.handlerByID[symbol.id] = callback
+		return self
+
+	def process( self, match ):
+		"""Processes the given match, applying the matching handlers when found."""
+		if isinstance(match, ParsingResult): match = match.match
+		# We retrieve the element's id
+		eid     = match.elementID()
+		# We retrieve the handler for
+		handler = self.handlerByID.get(eid)
+		# print "[PROCESS]", eid, match.element().name()
+		if handler:
+			kwargs   = {}
+			# We only bind the arguments listed
+			varnames = handler.func_code.co_varnames
+			for m in match.children():
+				e = m.element
+				n = e.name
+				if n and n in varnames:
+					kwargs[n] = self.process(m)
+			try:
+				return handler(match, **kwargs)
+			except TypeError as e:
+				args = ["match"] + list(kwargs.keys())
+				raise Exception(str(e) + " -- arguments: {0}".format(",".join(args)))
+			except Exception as e:
+				raise e
+		else:
+			# If we don't have a handler, we recurse
+			return self.defaultProcess(match)
+
+	def defaultProcess( self, match ):
+		"""The default processing, which basically returns the match's value."""
+		return match.value()
+		# m = [self._process(m) for m in match.children()]
+		# if not m:
+		# 	return match.group() or None
+		# elif len(m) == 1 and m[0] is None:
+		# 	return None
+		# elif match.isFromReference():
+		# 	r = match.element()
+		# 	if r.isOptional():
+		# 		return m[0]
+		# 	elif r.isOne():
+		# 		return m[0]
+		# 	else:
+		# 		return m
+		# else:
+		# 	return m
+
 
 # -----------------------------------------------------------------------------
 #
@@ -1330,8 +1434,6 @@ class TestCollection:
 		self.assertEquals(op.group(),    "+")
 		self.assertEquals(op.groups(),  ["+"])
 
-class Test(unittest.TestCase):
-
 	def testGrammarSymbols(self):
 		g = Grammar(isVerbose = False)
 		s = g.symbols
@@ -1351,6 +1453,32 @@ class Test(unittest.TestCase):
 
 		print r.match.get()
 		print r.match.value()
+
+class Test(unittest.TestCase):
+
+	def testProcessor(self):
+		g = Grammar(isVerbose = False)
+		s = g.symbols
+		g.token("NUMBER",   "\d+")
+		g.token("VARIABLE", "\w+")
+		g.token("OPERATOR", "[\+\-*\/]")
+		g.group("Value",    s.NUMBER, s.VARIABLE)
+		g.rule ("Operation",
+			s.Value._as("left"), s.OPERATOR._as("op"), s.Value._as("right")
+		)
+		g.axiom = s.Operation
+
+
+		# # We parse, and make sure it completes
+		r = g.parseFromString("1+10")
+		self.assertTrue(r.isSuccess())
+		self.assertTrue(r.isComplete())
+
+		p = Processor(g)
+		p.on(s.NUMBER,    lambda _: ("N", _))
+		p.on(s.VARIABLE,  lambda _: ("V", _))
+		p.on(s.Operation, lambda _, left, op, right: (op, left, right))
+		print p.process(r)
 
 
 if __name__ == "__main__":

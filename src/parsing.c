@@ -1178,6 +1178,10 @@ bool ParsingResult_isSuccess(ParsingResult* this) {
 	return this->status == STATUS_PARTIAL || this->status == STATUS_SUCCESS;
 }
 
+iterated_t* ParsingResult_text(ParsingResult* this) {
+	return this->context->iterator->buffer;
+}
+
 void ParsingResult_free(ParsingResult* this) {
 	if (this != NULL) {
 		Match_free(this->match);

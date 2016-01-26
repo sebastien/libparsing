@@ -763,6 +763,9 @@ bool ParsingResult_isPartial(ParsingResult* this);
 // @method
 bool ParsingResult_isComplete(ParsingResult* this);
 
+// @method
+iterated_t* ParsingResult_text(ParsingResult* this);
+
 /*
  * The result of _recognizing_ parsing elements at given offsets within the
  * input stream is stored in `ParsingOffset`. Each parsing offset is a stack
