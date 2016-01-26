@@ -442,14 +442,10 @@ void ParsingElement_free(ParsingElement* this) {
 	__DEALLOC(this);
 }
 
-
 ParsingElement* ParsingElement_add(ParsingElement* this, Reference *child) {
-	DEBUG("ParsingElement_add: %p %p", this, child);
-	DEBUG("Reference->next: %p", child->next);
-	DEBUG("Reference_hasNext: %p --> %d", child, Reference_hasNext(child));
 	assert(!Reference_hasNext(child));
-	//assert(child->next == NULL);
-	//assert(child->element->recognize!=NULL);
+	assert(child->next == NULL);
+	assert(child->element->recognize!=NULL);
 	if (this->children) {
 		// If there are children, we skip until the end and add it
 		Reference* ref = this->children;
@@ -545,7 +541,7 @@ Reference* Reference_new(void) {
 	this->next        = NULL;
 	assert(!Reference_hasElement(this));
 	assert(!Reference_hasNext(this));
-	DEBUG("Reference_new: %p, element=%p, next=%p", this, this->element, this->next);
+	// DEBUG("Reference_new: %p, element=%p, next=%p", this, this->element, this->next);
 	return this;
 }
 
@@ -883,7 +879,7 @@ ParsingElement* Rule_new(Reference* children[]) {
 	ParsingElement* this = ParsingElement_new(children);
 	this->type           = TYPE_RULE;
 	this->recognize      = Rule_recognize;
-	DEBUG("Rule_new: %p", this)
+	// DEBUG("Rule_new: %p", this)
 	return this;
 }
 
