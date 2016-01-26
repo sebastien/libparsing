@@ -797,8 +797,27 @@ class Match(CObjectWrapper):
 		else:
 			raise ValueError
 
+	def _init( self ):
+		self._value_ = NOTHING
+
 	def group( self, index=0 ):
 		raise NotImplementedError
+
+	def _value( self ):
+		raise NotImplementedError
+
+	def value( self ):
+		"""Value is an accessor around this Match's value, which can
+		be transformed by a match processor."""
+		if self._value_ != NOTHING:
+			return self._value_
+		else:
+			return self._value()
+
+	def setValue( self, value ):
+		"""Sets the value in this specific match."""
+		self._value_ = value
+		return self
 
 	def type( self ):
 		return self._wrapped.contents.element.contents.type
@@ -870,6 +889,16 @@ class ReferenceMatch(CompositeMatch):
 		"""The name of the reference."""
 		return self.reference().name
 
+	def value( self ):
+		if self.isOne():
+			return self.child.value()
+		else:
+			return [_.value() for _ in self.children()]
+
+	def setValue( self, value ):
+		"""Sets the value in this specific match."""
+		raise ValueError("ReferenceMatch does not accept setting a new value")
+
 	def group( self, index=0 ):
 		if self.isOne():
 			return self.child.group(0)
@@ -896,6 +925,9 @@ class ReferenceMatch(CompositeMatch):
 
 class WordMatch(Match):
 
+	def _value( self ):
+		return self._group()
+
 	def group( self, index=0 ):
 		"""Returns the word matched"""
 		if index != 0: raise IndexError
@@ -911,6 +943,9 @@ class TokenMatch(Match):
 	int TokenMatch_count(Match* this);
 	"""
 
+	def _value( self ):
+		return self._group(0)
+
 	def group( self, index=0 ):
 		return self._group(index)
 
@@ -920,11 +955,16 @@ class TokenMatch(Match):
 		return [self.group(i) for i in range(match.count)]
 
 class RuleMatch(CompositeMatch):
-	pass
+
+	def _value( self ):
+		return [_.value() for _ in self.children()]
 
 class GroupMatch(CompositeMatch):
 
-	pass
+	def _value( self ):
+		c = list(self.children())
+		assert len(c) <= 1
+		return c[0].value()
 
 # -----------------------------------------------------------------------------
 #
@@ -1305,9 +1345,12 @@ class Test(unittest.TestCase):
 		g.axiom = s.Operation
 
 		# # We parse, and make sure it completes
-		# r = g.parseFromString("1+10")
-		# self.assertTrue(r.isSuccess())
-		# self.assertTrue(r.isComplete())
+		r = g.parseFromString("1+10")
+		self.assertTrue(r.isSuccess())
+		self.assertTrue(r.isComplete())
+
+		print r.match.get()
+		print r.match.value()
 
 
 if __name__ == "__main__":
