@@ -5,7 +5,7 @@
 // License           : BSD License
 // ----------------------------------------------------------------------------
 // Creation date     : 12-Dec-2014
-// Last modification : 12-Dec-2014
+// Last modification : 27-Jan-2016
 // ----------------------------------------------------------------------------
 
 #ifndef __OO__
@@ -92,19 +92,17 @@ typedef char  bool;
 
 #ifdef DEBUG_ENABLED
 #define DEBUG(msg,...)   fprintf(DEBUG_STREAM,   "--- ");fprintf(DEBUG_STREAM,   msg, __VA_ARGS__);fprintf(DEBUG_STREAM,   "\n");
-#else
-#define DEBUG(msg,...)   ;
-#endif
-
-#ifdef DEBUG_ENABLED
-#define DEBUG(msg,...)   fprintf(DEBUG_STREAM,   "--- ");fprintf(DEBUG_STREAM,   msg, __VA_ARGS__);fprintf(DEBUG_STREAM,   "\n");
 #define DEBUG_IF(cond,msg,...)   if (cond) {DEBUG(msg, __VA_ARGS__);}
 #else
 #define DEBUG(msg,...)          ;
 #define DEBUG_IF(cond,msg,...)   ;
 #endif
 
-
+#ifdef TRACE_ENABLED
+#define TRACE(msg,...)   fprintf(DEBUG_STREAM,   "--- ");fprintf(DEBUG_STREAM,   msg, __VA_ARGS__);fprintf(DEBUG_STREAM,   "\n");
+#else
+#define TRACE(msg,...)          ;
+#endif
 
 #define WARNING(msg,...) fprintf(WARNING_STREAM, "WRN ");fprintf(WARNING_STREAM, msg, __VA_ARGS__);fprintf(WARNING_STREAM, "\n");
 #define ERROR(msg,...)   fprintf(WARNING_STREAM, "ERR ");fprintf(ERROR_STREAM,   msg, __VA_ARGS__);fprintf(ERROR_STREAM,   "\n");
@@ -116,7 +114,6 @@ typedef char  bool;
 #else
 #define ASSERT(v,msg,...) /* */
 #endif
-
 
 // todo: ERROR, WARNING, INFO, DEBUG
 // todo: COUNTER(name, delta)

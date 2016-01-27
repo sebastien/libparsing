@@ -468,10 +468,14 @@ ParsingElement* ParsingElement_name( ParsingElement* this, const char* name ) {
 }
 
 int ParsingElement__walk( ParsingElement* this, WalkingCallback callback, int step, void* context ) {
+	TRACE("ParsingElement__walk: %d %s [%d]", this->id, this->name, step);
 	int i = step;
 	step  = callback((Element*)this, step, context);
 	Reference* child = this->children;
 	while ( child != NULL && step >= 0) {
+		// We are sure here that the child is a reference, so wa can
+		// call Reference__walk directly.
+		assert(Reference_Is(child));
 		int j = Reference__walk(child, callback, ++i, context);
 		if (j > 0) { step = i = j; }
 		child = child->next;
@@ -533,7 +537,7 @@ Reference* Reference_FromElement(ParsingElement* element){
 Reference* Reference_new(void) {
 	__ALLOC(Reference, this);
 	this->type        = TYPE_REFERENCE;
-	this->id          = -1;
+	this->id          = ID_UNBOUND;
 	this->cardinality = CARDINALITY_ONE;
 	this->name        = "_";
 	this->element     = NULL;
@@ -565,6 +569,7 @@ Reference* Reference_name(Reference* this, const char* name) {
 }
 
 int Reference__walk( Reference* this, WalkingCallback callback, int step, void* context ) {
+	TRACE("Reference__walk: %d %s [%d]", this->id, this->name, step);
 	step = callback((Element*)this, step, context);
 	if (step >= 0) {
 		step = ParsingElement__walk(this->element, callback, step + 1, context);
@@ -1199,6 +1204,7 @@ void ParsingResult_free(ParsingResult* this) {
 int Grammar__resetElementIDs(Element* e, int step, void* nothing) {
 	if (Reference_Is(e)) {
 		Reference* r = (Reference*)e;
+		TRACE("Grammar__resetElementIDs: reset reference %d %s [%d]", r->id, r->name, step)
 		if (r->id != ID_BINDING) {
 			r->id = ID_BINDING;
 			return step;
@@ -1207,6 +1213,7 @@ int Grammar__resetElementIDs(Element* e, int step, void* nothing) {
 		}
 	} else {
 		ParsingElement * r = (ParsingElement*)e;
+		TRACE("Grammar__resetElementIDs: reset parsing element %d %s [%d]", r->id, r->name, step)
 		if (r->id != ID_BINDING) {
 			r->id = ID_BINDING;
 			return step;
@@ -1255,10 +1262,15 @@ void Grammar_prepare ( Grammar* this ) {
 		this->skip->id = 0;
 	}
 	if (this->axiom!=NULL) {
+		// We would need to free elements if they were already allocated
+		if (this->elements) { free(this->elements) ; this->elements = NULL; }
+		assert(this->elements == NULL);
+		TRACE("Grammar_prepare: resetting element IDs %c", ' ')
 		Element_walk(this->axiom, Grammar__resetElementIDs, NULL);
 		if (this->skip != NULL) {
 			Element_walk(this->skip, Grammar__resetElementIDs, NULL);
 		}
+		TRACE("Grammar_prepare: assigning new element IDs %c", ' ')
 		int count = Element_walk(this->axiom, Grammar__assignElementIDs, NULL);
 		this->axiomCount = count;
 		if (this->skip != NULL) {
@@ -1275,6 +1287,8 @@ void Grammar_prepare ( Grammar* this ) {
 }
 
 ParsingResult* Grammar_parseFromIterator( Grammar* this, Iterator* iterator ) {
+	// We make sure the grammar is prepared before we start parsing
+	if (this->elements == NULL) {Grammar_prepare(this);}
 	assert(this->axiom != NULL);
 	// ParsingOffset*  offset  = ParsingOffset_new(iterator->offset);
 	ParsingContext* context = ParsingContext_new(this, iterator);
@@ -1297,7 +1311,6 @@ ParsingResult* Grammar_parseFromPath( Grammar* this, const char* path ) {
 }
 
 ParsingResult* Grammar_parseFromString( Grammar* this, const char* text ) {
-	printf("Grammar_parseFromString: %s\n", text);
 	Iterator* iterator = Iterator_FromString(text);
 	if (iterator != NULL) {
 		return Grammar_parseFromIterator(this, iterator);

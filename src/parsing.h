@@ -289,7 +289,6 @@ typedef struct Grammar {
 	bool             isVerbose;
 } Grammar;
 
-
 // @constructor
 Grammar* Grammar_new(void);
 

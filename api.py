@@ -286,6 +286,11 @@ class CLibrary:
 		list, processing the first filter bound to a matching type."""
 		for t,f in self._wraps:
 			if isinstance(cValue, t): return f(cValue)
+		# NOTE: If POINTER(..) had a parent class, we could test it, but this
+		# should work in the meantime. In essence, we want to return a reference
+		# to the structure as opposed to a pointer to it.
+		if not isinstance(cValue, CObjectWrapper) and hasattr(cValue, "contents"):
+			cValue = cValue.contents
 		return cValue
 
 	def unwrap( self, value):
@@ -814,9 +819,15 @@ class Match(CObjectWrapper):
 	def _value( self ):
 		raise NotImplementedError
 
-	def elementID( self ):
-		return ctypes.cast(self._wrapped.element.contents, C.TYPES["ParsingElement*"]).contents.id
+	def children( self ):
+		for _ in []: yield _
 
+	@property
+	def name( self ):
+		"""The name of the reference."""
+		return ctypes.cast(self._wrapped.contents.element, C.TYPES["ParsingElement*"]).contents.name
+
+	@property
 	def value( self ):
 		"""Value is an accessor around this Match's value, which can
 		be transformed by a match processor."""
@@ -825,13 +836,11 @@ class Match(CObjectWrapper):
 		else:
 			return self._value()
 
-	def setValue( self, value ):
+	@value.setter
+	def value( self, value ):
 		"""Sets the value in this specific match."""
 		self._value_ = value
 		return self
-
-	def type( self ):
-		return self._wrapped.contents.element.contents.type
 
 	def range( self ):
 		"""Returns the range (start, end) of the match."""
@@ -862,10 +871,10 @@ class CompositeMatch(Match):
 
 	def get( self, name=NOTHING ):
 		if name is NOTHING:
-			return dict((_.name(), _) for _ in self.children() if _.name())
+			return dict((_.name, _) for _ in self.children() if _.name)
 		else:
 			for _ in self.children():
-				if _.name() == name:
+				if _.name == name:
 					return _
 			raise IndexError
 
@@ -884,6 +893,7 @@ class CompositeMatch(Match):
 
 class ReferenceMatch(CompositeMatch):
 
+	@property
 	def reference( self ):
 		"""The reference wrapping the parsing element."""
 		# if not self._reference:
@@ -892,24 +902,22 @@ class ReferenceMatch(CompositeMatch):
 		# return self._reference
 		return ctypes.cast(self._wrapped.contents.element, C.TYPES["Reference*"]).contents
 
+	@property
 	def element( self ):
-		"""The parsing element wrapped by the reference"""
-		#return C.UnwrapCast(self.reference().element, C.TYPES["ParsingElement*"]).contents
-		return ctypes.cast(self.reference().element, C.TYPES["ParsingElement*"]).contents
+		"""the parsing element wrapped by the reference"""
+		#return c.unwrapcast(self.reference().element, c.types["ParsingElement*"]).contents
+		return ctypes.cast(self.reference.element, C.TYPES["ParsingElement*"]).contents
 
+	@property
 	def name( self ):
 		"""The name of the reference."""
-		return self.reference().name
+		return self.reference.name
 
-	def value( self ):
-		if self.isOne():
-			return self.child.value()
+	def _value( self ):
+		if self.isOne() or self.isOptional():
+			return self.child.value
 		else:
-			return [_.value() for _ in self.children()]
-
-	def setValue( self, value ):
-		"""Sets the value in this specific match."""
-		raise ValueError("ReferenceMatch does not accept setting a new value")
+			return [_.value for _ in self.children()]
 
 	def group( self, index=0 ):
 		if self.isOne():
@@ -921,7 +929,7 @@ class ReferenceMatch(CompositeMatch):
 		return [_.group() for _ in self]
 
 	def cardinality( self ):
-		return self.reference().cardinality
+		return self.reference.cardinality
 
 	def isOne( self ):
 		return self.cardinality() == CARDINALITY_ONE
@@ -969,14 +977,14 @@ class TokenMatch(Match):
 class RuleMatch(CompositeMatch):
 
 	def _value( self ):
-		return [_.value() for _ in self.children()]
+		return [_.value for _ in self.children()]
 
 class GroupMatch(CompositeMatch):
 
 	def _value( self ):
 		c = list(self.children())
 		assert len(c) <= 1
-		return c[0].value()
+		return c[0].value
 
 # -----------------------------------------------------------------------------
 #
@@ -1116,50 +1124,46 @@ class Processor(object):
 	def process( self, match ):
 		"""Processes the given match, applying the matching handlers when found."""
 		if isinstance(match, ParsingResult): match = match.match
+		print "[PROCESS]", match
+		assert not isinstance(match, ReferenceMatch), "Processor.process: match expected not to be reference match, got {0}".format(match)
 		# We retrieve the element's id
-		eid     = match.elementID()
+		eid     = match.element.id
 		# We retrieve the handler for
 		handler = self.handlerByID.get(eid)
-		# print "[PROCESS]", eid, match.element().name()
 		if handler:
+			print "[PROCESS] Custom handler for", eid, match.name
 			kwargs   = {}
 			# We only bind the arguments listed
 			varnames = handler.func_code.co_varnames
 			for m in match.children():
-				e = m.element
-				n = e.name
-				if n and n in varnames:
-					kwargs[n] = self.process(m)
+				k = m.name
+				assert isinstance(m, ReferenceMatch)
+				if k and k in varnames:
+					# NOTE: We only process the referenced arguments
+					kwargs[k] = self._processReferenceMatch(m)
 			try:
-				return handler(match, **kwargs)
+				value   = handler(match, **kwargs)
+				match.value = value
+				return value
 			except TypeError as e:
 				args = ["match"] + list(kwargs.keys())
-				raise Exception(str(e) + " -- arguments: {0}".format(",".join(args)))
+				raise Exception(str(e) + " -- arguments: {0}".format(",".join([str(_) for _ in args])))
 			except Exception as e:
 				raise e
 		else:
-			# If we don't have a handler, we recurse
-			return self.defaultProcess(match)
+			print "[PROCESS] Generic handler for", eid, match.name
+			value = [self._processReferenceMatch(_) for _ in match.children()]
+			return value
 
-	def defaultProcess( self, match ):
-		"""The default processing, which basically returns the match's value."""
-		return match.value()
-		# m = [self._process(m) for m in match.children()]
-		# if not m:
-		# 	return match.group() or None
-		# elif len(m) == 1 and m[0] is None:
-		# 	return None
-		# elif match.isFromReference():
-		# 	r = match.element()
-		# 	if r.isOptional():
-		# 		return m[0]
-		# 	elif r.isOne():
-		# 		return m[0]
-		# 	else:
-		# 		return m
-		# else:
-		# 	return m
-
+	def _processReferenceMatch( self, refMatch ):
+		"""Processes a reference match."""
+		ref_match = refMatch
+		assert isinstance(ref_match, ReferenceMatch)
+		ref_value = [self.process(_) for _ in ref_match.children()]
+		if ref_match.isOne() or ref_match.isOptional():
+			ref_value = ref_value[0]
+		ref_match.value = ref_value
+		return ref_value
 
 # -----------------------------------------------------------------------------
 #
@@ -1455,7 +1459,7 @@ class TestCollection:
 		self.assertTrue(r.isComplete())
 
 		print r.match.get()
-		print r.match.value()
+		print r.match.value
 
 class Test(unittest.TestCase):
 
@@ -1471,6 +1475,14 @@ class Test(unittest.TestCase):
 		)
 		g.axiom = s.Operation
 
+		# Calling prepare will process the symbols
+		g.prepare()
+
+		self.assertEquals(s.Operation.id, 0)
+		self.assertEquals(s.Value.id,     2)
+		self.assertEquals(s.NUMBER.id,    4)
+		self.assertEquals(s.VARIABLE.id,  6)
+		self.assertEquals(s.OPERATOR.id,  8)
 
 		# # We parse, and make sure it completes
 		r = g.parseFromString("1+10")
@@ -1478,10 +1490,14 @@ class Test(unittest.TestCase):
 		self.assertTrue(r.isComplete())
 
 		p = Processor(g)
-		p.on(s.NUMBER,    lambda _: ("N", _))
+		p.on(s.NUMBER,    lambda _: ("N", int(_.value)))
 		p.on(s.VARIABLE,  lambda _: ("V", _))
 		p.on(s.Operation, lambda _, left, op, right: (op, left, right))
-		print p.process(r)
+
+		res = p.process(r)
+		self.assertEquals(res, ("+", ("N", 1), ("N", 10)))
+		print ","
+		print res
 
 
 if __name__ == "__main__":
