@@ -755,7 +755,15 @@ ParsingElement* ParsingElement_add(ParsingElement *this, Reference *child);
 ```
 
 
-#### <a name="ParsingElement_add_method"><span class="classifier">method</span> `ParsingElement_add`</a>
+#### <a name="ParsingElement_clear_method"><span class="classifier">method</span> `ParsingElement_clear`</a>
+
+
+```c
+ParsingElement* ParsingElement_clear(ParsingElement *this);
+```
+
+
+#### <a name="ParsingElement_clear_method"><span class="classifier">method</span> `ParsingElement_clear`</a>
 
  Returns the match for this parsing element for the given iterator's state.
 	 inline Match* ParsingElement_recognize( ParsingElement* this, ParsingContext* context );

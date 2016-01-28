@@ -424,8 +424,12 @@ make install               # You can set PREFIX</code></pre>
 <p>Adds a new reference as child of this parsing element. This will only be effective for composite parsing elements such as <code>Rule</code> or <code>Token</code>.</p>
 <pre class="sourceCode c"><code class="sourceCode c">ParsingElement* ParsingElement_add(ParsingElement *this, Reference *child);</code></pre>
 </div>
-<div id="method-parsingelement_add-1" class="section level4">
-<h4><a name="ParsingElement_add_method"><span class="classifier">method</span> <code>ParsingElement_add</code></a></h4>
+<div id="method-parsingelement_clear" class="section level4">
+<h4><a name="ParsingElement_clear_method"><span class="classifier">method</span> <code>ParsingElement_clear</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c">ParsingElement* ParsingElement_clear(ParsingElement *this);</code></pre>
+</div>
+<div id="method-parsingelement_clear-1" class="section level4">
+<h4><a name="ParsingElement_clear_method"><span class="classifier">method</span> <code>ParsingElement_clear</code></a></h4>
 <p>Returns the match for this parsing element for the given iterator's state. inline Match* ParsingElement_recognize( ParsingElement* this, ParsingContext* context );</p>
 </div>
 <div id="method-parsingelement_process" class="section level4">

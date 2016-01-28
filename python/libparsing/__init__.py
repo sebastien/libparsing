@@ -232,7 +232,8 @@ class CLibrary:
 		"/usr/lib",
 		"/lib",
 	]
-	EXT = ["", ".so", ".ld", ".dyld"]
+	PREFIX = [""]
+	EXT    = ["", ".so", ".ld", ".dyld"]
 
 	# FROM: http://goodcode.io/articles/python-dict-object/
 	class Symbols(object):
@@ -246,8 +247,10 @@ class CLibrary:
 			path = os.path.abspath(path)
 			for ext in cls.EXT:
 				p = os.path.join(path, name + ext)
-				if os.path.exists(p):
-					return p
+				for prefix in cls.PREFIX:
+					pp = prefix + p
+					if os.path.exists(pp) and not os.path.isdir(pp):
+						return pp
 		return None
 
 	@classmethod
@@ -694,10 +697,12 @@ class Reference(CObjectWrapper):
 		res._mustFree = True
 		return res
 
-	def _new( self, element=None, name=None ):
+	def _new( self, element=None, name=None, cardinality=NOTHING ):
 		CObjectWrapper._new(self)
 		self.element = element
 		self.name    = name
+		if cardinality in (CARDINALITY_ONE, CARDINALITY_OPTIONAL, CARDINALITY_MANY_OPTIONAL, CARDINALITY_MANY):
+			self.cardinality = cardinality
 
 	def one( self ):
 		self._wrapped.cardinality = CARDINALITY_ONE
@@ -715,6 +720,10 @@ class Reference(CObjectWrapper):
 		self._wrapped.cardinality = CARDINALITY_MANY
 		return self
 
+	def _as( self, name ):
+		self.name = name
+		return self
+
 class Word(ParsingElement):
 
 	FUNCTIONS = """
@@ -729,6 +738,24 @@ class Token(ParsingElement):
 	void Token_free(ParsingElement* this);
 	"""
 
+class Condition(ParsingElement):
+	FUNCTIONS = """
+	ParsingElement* Condition_new(ConditionCallback c);
+	"""
+
+	def _new( self, callback ):
+		callback = C.TYPES["ConditionCallback"](callback)
+		return ParsingElement._new(self, callback)
+
+class Procedure(ParsingElement):
+	FUNCTIONS = """
+	ParsingElement* Procedure_new(ProcedureCallback c);
+	"""
+
+	def _new( self, callback ):
+		callback = C.TYPES["ProcedureCallback"](callback)
+		ParsingElement._new(self, callback)
+
 # -----------------------------------------------------------------------------
 #
 # COMPOSITE PARSING ELEMENTS
@@ -740,6 +767,7 @@ class CompositeElement(ParsingElement):
 	WRAPPED   = TParsingElement
 	FUNCTIONS = """
 	this* ParsingElement_add(ParsingElement* this, Reference* child); // @as _add
+	this* ParsingElement_clear(ParsingElement* this);
 	"""
 
 	# NOTE: This is an attempt at memory management
@@ -751,15 +779,21 @@ class CompositeElement(ParsingElement):
 		for _ in args:
 			self.add(_)
 
-	def add( self, reference ):
+	def add( self, *references ):
 		# argument = reference
-		assert reference
-		assert isinstance(reference, ParsingElement) or isinstance(reference, Reference), "{0}.add: Expected ParsingElement or Reference, got {1}".format(self.__class__, reference)
-		reference = Reference.Ensure(reference)
-		assert isinstance(reference, Reference)
-		self._add(reference)
-		# self._children.append((reference, argument))
-		assert self.children
+		for i, reference in enumerate(references):
+			assert reference, "{0}.add: no reference given, got {1} as argument #{2}".format(self.__class__.__name__, reference, i)
+			assert isinstance(reference, ParsingElement) or isinstance(reference, Reference), "{0}.add: Expected ParsingElement or Reference, got {1} as argument #{2}".format(self.__class__, reference, i)
+			reference = Reference.Ensure(reference)
+			assert isinstance(reference, Reference)
+			self._add(reference)
+			# self._children.append((reference, argument))
+			assert self.children
+		return self
+
+	def set( self, *references ):
+		self.clear()
+		self.add(*references)
 		return self
 
 class Rule(CompositeElement):
@@ -979,6 +1013,16 @@ class TokenMatch(Match):
 		match   = ctypes.cast(self._wrapped.contents.data,    C.TYPES["TokenMatch*"]).contents
 		return [self.group(i) for i in range(match.count)]
 
+class ProcedureMatch(Match):
+
+	def _value( self ):
+		return NOTHING
+
+class ConditionMatch(Match):
+
+	def _value( self ):
+		return NOTHING
+
 class RuleMatch(CompositeMatch):
 
 	def _value( self ):
@@ -1057,7 +1101,7 @@ class Grammar(CObjectWrapper):
 			element = c(*args, **kwargs)
 			# The element will be freed by the grammar when its
 			# reference will be lost
-			element._mustFree   = False
+			# element._mustFree   = False
 			self._symbols["_" + str(element.id)] = element
 			return element
 		def named_creator( self, name, *args, **kwargs ):
@@ -1065,7 +1109,7 @@ class Grammar(CObjectWrapper):
 			element.name = name
 			# The element will be freed by the grammar when its
 			# reference will be lost
-			element._mustFree   = False
+			# element._mustFree   = False
 			self._symbols[name] = element
 			assert name in self._symbols
 			assert hasattr(self.symbols, name)
@@ -1081,9 +1125,9 @@ class Grammar(CObjectWrapper):
 		self.symbols   = CLibrary.Symbols()
 		self._symbols  = self.symbols.__dict__
 
-	def __del__( self ):
-		if self._mustFree:
-			self.free()
+	#def __del__( self ):
+	#	if self._mustFree:
+	#		self.free()
 
 # -----------------------------------------------------------------------------
 #
@@ -1107,6 +1151,7 @@ class Processor(object):
 		self.symbolByName = {}
 		self.symbolByID   = {}
 		self.handlerByID  = {}
+		self.grammar      = grammar
 		self._bindSymbols(grammar)
 		self._bindHandlers()
 
@@ -1114,6 +1159,7 @@ class Processor(object):
 		"""Registers the symbols from the grammar into this processor. This
 		will create a mapping from the symbol name and the symbol id to the
 		symbol itself."""
+		grammar.prepare()
 		for name, symbol in grammar._symbols.items():
 			if symbol.id in self.symbolByID:
 				if symbol.id >= 0:
@@ -1121,9 +1167,11 @@ class Processor(object):
 				else:
 					logging.warn("Unused symbol: %s" % (repr(symbol)))
 			self.symbolByID[symbol.id] = symbol
+			self.symbolByName[symbol.name] = symbol
 
 	def _bindHandlers( self ):
 		"""Discovers the handlers"""
+		assert len(self.symbolByName) > 0, "{0}._bindHandlers: No symbols registered, got {1} symbol IDs from grammar {2}".format(self.__class__.__name__, len(self.symbolByID), self.grammar)
 		for k in dir(self):
 			if not k.startswith("on"): continue
 			name = k[2:]
@@ -1237,12 +1285,14 @@ class TreeWriter(Processor):
 # We pre-declare the types that are required by the structure declarations.
 # It's OK if they're void* instead of the actual structure definition.
 C.TYPES.update({
-	"Iterator*"       : ctypes.c_void_p,
-	"Element*"        : ctypes.c_void_p,
-	"Element**"       : ctypes.POINTER(ctypes.c_void_p),
-	"ParsingContext*" : ctypes.c_void_p,
-	"ParsingOffset*"  : ctypes.c_void_p,
-	"WalkingCallback" : ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p),
+	"Iterator*"         : ctypes.c_void_p,
+	"Element*"          : ctypes.c_void_p,
+	"Element**"         : ctypes.POINTER(ctypes.c_void_p),
+	"ParsingContext*"   : ctypes.c_void_p,
+	"ParsingOffset*"    : ctypes.c_void_p,
+	"WalkingCallback"   : ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p),
+	"ConditionCallback" : ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.POINTER(TParsingElement), ctypes.POINTER(TParsingContext)),
+	"ProcedureCallback" : ctypes.CFUNCTYPE(None, ctypes.POINTER(TParsingElement), ctypes.POINTER(TParsingContext)),
 })
 
 # We register structure definitions that we want to be accessible
@@ -1266,22 +1316,24 @@ C.Register(
 # a flat interface to the native C library, but all the registered
 # CObjectWrapper subclasses will now offer an object-oriented wrapper.
 C_API = CLibrary(
-	"libparsing"
+	"_libparsing"
 ).register(
 	Reference,
 	Match,
 	ParsingResult,
 	Grammar,
-	Word,
-	Token,
-	TokenMatch,
-	Rule,
-	Group,
+	Word,      #WordMatch,
+	Token,     TokenMatch,
+	Rule,      #RuleMatch,
+	Group,     #GroupMatch,
+	Condition, #ConditionMatch,
+	Procedure, #ConditionMatch,
 )
 
 # We dynamically register shorthand factory methods for parsing elements in
 # the Grammar.
-Grammar.Register(Word, Token, Group, Rule)
+Grammar.Register(Word, Token, Group, Rule, Condition, Procedure)
+
 # NOTE: Useful for debugging
 # for k in sorted(C.TYPES.keys()):
 # 	print "C.TYPES[{0}] = {1}".format(k, C.TYPES[k])

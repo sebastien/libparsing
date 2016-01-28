@@ -469,6 +469,9 @@ void ParsingElement_free(ParsingElement* this);
 ParsingElement* ParsingElement_add(ParsingElement *this, Reference *child);
 
 // @method
+ParsingElement* ParsingElement_clear(ParsingElement *this);
+
+// @method
 // Returns the match for this parsing element for the given iterator's state.
 // inline Match* ParsingElement_recognize( ParsingElement* this, ParsingContext* context );
 

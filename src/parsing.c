@@ -476,7 +476,7 @@ void ParsingElement_free(ParsingElement* this) {
 	__DEALLOC(this);
 }
 
-ParsingElement* ParsingElement_add(ParsingElement* this, Reference *child) {
+ParsingElement* ParsingElement_add(ParsingElement* this, Reference* child) {
 	assert(!Reference_hasNext(child));
 	assert(child->next == NULL);
 	assert(child->element->recognize!=NULL);
@@ -488,6 +488,17 @@ ParsingElement* ParsingElement_add(ParsingElement* this, Reference *child) {
 	} else {
 		// If there are no children, we set it as the first
 		this->children = child;
+	}
+	return this;
+}
+
+ParsingElement* ParsingElement_clear(ParsingElement* this) {
+	Reference* child = this->children;
+	while ( child != NULL ) {
+		assert(Reference_Is(child));
+		Reference* next = child->next;
+		Reference_free(child);
+		child = next;
 	}
 	return this;
 }
