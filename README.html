@@ -26,7 +26,7 @@ var texto=typeof"extend"!="undefined"&&extend&&extend.module&&extend.module("tex
 <h1>libparsing</h1>
 <div id="c-python-parsing-elements-grammar-library" class="section level2">
 <h2>C &amp; Python Parsing Elements Grammar Library</h2>
-<pre><code>Version :  0.6.0
+<pre><code>Version :  0.7.0
 URL     :  http://github.com/sebastien/parsing
 README  :  https://cdn.rawgit.com/sebastien/libparsing/master/README.html</code></pre>
 <p><code>libparsing</code> is a parsing element grammar (PEG) library written in C with Python bindings. It offers decent performance while allowing for a lot of flexibility. It is mainly intended to be used to create programming languages and software engineering tools.</p>
@@ -223,6 +223,10 @@ make install               # You can set PREFIX</code></pre>
 <div id="method-grammar_prepare" class="section level4">
 <h4><a name="Grammar_prepare_method"><span class="classifier">method</span> <code>Grammar_prepare</code></a></h4>
 <pre class="sourceCode c"><code class="sourceCode c"><span class="dt">void</span> Grammar_prepare ( Grammar* this );</code></pre>
+</div>
+<div id="method-grammar_symbolscount" class="section level4">
+<h4><a name="Grammar_symbolsCount_method"><span class="classifier">method</span> <code>Grammar_symbolsCount</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="dt">int</span> Grammar_symbolsCount ( Grammar* this );</code></pre>
 </div>
 <div id="method-grammar_parsefromiterator" class="section level4">
 <h4><a name="Grammar_parseFromIterator_method"><span class="classifier">method</span> <code>Grammar_parseFromIterator</code></a></h4>
@@ -560,6 +564,10 @@ make install               # You can set PREFIX</code></pre>
 <h4><a name="Reference_constructor"><span class="classifier">constructor</span> <code>Reference</code></a></h4>
 <p>References are typically owned by their single parent composite element.</p>
 <pre class="sourceCode c"><code class="sourceCode c">Reference* Reference_new(<span class="dt">void</span>);</code></pre>
+</div>
+<div id="destructor-reference_free" class="section level4">
+<h4><a name="Reference_free_destructor"><span class="classifier">destructor</span> <code>Reference_free</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="dt">void</span> Reference_free(Reference* this);</code></pre>
 </div>
 <div id="method-reference_cardinality" class="section level4">
 <h4><a name="Reference_cardinality_method"><span class="classifier">method</span> <code>Reference_cardinality</code></a></h4>

@@ -3,7 +3,7 @@
 ## C & Python Parsing Elements Grammar Library
 
 ```
-Version :  0.6.0
+Version :  0.7.0
 URL     :  http://github.com/sebastien/parsing
 README  :  https://cdn.rawgit.com/sebastien/libparsing/master/README.html
 ```
@@ -370,6 +370,14 @@ void Grammar_free(Grammar* this);
 
 ```c
 void Grammar_prepare ( Grammar* this );
+```
+
+
+#### <a name="Grammar_symbolsCount_method"><span class="classifier">method</span> `Grammar_symbolsCount`</a>
+
+
+```c
+int Grammar_symbolsCount ( Grammar* this );
 ```
 
 
@@ -995,6 +1003,14 @@ Reference* Reference_FromElement(ParsingElement* element);
 
 ```c
 Reference* Reference_new(void);
+```
+
+
+#### <a name="Reference_free_destructor"><span class="classifier">destructor</span> `Reference_free`</a>
+
+
+```c
+void Reference_free(Reference* this);
 ```
 
 

@@ -619,7 +619,9 @@ class ParsingElement(CObjectWrapper):
 	WRAPPED   = TParsingElement
 	FUNCTIONS = """
 	this* ParsingElement_name( ParsingElement* this, const char* name ); // @as setName
+	void  ParsingElement_free(ParsingElement* this);
 	"""
+
 	@classmethod
 	def Wrap( cls, wrapped ):
 		"""This classmethod acts as a factory to produce specialized instances
@@ -669,6 +671,7 @@ class Reference(CObjectWrapper):
 	Reference* Reference_Ensure(void* element); // @as _Ensure
 	Reference* Reference_FromElement(ParsingElement* element); // @as _FromElement
 	Reference* Reference_new(void);
+	void       Reference_free(Reference* this);
 	Reference* Reference_cardinality(Reference* this, char cardinality); // @as setCardinality
 	Reference* Reference_name(Reference* this, const char* name); // @as setName
 	bool       Reference_hasElement(Reference* this);
@@ -786,6 +789,7 @@ class Match(CObjectWrapper):
 	bool Match_isSuccess(Match* this);
 	int Match_getOffset(Match* this);
 	int Match_getLength(Match* this);
+	void Match_free(Match* this);
 	int Match__walk(Match* this, WalkingCallback callback, int step, void* context );
 	"""
 
@@ -1013,6 +1017,10 @@ class ParsingResult(CObjectWrapper):
 		if i != 0: i += 1
 		return t[i:(i+100)].split("\n")[0]
 
+	def __del__( self ):
+		if self._mustFree:
+			self.free()
+
 # -----------------------------------------------------------------------------
 #
 # GRAMMAR
@@ -1047,11 +1055,17 @@ class Grammar(CObjectWrapper):
 		assert issubclass(c, ParsingElement)
 		def anonymous_creator( self, *args, **kwargs ):
 			element = c(*args, **kwargs)
+			# The element will be freed by the grammar when its
+			# reference will be lost
+			element._mustFree   = False
 			self._symbols["_" + str(element.id)] = element
 			return element
 		def named_creator( self, name, *args, **kwargs ):
 			element = c(*args, **kwargs)
 			element.name = name
+			# The element will be freed by the grammar when its
+			# reference will be lost
+			element._mustFree   = False
 			self._symbols[name] = element
 			assert name in self._symbols
 			assert hasattr(self.symbols, name)
@@ -1066,6 +1080,10 @@ class Grammar(CObjectWrapper):
 		self.axiom     = axiom
 		self.symbols   = CLibrary.Symbols()
 		self._symbols  = self.symbols.__dict__
+
+	def __del__( self ):
+		if self._mustFree:
+			self.free()
 
 # -----------------------------------------------------------------------------
 #

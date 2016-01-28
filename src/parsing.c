@@ -312,14 +312,25 @@ Grammar* Grammar_new(void) {
 	return this;
 }
 
+int Grammar_symbolsCount(Grammar* this) {
+	return this->axiomCount + this->skipCount;
+}
+
 void Grammar_free(Grammar* this) {
-	// FIXME: Implement me. We should get a list of all the parsing elements
-	// and free them.
-	/*
-	Element*[] symbols = Grammar_listSymbols();
-	for (int i = 0; i < (this->axiomCount + this->skipCount); i++ ) {
+	DEBUG("Grammar_free(%p)", this)
+	int count = (this->axiomCount + this->skipCount);
+	for (int i = 0; i < count ; i++ ) {
+		Element* element = this->elements[i];
+		if (ParsingElement_Is(element)) {
+			ParsingElement* e = (ParsingElement*)element;
+			DEBUG("Grammar_free(%p):[%d/%d]->ParsingElement %p %c.%d#%s", this, i, count, element, e->type, e->id, e->name)
+			ParsingElement_free(e);
+		} else {
+			Reference* r = (Reference*)element;
+			DEBUG("Grammar_free(%p):[%d/%d]->Reference %p.%c(%d)[%c]#%s", this, i, count, element, r->type, r->id, r->cardinality, r->name)
+			Reference_free(r);
+		}
 	}
-	*/
 	__DEALLOC(this);
 }
 
@@ -367,8 +378,26 @@ int Match_getLength(Match *this) {
 	return (int)this->length;
 }
 
+// TODO: We might want to recycle the objects for better performance and
+// fewer allocs.
 void Match_free(Match* this) {
-	if (this!=NULL && this!=FAILURE) {__DEALLOC(this);}
+	if (this!=NULL && this!=FAILURE) {
+		// We free the children
+		Match_free(this->child);
+		// We free the next one
+		Match_free(this->next);
+		// If the match is from a parsing element
+		if (ParsingElement_Is(this->element)) {
+			ParsingElement* element = ((ParsingElement*)this->element);
+			// and the parsing element declared a free match function, we
+			// apply it.
+			if (element->freeMatch) {
+				element->freeMatch(this);
+			}
+		}
+		// We deallocate this one
+		__DEALLOC(this);
+	}
 }
 
 bool Match_isSuccess(Match* this) {
@@ -395,6 +424,7 @@ int Match__walk(Match* this, WalkingCallback callback, int step, void* context )
 bool ParsingElement_Is(void *this) {
 	if (this == NULL) { return FALSE; }
 	switch (((ParsingElement*)this)->type) {
+		// It is not a parsing element if it is a refernence
 		case TYPE_ELEMENT:
 		case TYPE_WORD:
 		case TYPE_TOKEN:
@@ -405,6 +435,11 @@ bool ParsingElement_Is(void *this) {
 			return TRUE;
 		default:
 			return FALSE;
+//
+//		case TYPE_REFERENCE:
+//			return FALSE;
+//		default:
+//			return TRUE;
 	}
 }
 
@@ -431,7 +466,7 @@ ParsingElement* ParsingElement_new(Reference* children[]) {
 }
 
 void ParsingElement_free(ParsingElement* this) {
-	DEBUG("ParsingElement_free: %p", this)
+	// DEBUG("ParsingElement_free: %p", this)
 	Reference* child = this->children;
 	while (child != NULL) {
 		Reference* next = child->next;
@@ -473,7 +508,7 @@ int ParsingElement__walk( ParsingElement* this, WalkingCallback callback, int st
 	step  = callback((Element*)this, step, context);
 	Reference* child = this->children;
 	while ( child != NULL && step >= 0) {
-		// We are sure here that the child is a reference, so wa can
+		// We are sure here that the child is a reference, so we can
 		// call Reference__walk directly.
 		assert(Reference_Is(child));
 		int j = Reference__walk(child, callback, ++i, context);
@@ -546,6 +581,12 @@ Reference* Reference_new(void) {
 	assert(!Reference_hasNext(this));
 	// DEBUG("Reference_new: %p, element=%p, next=%p", this, this->element, this->next);
 	return this;
+}
+
+void Reference_free(Reference* this) {
+	// NOTE: We do not free the referenced element nor the next reference.
+	// That would be the job of the grammar.
+	__DEALLOC(this)
 }
 
 bool Reference_hasElement(Reference* this) {
@@ -1194,6 +1235,8 @@ void ParsingResult_free(ParsingResult* this) {
 	}
 	__DEALLOC(this);
 }
+
+
 
 // ----------------------------------------------------------------------------
 //

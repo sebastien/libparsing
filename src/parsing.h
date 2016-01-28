@@ -5,7 +5,7 @@
 // License           : BSD License
 // ----------------------------------------------------------------------------
 // Creation date     : 12-Dec-2014
-// Last modification : 26-Jan-2016
+// Last modification : 28-Jan-2016
 // ----------------------------------------------------------------------------
 
 #include <stdlib.h>
@@ -23,14 +23,14 @@
 
 #ifndef __PARSING_H__
 #define __PARSING_H__
-#define __PARSING_VERSION__ "0.6.0"
+#define __PARSING_VERSION__ "0.7.3"
 
 /**
  * #  libparsing
  * ## C & Python Parsing Elements Grammar Library
  *
  * ```
- * Version :  0.6.0
+ * Version :  0.7.0
  * URL     :  http://github.com/sebastien/parsing
  * README  :  https://cdn.rawgit.com/sebastien/libparsing/master/README.html
  * ```
@@ -297,6 +297,9 @@ void Grammar_free(Grammar* this);
 
 // @method
 void Grammar_prepare ( Grammar* this );
+
+// @method
+int Grammar_symbolsCount ( Grammar* this );
 
 // @method
 ParsingResult* Grammar_parseFromIterator( Grammar* this, Iterator* iterator );
@@ -603,6 +606,9 @@ Reference* Reference_FromElement(ParsingElement* element);
 // @constructor
 // References are typically owned by their single parent composite element.
 Reference* Reference_new(void);
+
+// @destructor
+void Reference_free(Reference* this);
 
 // @method
 // Sets the cardinality of this reference, returning it transprently.
