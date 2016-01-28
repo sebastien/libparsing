@@ -1206,11 +1206,13 @@ typedef struct ParsingOffset  ParsingOffset;
 
 ```c
 typedef struct ParsingStats {
-	size_t  bytesRead;
-	double  parseTime;
-	size_t  symbolsCount;
-	size_t* successBySymbol;
-	size_t* failureBySymbol;
+	size_t   bytesRead;
+	double   parseTime;
+	size_t   symbolsCount;
+	size_t*  successBySymbol;
+	size_t*  failureBySymbol;
+	size_t   failureOffset;   // A reference to the deepest failure
+	Element* failureElement;  // A reference to the failure element
 } ParsingStats;
 ```
 

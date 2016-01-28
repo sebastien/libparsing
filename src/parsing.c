@@ -987,7 +987,7 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 			// DEBUG("Rule:Skipping with element %c#%d", skip->type, skip->id)
 			Match* skip_match    = skip->recognize(skip, context);
 			int    skip_count    = 0;
-			size_t skip_offset   = context->iterator->offset;
+			DEBUG_CODE(size_t skip_offset   = context->iterator->offset)
 			while (Match_isSuccess(skip_match)){skip_match = skip->recognize(skip, context); skip_count++; }
 			if (skip_count > 0) {
 				// If the rule failed, we try to skip characters. We free any
@@ -1202,6 +1202,11 @@ Match* ParsingStats_registerMatch(ParsingStats* this, Element* e, Match* m) {
 		this->successBySymbol[r->id] += 1;
 	} else {
 		this->failureBySymbol[r->id] += 1;
+		// We register the deepest failure
+		if(m->offset >= this->failureOffset) {
+			this->failureOffset  = m->offset;
+			this->failureElement = m->element;
+		}
 	}
 	return m;
 }

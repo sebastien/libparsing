@@ -529,7 +529,6 @@ class TReference(ctypes.Structure):
 	"""
 
 	def __init__( self, *args, **kwargs ):
-		print self, args, kwargs
 		ctypes.Structure.__init__(*args, **kwargs)
 
 class TMatch(ctypes.Structure):
@@ -594,6 +593,8 @@ class TParsingStats(ctypes.Structure):
 	size_t  symbolsCount;
 	size_t* successBySymbol;
 	size_t* failureBySymbol;
+	size_t   failureOffset;   // A reference to the deepest failure
+	Element* failureElement;  // A reference to the failure element
 	"""
 
 class TParsingContext(ctypes.Structure):
@@ -1060,7 +1061,6 @@ class ParsingResult(CObjectWrapper):
 
 	@property
 	def line( self ):
-		print self.context.iterator
 		return self.context.iterator.contents.lines
 
 	@property

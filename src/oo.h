@@ -93,9 +93,11 @@ typedef char  bool;
 #ifdef DEBUG_ENABLED
 #define DEBUG(msg,...)   fprintf(DEBUG_STREAM,   "--- ");fprintf(DEBUG_STREAM,   msg, __VA_ARGS__);fprintf(DEBUG_STREAM,   "\n");
 #define DEBUG_IF(cond,msg,...)   if (cond) {DEBUG(msg, __VA_ARGS__);}
+#define DEBUG_CODE(_) _ ;
 #else
 #define DEBUG(msg,...)          ;
 #define DEBUG_IF(cond,msg,...)   ;
+#define DEBUG_CODE(_)            ;
 #endif
 
 #ifdef TRACE_ENABLED

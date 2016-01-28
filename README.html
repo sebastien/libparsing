@@ -670,11 +670,13 @@ make install               # You can set PREFIX</code></pre>
 <div id="type-parsingstats" class="section level4">
 <h4><a name="ParsingStats_type"><span class="classifier">type</span> <code>ParsingStats</code></a></h4>
 <pre class="sourceCode c"><code class="sourceCode c"><span class="kw">typedef</span> <span class="kw">struct</span> ParsingStats {
-    size_t  bytesRead;
-    <span class="dt">double</span>  parseTime;
-    size_t  symbolsCount;
-    size_t* successBySymbol;
-    size_t* failureBySymbol;
+    size_t   bytesRead;
+    <span class="dt">double</span>   parseTime;
+    size_t   symbolsCount;
+    size_t*  successBySymbol;
+    size_t*  failureBySymbol;
+    size_t   failureOffset;   <span class="co">// A reference to the deepest failure</span>
+    Element* failureElement;  <span class="co">// A reference to the failure element</span>
 } ParsingStats;</code></pre>
 </div>
 <div id="constructor-parsingstats" class="section level4">
