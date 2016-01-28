@@ -928,20 +928,21 @@ class ReferenceMatch(CompositeMatch):
 	def groups( self ):
 		return [_.group() for _ in self]
 
+	@property
 	def cardinality( self ):
 		return self.reference.cardinality
 
 	def isOne( self ):
-		return self.cardinality() == CARDINALITY_ONE
+		return self.cardinality == CARDINALITY_ONE
 
 	def isOptional( self ):
-		return self.cardinality() == CARDINALITY_OPTIONAL
+		return self.cardinality == CARDINALITY_OPTIONAL
 
 	def isZeroOrMore( self ):
-		return self.cardinality() == CARDINALITY_MANY_OPTIONAL
+		return self.cardinality == CARDINALITY_MANY_OPTIONAL
 
 	def isOneOrMore( self ):
-		return self.cardinality() == CARDINALITY_MANY
+		return self.cardinality == CARDINALITY_MANY
 
 class WordMatch(Match):
 
@@ -1124,46 +1125,60 @@ class Processor(object):
 	def process( self, match ):
 		"""Processes the given match, applying the matching handlers when found."""
 		if isinstance(match, ParsingResult): match = match.match
-		print "[PROCESS]", match
 		assert not isinstance(match, ReferenceMatch), "Processor.process: match expected not to be reference match, got {0}".format(match)
 		# We retrieve the element's id
 		eid     = match.element.id
 		# We retrieve the handler for
 		handler = self.handlerByID.get(eid)
 		if handler:
-			print "[PROCESS] Custom handler for", eid, match.name
-			kwargs   = {}
-			# We only bind the arguments listed
-			varnames = handler.func_code.co_varnames
-			for m in match.children():
-				k = m.name
-				assert isinstance(m, ReferenceMatch)
-				if k and k in varnames:
-					# NOTE: We only process the referenced arguments
-					kwargs[k] = self._processReferenceMatch(m)
-			try:
-				value   = handler(match, **kwargs)
-				match.value = value
-				return value
-			except TypeError as e:
-				args = ["match"] + list(kwargs.keys())
-				raise Exception(str(e) + " -- arguments: {0}".format(",".join([str(_) for _ in args])))
-			except Exception as e:
-				raise e
+			# A handler was found, so we apply it to the match. The handler
+			# returns a value that should be assigned to the match
+			result = self._applyHandler( handler, match )
+			# print "processed[H]: {0}#{1} : {2} --> {3}".format(match.__class__.__name__, match.name, repr(match.value), repr(result))
+			return result if result is not None else match.value
 		else:
-			print "[PROCESS] Generic handler for", eid, match.name
-			value = [self._processReferenceMatch(_) for _ in match.children()]
-			return value
+			if isinstance(match, GroupMatch):
+				result = self._processReferenceMatch(match.child)
+			elif isinstance(match, CompositeMatch):
+				result = [self._processReferenceMatch(_) for _ in match.children()]
+			else:
+				result = match.value
+			# print "processed[*]: {0}#{1} : {2} --> {3}".format(match.__class__.__name__, match.name, repr(match.value), repr(result))
+			return result
 
-	def _processReferenceMatch( self, refMatch ):
-		"""Processes a reference match."""
-		ref_match = refMatch
-		assert isinstance(ref_match, ReferenceMatch)
-		ref_value = [self.process(_) for _ in ref_match.children()]
-		if ref_match.isOne() or ref_match.isOptional():
-			ref_value = ref_value[0]
-		ref_match.value = ref_value
-		return ref_value
+	def _processReferenceMatch( self, match ):
+		"""Processes the reference match."""
+		assert isinstance(match, ReferenceMatch)
+		if match.isOne() or match.isOptional():
+			value   = self.process(match.child)
+			results = value
+		else:
+			value   = [self.process(_) for _ in match.children()]
+			results = value
+		# print "_processReferenceMatch: {0}[{1}]#{2}({3}) : {4} -> {5} -> {6}".format(match.__class__.__name__, match.element.type, match.element.name, match.cardinality, repr(match.value), repr(value), repr(results))
+		return results
+
+	def _applyHandler( self, handler, match ):
+		"""Applies the given handler to the given match, returning the value
+		produces but the handler."""
+		kwargs   = {}
+		# We only bind the arguments listed
+		varnames = handler.func_code.co_varnames
+		for m in match.children():
+			k = m.name
+			assert isinstance(m, ReferenceMatch)
+			if k and k in varnames:
+				kwargs[k] = self._processReferenceMatch(m)
+		try:
+			value= match.value
+			result =  handler(match, **kwargs)
+			#print "_applyHandler: {0}#{1} : {2} --> {3}".format(match.__class__.__name__, match.name, repr(value), repr(result))
+			return result
+		except TypeError as e:
+			args = ["match"] + list(kwargs.keys())
+			raise Exception(str(e) + " -- arguments: {0}".format(",".join([str(_) for _ in args])))
+		except Exception as e:
+			raise e
 
 # -----------------------------------------------------------------------------
 #
@@ -1495,6 +1510,8 @@ class Test(unittest.TestCase):
 		p.on(s.Operation, lambda _, left, op, right: (op, left, right))
 
 		res = p.process(r)
+		# import ipdb
+		# ipdb.set_trace()
 		self.assertEquals(res, ("+", ("N", 1), ("N", 10)))
 		print ","
 		print res
