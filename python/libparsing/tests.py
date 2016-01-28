@@ -71,7 +71,7 @@ class TestCollection(unittest.TestCase):
 		w           = Word(text)
 		g.axiom     = w
 		g.isVerbose = False
-		r           = g.parseFromString(text)
+		r           = g.parseString(text)
 		assert r
 		m           = r.match
 		assert m
@@ -95,7 +95,7 @@ class TestCollection(unittest.TestCase):
 		libparsing.ParsingElement_add(ab, rb)
 		g.contents.axiom     = ab
 		g.contents.isVerbose = 0
-		libparsing.Grammar_parseFromString(g, "abab")
+		libparsing.Grammar_parseString(g, "abab")
 
 	def testRuleOO( self ):
 		g       = Grammar()
@@ -109,7 +109,7 @@ class TestCollection(unittest.TestCase):
 		ab.add(rb)
 		g.axiom = ab
 		g.isVerbose = True
-		r = g.parseFromString(text)
+		r = g.parseString(text)
 
 	def testMemory( self ):
 		# In this case Word and Grammar should all be freed upon deletion.
@@ -132,7 +132,7 @@ class TestCollection(unittest.TestCase):
 			isVerbose = False,
 			axiom     = Rule(Word("a"), Word("b"))
 		)
-		r = g.parseFromString("abab")
+		r = g.parseString("abab")
 		# We test the parsing result
 		assert isinstance(r, ParsingResult)
 		assert not r.isFailure()
@@ -175,7 +175,7 @@ class TestCollection(unittest.TestCase):
 			axiom     = Operation
 		)
 		# We parse, and make sure it completes
-		r = g.parseFromString("1+10")
+		r = g.parseString("1+10")
 		self.assertTrue(r.isSuccess())
 		self.assertTrue(r.isComplete())
 
@@ -222,7 +222,7 @@ class TestCollection(unittest.TestCase):
 		g.axiom = s.Operation
 
 		# # We parse, and make sure it completes
-		r = g.parseFromString("1+10")
+		r = g.parseString("1+10")
 		self.assertTrue(r.isSuccess())
 		self.assertTrue(r.isComplete())
 
@@ -248,7 +248,7 @@ class TestCollection(unittest.TestCase):
 		self.assertEquals(s.OPERATOR.id,  8)
 
 		# # We parse, and make sure it completes
-		r = g.parseFromString("1+10")
+		r = g.parseString("1+10")
 		self.assertTrue(r.isSuccess())
 		self.assertTrue(r.isComplete())
 

@@ -552,6 +552,22 @@ class TTokenMatch(ctypes.Structure):
 	const char**    groups;
 	"""
 
+class TIterator(ctypes.Structure):
+
+	STRUCTURE = """
+	char           status;    // The status of the iterator, one of STATUS_{INIT|PROCESSING|INPUT_ENDED|ENDED}
+	char*          buffer;    // The buffer to the read data, note how it is a (void*) and not an `iterated_t`
+	iterated_t*    current;   // The for the current offset within the buffer
+	iterated_t     separator; // The character for line separator
+	size_t         offset;    // Offset in input (in bytes), might be different from `current - buffer` if some input was freed.
+	size_t         lines;     // Counter for lines that have been encountered
+	size_t         capacity;  // Content capacity (in bytes), might be bigger than the data acquired from the input
+	size_t         available; // Available data in buffer (in bytes), always `<= capacity`
+	bool           freeBuffer;
+	void*          input;     // Pointer to the input source
+	IteratorCallback move;
+	"""
+
 class TParsingContext(ctypes.Structure):
 
 	STRUCTURE = """
@@ -560,16 +576,6 @@ class TParsingContext(ctypes.Structure):
 	struct ParsingOffset* offsets;      // The parsing offsets, starting at 0
 	struct ParsingOffset* current;      // The current parsing offset
 	struct ParsingStats*  stats;
-	"""
-
-class TParsingStats(ctypes.Structure):
-
-	STRUCTURE = """
-	size_t  bytesRead;
-	double  parseTime;
-	size_t  symbolsCount;
-	size_t* successBySymbol;
-	size_t* failureBySymbol;
 	"""
 
 class TParsingResult(ctypes.Structure):
@@ -1050,13 +1056,25 @@ class ParsingResult(CObjectWrapper):
 	bool ParsingResult_isPartial(ParsingResult* this);
 	bool ParsingResult_isSuccess(ParsingResult* this);
 	bool ParsingResult_isComplete(ParsingResult* this);
-	const char* ParsingResult_text(ParsingResult* this);
 	"""
 
-	def textaround( self, line=None ):
+	@property
+	def line( self ):
+		print self.context.iterator
+		return self.context.iterator.contents.lines
+
+	@property
+	def offset( self ):
+		return self.context.iterator.contents.offset
+
+	@property
+	def text( self ):
+		return self.context.iterator.contents.buffer
+
+	def textAround( self, line=None ):
 		if line is None: line = self.line
-		i = self.offset()
-		t = self.text()
+		i = self.offset
+		t = self.text
 		while i > 1 and t[i] != "\n": i -= 1
 		if i != 0: i += 1
 		return t[i:(i+100)].split("\n")[0]
@@ -1079,9 +1097,9 @@ class Grammar(CObjectWrapper):
 	Grammar* Grammar_new(void);
 	void Grammar_free(Grammar* this);
 	void Grammar_prepare ( Grammar* this );
-	ParsingResult* Grammar_parseFromIterator( Grammar* this, Iterator* iterator );
-	ParsingResult* Grammar_parseFromPath( Grammar* this, const char* path );
-	ParsingResult* Grammar_parseFromString( Grammar* this, const char* text );
+	ParsingResult* Grammar_parseIterator( Grammar* this, Iterator* iterator );
+	ParsingResult* Grammar_parsePath( Grammar* this, const char* path );
+	ParsingResult* Grammar_parseString( Grammar* this, const char* text );
 	"""
 
 	PROPERTIES = lambda:dict(
@@ -1285,11 +1303,14 @@ class TreeWriter(Processor):
 # We pre-declare the types that are required by the structure declarations.
 # It's OK if they're void* instead of the actual structure definition.
 C.TYPES.update({
+	"iterated_t"        : ctypes.c_char,
+	"iterated_t*"       : ctypes.c_char_p,
 	"Iterator*"         : ctypes.c_void_p,
 	"Element*"          : ctypes.c_void_p,
 	"Element**"         : ctypes.POINTER(ctypes.c_void_p),
 	"ParsingContext*"   : ctypes.c_void_p,
 	"ParsingOffset*"    : ctypes.c_void_p,
+	"IteratorCallback"  : ctypes.CFUNCTYPE(ctypes.c_bool, ctypes.POINTER(TIterator), ctypes.c_int),
 	"WalkingCallback"   : ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p),
 	"ConditionCallback" : ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.POINTER(TParsingElement), ctypes.POINTER(TParsingContext)),
 	"ProcedureCallback" : ctypes.CFUNCTYPE(None, ctypes.POINTER(TParsingElement), ctypes.POINTER(TParsingContext)),
@@ -1304,6 +1325,7 @@ C.Register(
 	TWordConfig,
 	TTokenMatch,
 	TMatch,
+	TIterator,
 	TParsingContext,
 	TParsingStats,
 	TParsingResult,

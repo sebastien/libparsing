@@ -150,8 +150,8 @@ typedef struct Iterator {
 	iterated_t     separator; // The character for line separator, `\n` by default.
 	size_t         offset;    // Offset in input (in bytes), might be different from `current - buffer` if some input was freed.
 	size_t         lines;     // Counter for lines that have been encountered
-	size_t         length;    // Content length (in bytes), might be bigger than the data acquired from the input
-	size_t         available; // Available data in buffer (in bytes), always `<= length`
+	size_t         capacity;  // Content capacity (in bytes), might be bigger than the data acquired from the input
+	size_t         available; // Available data in buffer (in bytes), always `<= capacity`
 	bool           freeBuffer;
 	void*          input;     // Pointer to the input source
 	bool          (*move) (struct Iterator*, int n); // Plug-in function to move to the previous/next positions
@@ -228,7 +228,8 @@ bool Iterator_open( Iterator* this, const char *path );
 
 #### <a name="Iterator_hasMore_method"><span class="classifier">method</span> `Iterator_hasMore`</a>
 
- Tells if the iterator has more available data
+ Tells if the iterator has more available data. This means that there is
+	 available data after the current offset.
 
 ```c
 bool Iterator_hasMore( Iterator* this );
@@ -237,9 +238,9 @@ bool Iterator_hasMore( Iterator* this );
 
 #### <a name="Iterator_remaining_method"><span class="classifier">method</span> `Iterator_remaining`</a>
 
- Returns the number of bytes available from the current iterator's position.
-	 This should be at least `ITERATOR_BUFFER_AHEAD` until end of input stream
-	 is reached.
+ Returns the number of bytes available from the current iterator's position
+	 up to the last available data. For dynamic streams, where the length is
+	 unknown, this should be lesser or equalt to `ITERATOR_BUFFER_AHEAD`.
 
 ```c
 size_t Iterator_remaining( Iterator* this );
@@ -293,7 +294,7 @@ void       FileInput_free(FileInput* this);
 #### <a name="FileInput_preload_method"><span class="classifier">method</span> `FileInput_preload`</a>
 
  Preloads data from the input source so that the buffer
-	 has ITERATOR_BUFFER_AHEAD characters ahead.
+	 has up to ITERATOR_BUFFER_AHEAD characters ahead.
 
 ```c
 size_t FileInput_preload( Iterator* this );
@@ -381,27 +382,27 @@ int Grammar_symbolsCount ( Grammar* this );
 ```
 
 
-#### <a name="Grammar_parseFromIterator_method"><span class="classifier">method</span> `Grammar_parseFromIterator`</a>
+#### <a name="Grammar_parseIterator_method"><span class="classifier">method</span> `Grammar_parseIterator`</a>
 
 
 ```c
-ParsingResult* Grammar_parseFromIterator( Grammar* this, Iterator* iterator );
+ParsingResult* Grammar_parseIterator( Grammar* this, Iterator* iterator );
 ```
 
 
-#### <a name="Grammar_parseFromPath_method"><span class="classifier">method</span> `Grammar_parseFromPath`</a>
+#### <a name="Grammar_parsePath_method"><span class="classifier">method</span> `Grammar_parsePath`</a>
 
 
 ```c
-ParsingResult* Grammar_parseFromPath( Grammar* this, const char* path );
+ParsingResult* Grammar_parsePath( Grammar* this, const char* path );
 ```
 
 
-#### <a name="Grammar_parseFromString_method"><span class="classifier">method</span> `Grammar_parseFromString`</a>
+#### <a name="Grammar_parseString_method"><span class="classifier">method</span> `Grammar_parseString`</a>
 
 
 ```c
-ParsingResult* Grammar_parseFromString( Grammar* this, const char* text );
+ParsingResult* Grammar_parseString( Grammar* this, const char* text );
 ```
 
 
