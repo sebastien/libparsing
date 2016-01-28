@@ -373,7 +373,7 @@ make install               # You can set PREFIX</code></pre>
 </div>
 <div id="destructor-match_free" class="section level4">
 <h4><a name="Match_free_destructor"><span class="classifier">destructor</span> <code>Match_free</code></a></h4>
-<p>Frees the given match. If the match is <code>MATCH_FAILURE</code>, then it won't be feed. This means that most of the times you won't need to free a failed match, as it's likely to be the <code>MATCH_FAILURE</code> singleton.</p>
+<p>Frees the given match. If the match is <code>FAILURE</code>, then it won't be feed. This means that most of the times you won't need to free a failed match, as it's likely to be the <code>FAILURE</code> singleton.</p>
 <pre class="sourceCode c"><code class="sourceCode c"><span class="dt">void</span> Match_free(Match* this);</code></pre>
 </div>
 <div id="method-match_issuccess" class="section level4">

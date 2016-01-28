@@ -660,9 +660,9 @@ Match* Match_new(void);
 
 #### <a name="Match_free_destructor"><span class="classifier">destructor</span> `Match_free`</a>
 
- Frees the given match. If the match is `MATCH_FAILURE`, then it won't
+ Frees the given match. If the match is `FAILURE`, then it won't
 	 be feed. This means that most of the times you won't need to free
-	 a failed match, as it's likely to be the `MATCH_FAILURE` singleton.
+	 a failed match, as it's likely to be the `FAILURE` singleton.
 
 ```c
 void Match_free(Match* this);

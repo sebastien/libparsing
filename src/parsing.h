@@ -176,8 +176,8 @@ typedef struct Iterator {
 	iterated_t     separator; // The character for line separator, `\n` by default.
 	size_t         offset;    // Offset in input (in bytes), might be different from `current - buffer` if some input was freed.
 	size_t         lines;     // Counter for lines that have been encountered
-	size_t         length;    // Content length (in bytes), might be bigger than the data acquired from the input
-	size_t         available; // Available data in buffer (in bytes), always `<= length`
+	size_t         capacity;  // Content capacity (in bytes), might be bigger than the data acquired from the input
+	size_t         available; // Available data in buffer (in bytes), always `<= capacity`
 	bool           freeBuffer;
 	// FIXME: The head should be freed when the offsets have been parsed, no need to keep in memory stuff we won't need.
 	void*          input;     // Pointer to the input source
@@ -217,13 +217,14 @@ void      Iterator_free(Iterator* this);
 bool Iterator_open( Iterator* this, const char *path );
 
 // @method
-// Tells if the iterator has more available data
+// Tells if the iterator has more available data. This means that there is
+// available data after the current offset.
 bool Iterator_hasMore( Iterator* this );
 
 // @method
-// Returns the number of bytes available from the current iterator's position.
-// This should be at least `ITERATOR_BUFFER_AHEAD` until end of input stream
-// is reached.
+// Returns the number of bytes available from the current iterator's position
+// up to the last available data. For dynamic streams, where the length is
+// unknown, this should be lesser or equalt to `ITERATOR_BUFFER_AHEAD`.
 size_t Iterator_remaining( Iterator* this );
 
 // @method
@@ -247,7 +248,7 @@ void       FileInput_free(FileInput* this);
 
 // @method
 // Preloads data from the input source so that the buffer
-// has ITERATOR_BUFFER_AHEAD characters ahead.
+// has up to ITERATOR_BUFFER_AHEAD characters ahead.
 size_t FileInput_preload( Iterator* this );
 
 // @method
@@ -302,13 +303,13 @@ void Grammar_prepare ( Grammar* this );
 int Grammar_symbolsCount ( Grammar* this );
 
 // @method
-ParsingResult* Grammar_parseFromIterator( Grammar* this, Iterator* iterator );
+ParsingResult* Grammar_parseIterator( Grammar* this, Iterator* iterator );
 
 // @method
-ParsingResult* Grammar_parseFromPath( Grammar* this, const char* path );
+ParsingResult* Grammar_parsePath( Grammar* this, const char* path );
 
 // @method
-ParsingResult* Grammar_parseFromString( Grammar* this, const char* text );
+ParsingResult* Grammar_parseString( Grammar* this, const char* text );
 
 /**
  * Elements
@@ -419,9 +420,9 @@ Match* Match_Success(size_t length, Element* element, ParsingContext* context);
 Match* Match_new(void);
 
 // @destructor
-// Frees the given match. If the match is `MATCH_FAILURE`, then it won't
+// Frees the given match. If the match is `FAILURE`, then it won't
 // be feed. This means that most of the times you won't need to free
-// a failed match, as it's likely to be the `MATCH_FAILURE` singleton.
+// a failed match, as it's likely to be the `FAILURE` singleton.
 void Match_free(Match* this);
 
 // @method

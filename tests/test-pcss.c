@@ -203,7 +203,7 @@ int main (void) {
 	if (!Iterator_open(iterator, path)) {
 		ERROR("Cannot open file: %s", path);
 	} else {
-		ParsingResult* r = Grammar_parseFromIterator(g, iterator);
+		ParsingResult* r = Grammar_parseIterator(g, iterator);
 		// Below is a simple test on how to iterate on the file
 		// int count = 0;
 		// while (FileInput_next(i)) {

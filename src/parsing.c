@@ -49,8 +49,8 @@ Iterator* Iterator_FromString(const char* text) {
 	if (this!=NULL) {
 		this->buffer     = (iterated_t*)text;
 		this->current    = (iterated_t*)text;
-		this->length     = strlen(text);
-		this->available  = this->length;
+		this->capacity   = strlen(text);
+		this->available  = this->capacity;
 		this->move       = String_move;
 	}
 	return this;
@@ -65,7 +65,7 @@ Iterator* Iterator_new( void ) {
 	this->offset        = 0;
 	this->lines         = 0;
 	this->available     = 0;
-	this->length        = 0;
+	this->capacity      = 0;
 	this->input         = NULL;
 	this->move          = NULL;
 	this->freeBuffer    = FALSE;
@@ -83,16 +83,16 @@ bool Iterator_open( Iterator* this, const char *path ) {
 		// so that we ensure that the current position always has ITERATOR_BUFFER_AHEAD
 		// bytes ahead (if the input source has the data)
 		assert(this->buffer == NULL);
-		this->length  = sizeof(iterated_t) * ITERATOR_BUFFER_AHEAD * 2;
-		this->buffer  = calloc(this->length + 1, 1);
+		this->capacity= sizeof(iterated_t) * ITERATOR_BUFFER_AHEAD * 2;
+		this->buffer  = calloc(this->capacity + 1, 1);
 		assert(this->buffer != NULL);
 		this->current = (iterated_t*)this->buffer;
 		// We make sure we have a trailing \0 sign to stop any string parsing
 		// function to go any further.
-		((char*)this->buffer)[this->length] = '\0';
+		((char*)this->buffer)[this->capacity] = '\0';
 		assert(strlen(((char*)this->buffer)) == 0);
 		FileInput_preload(this);
-		// DEBUG("Iterator_open: strlen(buffer)=%zd/%zd", strlen((char*)this->buffer), this->length);
+		DEBUG("Iterator_open: strlen(buffer)=%zd/%zd", strlen((char*)this->buffer), this->capacity);
 		this->move   = FileInput_move;
 		ENSURE(input->file) {};
 		return TRUE;
@@ -102,14 +102,15 @@ bool Iterator_open( Iterator* this, const char *path ) {
 }
 
 bool Iterator_hasMore( Iterator* this ) {
-	// DEBUG("Iterator_hasMore: %zd, offset=%zd length=%zd available=%zd", this->length - this->offset, this->offset, this->length, this->available)
+	size_t remaining = Iterator_remaining(this);
+	DEBUG("Iterator_hasMore: %zd, offset=%zd available=%zd capacity=%zd ", remaining, this->offset, this->available, this->capacity)
 	// NOTE: This used to be STATUS_ENDED, but I changed it to the actual.
-	return this->offset < this->length;
+	return remaining > 0;
 }
 
 size_t Iterator_remaining( Iterator* this ) {
-	// DEBUG("Iterator_remaining: %zd, offset=%zd length=%zd available=%zd", this->length - this->offset, this->offset, this->length, this->available)
-	return (this->length - this->offset);
+	DEBUG("Iterator_remaining: %zd, offset=%zd available=%zd capacity=%zd", this->available - this->offset, this->offset, this->available, this->capacity)
+	return (this->available - (this->current - this->buffer));
 }
 
 bool Iterator_moveTo ( Iterator* this, size_t offset ) {
@@ -118,6 +119,7 @@ bool Iterator_moveTo ( Iterator* this, size_t offset ) {
 
 void Iterator_free( Iterator* this ) {
 	// FIXME: Should close input file
+	TRACE("Iterator_free: %p", this)
 	if (this->freeBuffer) {
 		__DEALLOC(this->buffer);
 	}
@@ -135,7 +137,7 @@ bool String_move ( Iterator* this, int n ) {
 	if ( n == 0) {
 		// --- STAYING IN PLACE -----------------------------------------------
 		// We're not moving position
-		// DEBUG("String_move: did not move (n=%d) offset=%zd/length=%zd, available=%zd, current-buffer=%ld\n", n, this->offset, this->length, this->available, this->current - this->buffer);
+		DEBUG("String_move: did not move (n=%d) offset=%zd/length=%zd, available=%zd, current-buffer=%ld\n", n, this->offset, this->capacity, this->available, this->current - this->buffer);
 		return TRUE;
 	} else if ( n >= 0 ) {
 		// --- MOVING FORWARD -------------------------------------------------
@@ -153,8 +155,8 @@ bool String_move ( Iterator* this, int n ) {
 			c--;
 		}
 		// We then store the amount of available
-		this->available = this->length - this->offset;
-		// DEBUG("String_move: moved forward by c=%zd, n=%d offset=%zd length=%zd, available=%zd, current-buffer=%ld", c_copy, n, this->offset, this->length, this->available, this->current - this->buffer);
+		this->available = this->capacity - this->offset;
+		// DEBUG("String_move: moved forward by c=%zd, n=%d offset=%zd capacity=%zd, available=%zd, current-buffer=%ld", c_copy, n, this->offset, this->capacity, this->available, this->current - this->buffer);
 		if (this->available == 0) {
 			// If we have no more available elements, then the status of
 			// the stream is STATUS_ENDED
@@ -178,7 +180,7 @@ bool String_move ( Iterator* this, int n ) {
 			this->status  = STATUS_PROCESSING;
 		}
 		assert(Iterator_remaining(this) >= 0 - n);
-		// DEBUG("String_move: moved backwards by n=%d offset=%zd/length=%zd, available=%zd, current-buffer=%ld", n, this->offset, this->length, this->available, this->current - this->buffer);
+		DEBUG("String_move: moved backwards by n=%d offset=%zd/length=%zd, available=%zd, current-buffer=%ld", n, this->offset, this->capacity, this->available, this->current - this->buffer);
 		return TRUE;
 	}
 }
@@ -204,6 +206,7 @@ FileInput* FileInput_new(const char* path ) {
 }
 
 void FileInput_free(FileInput* this) {
+	TRACE("FileInput_free: %p", this)
 	if (this->file != NULL) { fclose(this->file);   }
 }
 
@@ -213,10 +216,10 @@ size_t FileInput_preload( Iterator* this ) {
 	FileInput*   input         = (FileInput*)this->input;
 	size_t       read          = this->current   - this->buffer;
 	size_t       left          = this->available - read;
-	//DEBUG("FileInput_preload: %zd read, %zd available / %zd length [%c]", read, this->available, this->length, this->status);
+	DEBUG("FileInput_preload: %zd read, %zd available/%zd buffer capacity [%c]", read, this->available, this->capacity, this->status);
 	assert (read >= 0);
 	assert (left >= 0);
-	assert (left  < this->length);
+	assert (left  < this->capacity);
 	// Do we have less left than the buffer ahead?
 	if ( left < ITERATOR_BUFFER_AHEAD && this->status != STATUS_INPUT_ENDED) {
 		// We move buffer[current:] to the begining of the buffer
@@ -224,16 +227,16 @@ size_t FileInput_preload( Iterator* this ) {
 		// memmove((void*)this->buffer, (void*)this->current, left);
 		// We realloc the memory to make sure we
 		size_t delta  = this->current - this->buffer;
-		this->length += ITERATOR_BUFFER_AHEAD;
-		assert(this->length + 1 > 0);
-		DEBUG("<<< FileInput: growing buffer to %zd", this->length + 1)
-		this->buffer  = realloc((void*)this->buffer, this->length + 1);
+		this->capacity += ITERATOR_BUFFER_AHEAD;
+		assert(this->capacity + 1 > 0);
+		DEBUG("<<< FileInput: growing buffer to %zd", this->capacity + 1)
+		this->buffer  = realloc((void*)this->buffer, this->capacity + 1);
 		assert(this->buffer != NULL);
 		this->current = this->buffer + delta;
 		// We make sure we add a trailing \0 to the buffer
-		this->buffer[this->length] = '\0';
+		this->buffer[this->capacity] = '\0';
 		// We want to read as much as possible so that we fill the buffer
-		size_t to_read         = this->length - left;
+		size_t to_read         = this->capacity - left;
 		size_t read            = fread((void*)this->buffer + this->available, sizeof(char), to_read, input->file);
 		this->available        += read;
 		left                   += read;
@@ -282,13 +285,13 @@ bool FileInput_move   ( Iterator* this, int n ) {
 	} else {
 		// The assert below is temporary, once we figure out when to free the input data
 		// that we don't need anymore this would work.
-		ASSERT(this->length > this->offset, "FileInput_move: offset is greater than length (%zd > %zd)", this->offset, this->length)
+		ASSERT(this->capacity > this->offset, "FileInput_move: offset is greater than capacity (%zd > %zd)", this->offset, this->capacity)
 		// We make sure that `n` is not bigger than the length of the available buffer
-		n = this->length + n < 0 ? 0 - this->length : n;
+		n = this->capacity + n < 0 ? 0 - this->capacity : n;
 		this->current = (((char*)this->current) + n);
 		this->offset += n;
 		if (n!=0) {this->status  = STATUS_PROCESSING;}
-		DEBUG("[<] %d%d == %zd (%zd available, %zd length, %zd bytes left)", ((int)this->offset) - n, n, this->offset, this->available, this->length, Iterator_remaining(this));
+		DEBUG("[<] %d%d == %zd (%zd available, %zd capacity, %zd bytes left)", ((int)this->offset) - n, n, this->offset, this->available, this->capacity, Iterator_remaining(this));
 		assert(Iterator_remaining(this) >= 0 - n);
 		return TRUE;
 	}
@@ -317,7 +320,7 @@ int Grammar_symbolsCount(Grammar* this) {
 }
 
 void Grammar_free(Grammar* this) {
-	DEBUG("Grammar_free(%p)", this)
+	TRACE("Grammar_free: %p", this)
 	int count = (this->axiomCount + this->skipCount);
 	for (int i = 0; i < count ; i++ ) {
 		Element* element = this->elements[i];
@@ -382,6 +385,7 @@ int Match_getLength(Match *this) {
 // fewer allocs.
 void Match_free(Match* this) {
 	if (this!=NULL && this!=FAILURE) {
+		TRACE("Match_free: %p", this);
 		// We free the children
 		Match_free(this->child);
 		// We free the next one
@@ -466,7 +470,7 @@ ParsingElement* ParsingElement_new(Reference* children[]) {
 }
 
 void ParsingElement_free(ParsingElement* this) {
-	// DEBUG("ParsingElement_free: %p", this)
+	TRACE("ParsingElement_free: %p", this)
 	Reference* child = this->children;
 	while (child != NULL) {
 		Reference* next = child->next;
@@ -595,6 +599,7 @@ Reference* Reference_new(void) {
 }
 
 void Reference_free(Reference* this) {
+	TRACE("Reference_free: %p", this)
 	// NOTE: We do not free the referenced element nor the next reference.
 	// That would be the job of the grammar.
 	__DEALLOC(this)
@@ -722,6 +727,7 @@ ParsingElement* Word_new(const char* word) {
 
 // TODO: Implement Word_free and regfree
 void Word_free(ParsingElement* this) {
+	TRACE("Word_free: %p", this)
 	WordConfig* config = (WordConfig*)this->config;
 	if (config != NULL) {
 		// We don't have anything special to dealloc besides the config
@@ -886,6 +892,7 @@ int TokenMatch_count(Match* match) {
 }
 
 void TokenMatch_free(Match* match) {
+	TRACE("TokenMatch_free: %p", match)
 	assert (match                != NULL);
 	assert (match->data          != NULL);
 	assert (match->context       != NULL);
@@ -969,9 +976,15 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 		// We iterate over the children of the rule. We expect each child to
 		// match, and we might skip inbetween the children to find a match.
 		Match* match = Reference_recognize(child, context);
-		// DEBUG("Rule:%s[%d]=%s %s at %zd-%zd", this->name, step, child->element->name, (Match_isSuccess(match) ? "matched" : "failed"), (Match_isSuccess(match) ?  context->iterator->offset - match->length : context->iterator->offset), context->iterator->offset);
+		DEBUG("Rule:%s[%d]=%s %s at %zd-%zd", this->name, step, child->element->name, (Match_isSuccess(match) ? "matched" : "failed"), (Match_isSuccess(match) ?  context->iterator->offset - match->length : context->iterator->offset), context->iterator->offset);
 		if (!Match_isSuccess(match)) {
 			ParsingElement* skip = context->grammar->skip;
+			if (skip == NULL ) {
+				// We break if we had FAILURE and there is no skip defined.
+				break;
+			}
+			// DEBUG("Rule:Skipping with element %p", skip)
+			// DEBUG("Rule:Skipping with element %c#%d", skip->type, skip->id)
 			Match* skip_match    = skip->recognize(skip, context);
 			int    skip_count    = 0;
 			size_t skip_offset   = context->iterator->offset;
@@ -1062,6 +1075,9 @@ ParsingElement* Condition_new(ConditionCallback c) {
 Match*  Condition_recognize(ParsingElement* this, ParsingContext* context) {
 	if (this->config != NULL) {
 		Match* result = ((ConditionCallback)this->config)(this, context);
+		// We support special cases where the condition can return a boolean
+		if      (result == (Match*)0) { result = FAILURE; }
+		else if (result == (Match*)1) { result = Match_Success(0, this, context);}
 		LOG_IF(context->grammar->isVerbose &&  Match_isSuccess(result), "[✓] Condition %s matched %zd-%zd", this->name, context->iterator->offset - result->length, context->iterator->offset)
 		LOG_IF(context->grammar->isVerbose && !Match_isSuccess(result), "[1] Condition %s failed at %zd",  this->name, context->iterator->offset)
 		return  MATCH_STATS(result);
@@ -1340,7 +1356,7 @@ void Grammar_prepare ( Grammar* this ) {
 	}
 }
 
-ParsingResult* Grammar_parseFromIterator( Grammar* this, Iterator* iterator ) {
+ParsingResult* Grammar_parseIterator( Grammar* this, Iterator* iterator ) {
 	// We make sure the grammar is prepared before we start parsing
 	if (this->elements == NULL) {Grammar_prepare(this);}
 	assert(this->axiom != NULL);
@@ -1354,20 +1370,20 @@ ParsingResult* Grammar_parseFromIterator( Grammar* this, Iterator* iterator ) {
 	return ParsingResult_new(match, context);
 }
 
-ParsingResult* Grammar_parseFromPath( Grammar* this, const char* path ) {
+ParsingResult* Grammar_parsePath( Grammar* this, const char* path ) {
 	Iterator* iterator = Iterator_Open(path);
 	if (iterator != NULL) {
-		return Grammar_parseFromIterator(this, iterator);
+		return Grammar_parseIterator(this, iterator);
 	} else {
 		errno = ENOENT;
 		return NULL;
 	}
 }
 
-ParsingResult* Grammar_parseFromString( Grammar* this, const char* text ) {
+ParsingResult* Grammar_parseString( Grammar* this, const char* text ) {
 	Iterator* iterator = Iterator_FromString(text);
 	if (iterator != NULL) {
-		return Grammar_parseFromIterator(this, iterator);
+		return Grammar_parseIterator(this, iterator);
 	} else {
 		errno = ENOENT;
 		return NULL;
