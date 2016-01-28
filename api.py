@@ -12,7 +12,7 @@
 VERSION = "0.0.0"
 LICENSE = "http://ffctn.com/doc/licenses/bsd"
 
-import ctypes, os, re
+import ctypes, os, re, sys
 
 try:
 	import reporter as logging
@@ -1137,14 +1137,17 @@ class Processor(object):
 			# print "processed[H]: {0}#{1} : {2} --> {3}".format(match.__class__.__name__, match.name, repr(match.value), repr(result))
 			return result if result is not None else match.value
 		else:
-			if isinstance(match, GroupMatch):
-				result = self._processReferenceMatch(match.child)
-			elif isinstance(match, CompositeMatch):
-				result = [self._processReferenceMatch(_) for _ in match.children()]
-			else:
-				result = match.value
-			# print "processed[*]: {0}#{1} : {2} --> {3}".format(match.__class__.__name__, match.name, repr(match.value), repr(result))
-			return result
+			return self.defaultHandler(match)
+
+	def defaultHandler( self, match ):
+		if isinstance(match, GroupMatch):
+			result = self._processReferenceMatch(match.child)
+		elif isinstance(match, CompositeMatch):
+			result = [self._processReferenceMatch(_) for _ in match.children()]
+		else:
+			result = match.value
+		# print "processed[*]: {0}#{1} : {2} --> {3}".format(match.__class__.__name__, match.name, repr(match.value), repr(result))
+		return result
 
 	def _processReferenceMatch( self, match ):
 		"""Processes the reference match."""
@@ -1179,6 +1182,33 @@ class Processor(object):
 			raise Exception(str(e) + " -- arguments: {0}".format(",".join([str(_) for _ in args])))
 		except Exception as e:
 			raise e
+
+# -----------------------------------------------------------------------------
+#
+# TREE WRITER
+#
+# -----------------------------------------------------------------------------
+
+class TreeWriter(Processor):
+	"""A special processor that outputs the named parsing elements
+	registered in the parse tree. It is quite useful for debugging grammars."""
+
+	def __init__( self, grammar=None, output=sys.stdout ):
+		Processor.__init__(self, grammar)
+		self.output = output
+		self.reset()
+
+	def reset( self ):
+		self.indent = 0
+		self.count  = 0
+
+	def defaultHandler(self, match):
+		self.output.write("{0:04d}|{1}{2}\n".format(self.count, self.indent * "│    "  + "├────" , match.name))
+		self.indent += 1
+		self.count  += 1
+		r = Processor.defaultHandler(self, match)
+		self.indent -= 1
+		return r
 
 # -----------------------------------------------------------------------------
 #
@@ -1248,8 +1278,8 @@ Grammar.Register(Word, Token, Group, Rule)
 
 import unittest
 
-#class TestCollection(unittest.TestCase):
-class TestCollection:
+class TestCollection(unittest.TestCase):
+#class TestCollection:
 
 	def testCTypesBehaviour( self ):
 		"""A few assertions about what to expect from CTypes."""
@@ -1312,14 +1342,14 @@ class TestCollection:
 		libparsing.ParsingElement_add(ab, r)
 
 	def testSimpleGrammar( self ):
-		g       = Grammar()
-		text    = "pouet"
-		w       = Word(text)
-		g.axiom = w
+		g           = Grammar()
+		text        = "pouet"
+		w           = Word(text)
+		g.axiom     = w
 		g.isVerbose = False
-		r       = g.parseFromString(text)
+		r           = g.parseFromString(text)
 		assert r
-		m       = r.match
+		m           = r.match
 		assert m
 		self.assertEqual(m.status, "M")
 		self.assertEqual(m.offset,  m.getOffset())
@@ -1340,7 +1370,7 @@ class TestCollection:
 		libparsing.ParsingElement_add(ab, ra)
 		libparsing.ParsingElement_add(ab, rb)
 		g.contents.axiom     = ab
-		g.contents.isVerbose = 1
+		g.contents.isVerbose = 0
 		libparsing.Grammar_parseFromString(g, "abab")
 
 	def testRuleOO( self ):
@@ -1473,11 +1503,6 @@ class TestCollection:
 		self.assertTrue(r.isSuccess())
 		self.assertTrue(r.isComplete())
 
-		print r.match.get()
-		print r.match.value
-
-class Test(unittest.TestCase):
-
 	def testProcessor(self):
 		g = Grammar(isVerbose = False)
 		s = g.symbols
@@ -1510,12 +1535,7 @@ class Test(unittest.TestCase):
 		p.on(s.Operation, lambda _, left, op, right: (op, left, right))
 
 		res = p.process(r)
-		# import ipdb
-		# ipdb.set_trace()
 		self.assertEquals(res, ("+", ("N", 1), ("N", 10)))
-		print ","
-		print res
-
 
 if __name__ == "__main__":
 	unittest.main()
