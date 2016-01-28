@@ -1312,7 +1312,7 @@ class TestCollection(unittest.TestCase):
 		assert r.contents._b_needsfree_ is 0
 		# SEE: https://docs.python.org/2.5/lib/ctypes-data-types.html
 		assert r.contents.name == "_"
-		assert r.contents.id   == -1, r.contents.id
+		self.assertEquals(r.contents.id, -10)
 		# So that's the surprising stuff about ctypes. Our C code assigns
 		# NULL to element and next. If we had declared TReference with
 		# `next` and `element` as returning `void*`, then we would
@@ -1322,8 +1322,8 @@ class TestCollection(unittest.TestCase):
 		assert not r.contents.next
 		assert r.contents.element is not None
 		assert r.contents.next    is not None
-		# r.contents.element = 0
-		# r.contents.next    = 0
+		r.contents.element = None
+		r.contents.next    = None
 		assert isinstance(r.contents.element, C.TYPES["ParsingElement*"])
 		assert isinstance(r.contents.next,    C.TYPES["Reference*"])
 		# And the C addresses of the element and next (which are NULL pointers)
@@ -1334,12 +1334,6 @@ class TestCollection(unittest.TestCase):
 		# Anyhow, we now creat an empty rule
 		ab = libparsing.Rule_new(None)
 		assert ab.contents._b_needsfree_ is 0
-		# And we add it the reference
-		C_API._cdll["ParsingElement_add"](ab, r)
-		# DEBUG: This is where we experienced problems, basically due to
-		# incorrect signature.
-		print "Invocation throught symbols"
-		libparsing.ParsingElement_add(ab, r)
 
 	def testSimpleGrammar( self ):
 		g           = Grammar()
@@ -1378,10 +1372,9 @@ class TestCollection(unittest.TestCase):
 		text    = "abab"
 		a       = Word("a")
 		b       = Word("b")
-		ab      = Rule(None)
+		ab      = Rule()
 		ra      = Reference.Ensure(a)
 		rb      = Reference.Ensure(b)
-		assert a._wrapped._b
 		ab.add(ra)
 		ab.add(rb)
 		g.axiom = ab
