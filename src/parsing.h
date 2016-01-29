@@ -172,7 +172,7 @@ typedef ITERATION_UNIT iterated_t;
 typedef struct Iterator {
 	char           status;    // The status of the iterator, one of STATUS_{INIT|PROCESSING|INPUT_ENDED|ENDED}
 	char*          buffer;    // The buffer to the read data, note how it is a (void*) and not an `iterated_t`
-	iterated_t*    current;   // The for the current offset within the buffer
+	iterated_t*    current;   // The pointer current offset within the buffer
 	iterated_t     separator; // The character for line separator, `\n` by default.
 	size_t         offset;    // Offset in input (in bytes), might be different from `current - buffer` if some input was freed.
 	size_t         lines;     // Counter for lines that have been encountered
@@ -512,6 +512,9 @@ void Word_free(ParsingElement* this);
 // The specialized match function for token parsing elements.
 Match*          Word_recognize(ParsingElement* this, ParsingContext* context);
 
+// @method
+const char* WordMatch_group(Match* match);
+
 /**
  * ### Tokens
  *
@@ -722,6 +725,8 @@ typedef struct ParsingStats {
 	size_t*  successBySymbol;
 	size_t*  failureBySymbol;
 	size_t   failureOffset;   // A reference to the deepest failure
+	size_t   matchOffset;
+	size_t   matchLength;
 	Element* failureElement;  // A reference to the failure element
 } ParsingStats;
 

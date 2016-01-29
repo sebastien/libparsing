@@ -146,7 +146,7 @@ Iterator* iterator = Iterator_Open("example.txt");
 typedef struct Iterator {
 	char           status;    // The status of the iterator, one of STATUS_{INIT|PROCESSING|INPUT_ENDED|ENDED}
 	char*          buffer;    // The buffer to the read data, note how it is a (void*) and not an `iterated_t`
-	iterated_t*    current;   // The for the current offset within the buffer
+	iterated_t*    current;   // The pointer current offset within the buffer
 	iterated_t     separator; // The character for line separator, `\n` by default.
 	size_t         offset;    // Offset in input (in bytes), might be different from `current - buffer` if some input was freed.
 	size_t         lines;     // Counter for lines that have been encountered
@@ -832,6 +832,14 @@ Match*          Word_recognize(ParsingElement* this, ParsingContext* context);
 ```
 
 
+#### <a name="WordMatch_group_method"><span class="classifier">method</span> `WordMatch_group`</a>
+
+
+```c
+const char* WordMatch_group(Match* match);
+```
+
+
 ### Tokens
 
 Tokens are regular expression based parsing elements. They do not have
@@ -1212,6 +1220,8 @@ typedef struct ParsingStats {
 	size_t*  successBySymbol;
 	size_t*  failureBySymbol;
 	size_t   failureOffset;   // A reference to the deepest failure
+	size_t   matchOffset;
+	size_t   matchLength;
 	Element* failureElement;  // A reference to the failure element
 } ParsingStats;
 ```

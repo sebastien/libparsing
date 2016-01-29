@@ -594,6 +594,8 @@ class TParsingStats(ctypes.Structure):
 	size_t* successBySymbol;
 	size_t* failureBySymbol;
 	size_t   failureOffset;   // A reference to the deepest failure
+	size_t   matchOffset;
+	size_t   matchLength;
 	Element* failureElement;  // A reference to the failure element
 	"""
 
@@ -852,8 +854,12 @@ class Match(CObjectWrapper):
 			return RuleMatch(wrappedCObject=wrapped)
 		elif element_type == TYPE_GROUP:
 			return GroupMatch(wrappedCObject=wrapped)
+		elif element_type == TYPE_CONDITION:
+			return ConditionMatch(wrappedCObject=wrapped)
+		elif element_type == TYPE_PROCEDURE:
+			return ProcedureMatch(wrappedCObject=wrapped)
 		else:
-			raise ValueError
+			raise ValueError("Unsupported match type: {0}".format(element_type))
 
 	def _init( self ):
 		self._value_ = NOTHING
@@ -912,7 +918,7 @@ class CompositeMatch(Match):
 		for i,_ in enumerate(self.children()):
 			if i == index:
 				return _
-		raise IndexError
+		return None
 
 	def get( self, name=NOTHING ):
 		if name is NOTHING:
@@ -921,7 +927,9 @@ class CompositeMatch(Match):
 			for _ in self.children():
 				if _.name == name:
 					return _
-			raise IndexError
+			# We don't throw an index error
+			return None
+			# raise IndexError
 
 	def __iter__( self ):
 		for _ in self.children():
@@ -989,7 +997,14 @@ class ReferenceMatch(CompositeMatch):
 	def isOneOrMore( self ):
 		return self.cardinality == CARDINALITY_MANY
 
+	def __repr__( self ):
+		return "<ReferenceMatch:{0}#{1}({2})*{3}>".format(self.element.type, self.element.id, self.name, self.cardinality)
+
 class WordMatch(Match):
+
+	FUNCTIONS = """
+	const char* WordMatch_group(Match* this); // @as _group
+	"""
 
 	def _value( self ):
 		return self._group()
@@ -1023,12 +1038,12 @@ class TokenMatch(Match):
 class ProcedureMatch(Match):
 
 	def _value( self ):
-		return NOTHING
+		return True
 
 class ConditionMatch(Match):
 
 	def _value( self ):
-		return NOTHING
+		return True
 
 class RuleMatch(CompositeMatch):
 
@@ -1052,11 +1067,12 @@ class ParsingResult(CObjectWrapper):
 
 	WRAPPED   = TParsingResult
 	FUNCTIONS = """
-	void ParsingResult_free(ParsingResult* this);
-	bool ParsingResult_isFailure(ParsingResult* this);
-	bool ParsingResult_isPartial(ParsingResult* this);
-	bool ParsingResult_isSuccess(ParsingResult* this);
-	bool ParsingResult_isComplete(ParsingResult* this);
+	void  ParsingResult_free(ParsingResult* this);
+	bool  ParsingResult_isFailure(ParsingResult* this);
+	bool  ParsingResult_isPartial(ParsingResult* this);
+	bool  ParsingResult_isSuccess(ParsingResult* this);
+	bool  ParsingResult_isComplete(ParsingResult* this);
+	int   ParsingResult_textOffset(ParsingResult* this); // @as _textOffset
 	"""
 
 	@property
@@ -1071,13 +1087,34 @@ class ParsingResult(CObjectWrapper):
 	def text( self ):
 		return self.context.iterator.contents.buffer
 
-	def textAround( self, line=None ):
-		if line is None: line = self.line
-		i = self.offset
+	@property
+	def textOffset( self ):
+		return self._textOffset()
+
+	def lastMatchRange( self ):
+		o = self.context.stats.contents.matchOffset
+		r = self.context.stats.contents.matchLength
+		return (o, o + r)
+
+	# def textAround( self, line=None ):
+	# 	if line is None: line = self.line
+	# 	i = self.offset
+	# 	t = self.text
+	# 	while i > 1 and t[i] != "\n": i -= 1
+	# 	if i != 0: i += 1
+	# 	return t[i:(i+100)].split("\n")[0]
+
+	def textAround( self ):
+		# We should get the offset range covered by the iterator's buffer
+		o = self.offset - self.textOffset
 		t = self.text
-		while i > 1 and t[i] != "\n": i -= 1
-		if i != 0: i += 1
-		return t[i:(i+100)].split("\n")[0]
+		s = o
+		e = o
+		while s > 0      and t[s] != "\n": s -= 1
+		while e < len(t) and t[e] != "\n": e += 1
+		l = t[s:e]
+		i = " " * (o - s - 1) + "^"
+		return l + "\n" + i
 
 	def __del__( self ):
 		if self._mustFree:
@@ -1179,11 +1216,12 @@ class Processor(object):
 		symbol itself."""
 		grammar.prepare()
 		for name, symbol in grammar._symbols.items():
+			print "SYMBOL:", name, symbol.id
+			if symbol.id < 0:
+				logging.warn("Unused symbol: %s" % (repr(symbol)))
+				continue
 			if symbol.id in self.symbolByID:
-				if symbol.id >= 0:
-					raise Exception("Duplicate symbol id: %d, has %s already while trying to assign %s" % (symbol.id, self.symbolByID[symbol.id].name, symbol.name))
-				else:
-					logging.warn("Unused symbol: %s" % (repr(symbol)))
+				raise Exception("Duplicate symbol id: %d, has %s already while trying to assign %s" % (symbol.id, self.symbolByID[symbol.id].name, symbol.name))
 			self.symbolByID[symbol.id] = symbol
 			self.symbolByName[symbol.name] = symbol
 
@@ -1195,9 +1233,11 @@ class Processor(object):
 			name = k[2:]
 			if not name:
 				continue
-			assert name in self.symbolByName, "Handler does not match any symbol: {0}, symbols are {1}".format(k, ", ".join(self.symbolByName.keys()))
-			symbol = self.symbolByName[name]
-			self.handlerByID[symbol.id] = getattr(self, k)
+			if name not in self.symbolByName:
+				logging.warn("Handler `{0}` does not match any of {1}".format(k, ", ".join(self.symbolByName.keys())))
+			else:
+				symbol = self.symbolByName[name]
+				self.handlerByID[symbol.id] = getattr(self, k)
 
 	def on( self, symbol, callback ):
 		"""Binds a handler for the given symbol."""
@@ -1208,8 +1248,9 @@ class Processor(object):
 
 	def process( self, match ):
 		"""Processes the given match, applying the matching handlers when found."""
+		if not match: return None
 		if isinstance(match, ParsingResult): match = match.match
-		assert not isinstance(match, ReferenceMatch), "Processor.process: match expected not to be reference match, got {0}".format(match)
+		assert not isinstance(match, ReferenceMatch), "{0}.process: match expected not to be reference match, got {1}".format(self.__class__.__name__, match)
 		# We retrieve the element's id
 		eid     = match.element.id
 		# We retrieve the handler for
@@ -1217,20 +1258,21 @@ class Processor(object):
 		if handler:
 			# A handler was found, so we apply it to the match. The handler
 			# returns a value that should be assigned to the match
+			print "process[H]: applying handler", handler, "TO", match
 			result = self._applyHandler( handler, match )
-			# print "processed[H]: {0}#{1} : {2} --> {3}".format(match.__class__.__name__, match.name, repr(match.value), repr(result))
+			print "processed[H]: {0}#{1} : {2} --> {3}".format(match.__class__.__name__, match.name, repr(match.value), repr(result))
 			return result if result is not None else match.value
 		else:
-			return self.defaultHandler(match)
+			return self.defaultProcess(match)
 
-	def defaultHandler( self, match ):
+	def defaultProcess( self, match ):
 		if isinstance(match, GroupMatch):
 			result = self._processReferenceMatch(match.child)
 		elif isinstance(match, CompositeMatch):
 			result = [self._processReferenceMatch(_) for _ in match.children()]
 		else:
 			result = match.value
-		# print "processed[*]: {0}#{1} : {2} --> {3}".format(match.__class__.__name__, match.name, repr(match.value), repr(result))
+		print "processed[*]: {0}#{1} : {2} --> {3}".format(match.__class__.__name__, match.name, repr(match.value), repr(result))
 		return result
 
 	def _processReferenceMatch( self, match ):
@@ -1242,7 +1284,7 @@ class Processor(object):
 		else:
 			value   = [self.process(_) for _ in match.children()]
 			results = value
-		# print "_processReferenceMatch: {0}[{1}]#{2}({3}) : {4} -> {5} -> {6}".format(match.__class__.__name__, match.element.type, match.element.name, match.cardinality, repr(match.value), repr(value), repr(results))
+		print "_processReferenceMatch: {0}[{1}]#{2}({3}) : {4} -> {5} -> {6}".format(match.__class__.__name__, match.element.type, match.element.name, match.cardinality, repr(match.value), repr(value), repr(results))
 		return results
 
 	def _applyHandler( self, handler, match ):
@@ -1259,13 +1301,13 @@ class Processor(object):
 		try:
 			value= match.value
 			result =  handler(match, **kwargs)
-			#print "_applyHandler: {0}#{1} : {2} --> {3}".format(match.__class__.__name__, match.name, repr(value), repr(result))
+			print "_applyHandler: {0}#{1} : {2} --> {3}".format(match.__class__.__name__, match.name, repr(value), repr(result))
 			return result
 		except TypeError as e:
 			args = ["match"] + list(kwargs.keys())
 			raise Exception(str(e) + " -- arguments: {0}".format(",".join([str(_) for _ in args])))
 		except Exception as e:
-			raise e
+			raise e.__class__("in {2}({3}): {4}".format(e.__class__.__name__, self.__class__.__name__, handler, match, e))
 
 # -----------------------------------------------------------------------------
 #
@@ -1286,11 +1328,11 @@ class TreeWriter(Processor):
 		self.indent = 0
 		self.count  = 0
 
-	def defaultHandler(self, match):
+	def defaultProcess(self, match):
 		self.output.write("{0:04d}|{1}{2}\n".format(self.count, self.indent * "│    "  + "├────" , match.name))
 		self.indent += 1
 		self.count  += 1
-		r = Processor.defaultHandler(self, match)
+		r = Processor.defaultProcess(self, match)
 		self.indent -= 1
 		return r
 
@@ -1344,7 +1386,7 @@ C_API = CLibrary(
 	Match,
 	ParsingResult,
 	Grammar,
-	Word,      #WordMatch,
+	Word,      WordMatch,
 	Token,     TokenMatch,
 	Rule,      #RuleMatch,
 	Group,     #GroupMatch,

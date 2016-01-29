@@ -109,8 +109,12 @@ bool Iterator_hasMore( Iterator* this ) {
 }
 
 size_t Iterator_remaining( Iterator* this ) {
-	DEBUG("Iterator_remaining: %zd, offset=%zd available=%zd capacity=%zd", this->available - this->offset, this->offset, this->available, this->capacity)
-	return (this->available - (this->current - this->buffer));
+	int buffer_offset = ((char*)this->current - this->buffer);
+	// FIXME: Does not work if iterated_t is not the same as char
+	int remaining = this->available - buffer_offset;
+	assert(remaining >= 0);
+	DEBUG("Iterator_remaining: %zd, offset=%zd available=%zd capacity=%zd", remaining, this->offset, this->available, this->capacity)
+	return (size_t)remaining;
 }
 
 bool Iterator_moveTo ( Iterator* this, size_t offset ) {
@@ -134,6 +138,7 @@ void Iterator_free( Iterator* this ) {
 // ----------------------------------------------------------------------------
 
 bool String_move ( Iterator* this, int n ) {
+	assert(this->capacity == this->available);
 	if ( n == 0) {
 		// --- STAYING IN PLACE -----------------------------------------------
 		// We're not moving position
@@ -143,7 +148,7 @@ bool String_move ( Iterator* this, int n ) {
 		// --- MOVING FORWARD -------------------------------------------------
 		// We're moving forward, so we want to know if there is at one more element
 		// in the file input.
-		size_t left = this->available;
+		size_t left = this->available - this->offset;
 		// `c` is the number of elements we're actually agoing to move, which
 		// is either `n` or the number of elements left.
 		size_t c    = n <= left ? n : left;
@@ -155,9 +160,9 @@ bool String_move ( Iterator* this, int n ) {
 			c--;
 		}
 		// We then store the amount of available
-		this->available = this->capacity - this->offset;
+		left = this->available - this->offset;
 		// DEBUG("String_move: moved forward by c=%zd, n=%d offset=%zd capacity=%zd, available=%zd, current-buffer=%ld", c_copy, n, this->offset, this->capacity, this->available, this->current - this->buffer);
-		if (this->available == 0) {
+		if (left == 0) {
 			// If we have no more available elements, then the status of
 			// the stream is STATUS_ENDED
 			this->status = STATUS_ENDED;
@@ -168,14 +173,12 @@ bool String_move ( Iterator* this, int n ) {
 		}
 	} else {
 		// --- BACKTRACKING ---------------------------------------------------
-		// We make sure that `n` is not smaller than the length of the available buffer
-		// ie. n = max(n,0 - this->available);
-		n = (this->available + n) < 0 ? 0 - this->available : n;
+		// We cannot backtrack further than the current offset.
+		n = MAX(n, 0 - this->offset);
 		// FIXME: This is a little bit brittle, we should rather use a macro
 		// in the iterator itself.
 		this->current    = (((ITERATION_UNIT*)this->current) + n);
 		this->offset    += n;
-		this->available -= n;
 		if (n!=0) {
 			this->status  = STATUS_PROCESSING;
 		}
@@ -871,6 +874,10 @@ Match* Token_recognize(ParsingElement* this, ParsingContext* context) {
 	return MATCH_STATS(result);
 }
 
+const char* WordMatch_group(Match* match) {
+	return ((WordConfig*)((ParsingElement*)match->element)->config)->word;
+}
+
 const char* TokenMatch_group(Match* match, int index) {
 	assert (match                != NULL);
 	assert (match->data          != NULL);
@@ -1175,6 +1182,10 @@ ParsingStats* ParsingStats_new(void) {
 	this->parseTime = 0;
 	this->successBySymbol = NULL;
 	this->failureBySymbol = NULL;
+	this->failureOffset   = 0;
+	this->matchOffset     = 0;
+	this->matchLength     = 0;
+	this->failureElement  = NULL;
 	return this;
 }
 
@@ -1200,6 +1211,10 @@ Match* ParsingStats_registerMatch(ParsingStats* this, Element* e, Match* m) {
 	Reference* r = (Reference*)e;
 	if (Match_isSuccess(m)) {
 		this->successBySymbol[r->id] += 1;
+		if (m->offset >= this->matchOffset) {
+			this->matchOffset = m->offset;
+			this->matchLength = m->length;
+		}
 	} else {
 		this->failureBySymbol[r->id] += 1;
 		// We register the deepest failure
@@ -1260,6 +1275,11 @@ iterated_t* ParsingResult_text(ParsingResult* this) {
 	return this->context->iterator->buffer;
 }
 
+int ParsingResult_textOffset(ParsingResult* this) {
+	int buffer_offset = this->context->iterator->current - this->context->iterator->buffer;
+	return this->context->iterator->offset - buffer_offset;
+}
+
 void ParsingResult_free(ParsingResult* this) {
 	if (this != NULL) {
 		Match_free(this->match);
@@ -1301,7 +1321,7 @@ int Grammar__resetElementIDs(Element* e, int step, void* nothing) {
 int Grammar__assignElementIDs(Element* e, int step, void* nothing) {
 	if (Reference_Is(e)) {
 		Reference* r = (Reference*)e;
-		if (r->id == -1) {
+		if (r->id == ID_BINDING) {
 			r->id = step;
 			DEBUG_IF(r->name != NULL, "[%03d] [%c] %s", r->id, r->type, r->name);
 			return step;
@@ -1310,7 +1330,7 @@ int Grammar__assignElementIDs(Element* e, int step, void* nothing) {
 		}
 	} else {
 		ParsingElement * r = (ParsingElement*)e;
-		if (r->id == -1) {
+		if (r->id == ID_BINDING) {
 			r->id = step;
 			DEBUG_IF(r->name != NULL, "[%03d] [%c] %s", r->id, r->type, r->name);
 			return step;
@@ -1349,7 +1369,7 @@ void Grammar_prepare ( Grammar* this ) {
 		int count = Element_walk(this->axiom, Grammar__assignElementIDs, NULL);
 		this->axiomCount = count;
 		if (this->skip != NULL) {
-			this->skipCount = Element__walk(this->skip, Grammar__assignElementIDs, count, NULL) - count;
+			this->skipCount = Element__walk(this->skip, Grammar__assignElementIDs, count + 1, NULL) - count;
 		}
 		// Now we register the elements
 		__DEALLOC(this->elements);

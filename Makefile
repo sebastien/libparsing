@@ -6,14 +6,13 @@ SOURCES  = $(wildcard src/*.c)
 TESTS    = $(wildcard tests/test-*.c)
 OBJECTS  = $(SOURCES:src/%.c=build/%.o)
 OBJECTS += $(TESTS:tests/%.c=build/%.o)
-PRODUCTS = lib$(PROJECT) lib$(PROJECT).so.$(VERSION) python/libparsing/libparsing.ffi README.html
+PRODUCTS = lib$(PROJECT) lib$(PROJECT).so.$(VERSION) python/lib$(PROJECT)/_lib$(PROJECT).so README.html
 TEST_PRODUCTS = $(TESTS:tests/%.c=%)
 CC       = gcc
 LIBS    := libpcre
 #CFLAGS  += -Isrc -std=c11 -O3 -Wall -fPIC -DWITH_PCRE -g -pg -DDEBUG_ENABLED
-CFLAGS  += -Isrc -std=c11 -Wall -fPIC -DWITH_PCRE -g -pg # -DDEBUG_ENABLED # -DTRACE_ENABLED
+CFLAGS  += -Isrc -std=c11 -Wall -fPIC -DWITH_PCRE -g -pg #-DDEBUG_ENABLED -DTRACE_ENABLED
 LDFLAGS :=  $(shell pkg-config --cflags --libs $(LIBS))
-
 
 # =============================================================================
 # MAIN RULES
@@ -28,13 +27,13 @@ clean:
 build:
 	mkdir build
 
-dist: libparsing update-python-version python/libparsing/libparsing.ffi
+dist: libparsing update-python-version python/lib$(PROJECT)/_lib$(PROJECT).so
 	python setup.py check clean sdist bdist 
 
 info:
 	@echo libparsing: $(VERSION)
 
-release: $(PRODUCT) update-python-version python/libparsing/libparsing.ffi
+release: $(PRODUCT) update-python-version python/lib$(PROJECT)/_lib$(PROJECT).so
 	python setup.py check clean
 	git commit -a -m "Release $(VERSION)" ; true
 	git tag $(VERSION) ; true
@@ -69,9 +68,8 @@ test-%: build/test-%.o build/parsing.o
 	$(CC) $? $(LDFLAGS) -o $@
 	chmod +x $@
 
-python/libparsing/libparsing.ffi: src/parsing.h
-	rm -f $@
-	cd python && python libparsing/__init__.py
+python/lib$(PROJECT)/_lib$(PROJECT).so: lib$(PROJECT).so
+	cp $< $@
 
 # =============================================================================
 # OBJECTS

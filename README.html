@@ -100,7 +100,7 @@ make install               # You can set PREFIX</code></pre>
 <pre class="sourceCode c"><code class="sourceCode c"><span class="kw">typedef</span> <span class="kw">struct</span> Iterator {
     <span class="dt">char</span>           status;    <span class="co">// The status of the iterator, one of STATUS_{INIT|PROCESSING|INPUT_ENDED|ENDED}</span>
     <span class="dt">char</span>*          buffer;    <span class="co">// The buffer to the read data, note how it is a (void*) and not an `iterated_t`</span>
-    iterated_t*    current;   <span class="co">// The for the current offset within the buffer</span>
+    iterated_t*    current;   <span class="co">// The pointer current offset within the buffer</span>
     iterated_t     separator; <span class="co">// The character for line separator, `\n` by default.</span>
     size_t         offset;    <span class="co">// Offset in input (in bytes), might be different from `current - buffer` if some input was freed.</span>
     size_t         lines;     <span class="co">// Counter for lines that have been encountered</span>
@@ -467,6 +467,10 @@ make install               # You can set PREFIX</code></pre>
 <p>The specialized match function for token parsing elements.</p>
 <pre class="sourceCode c"><code class="sourceCode c">Match*          Word_recognize(ParsingElement* this, ParsingContext* context);</code></pre>
 </div>
+<div id="method-wordmatch_group" class="section level4">
+<h4><a name="WordMatch_group_method"><span class="classifier">method</span> <code>WordMatch_group</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="dt">const</span> <span class="dt">char</span>* WordMatch_group(Match* match);</code></pre>
+</div>
 </div>
 <div id="tokens" class="section level3">
 <h3>Tokens</h3>
@@ -676,6 +680,8 @@ make install               # You can set PREFIX</code></pre>
     size_t*  successBySymbol;
     size_t*  failureBySymbol;
     size_t   failureOffset;   <span class="co">// A reference to the deepest failure</span>
+    size_t   matchOffset;
+    size_t   matchLength;
     Element* failureElement;  <span class="co">// A reference to the failure element</span>
 } ParsingStats;</code></pre>
 </div>
