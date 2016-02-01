@@ -3,6 +3,7 @@ PROJECT  = parsing
 VERSION  = $(shell grep VERSION src/parsing.h | cut -d'"' -f2)
 MAJOR    = $(shell echo $(VERSION) | cut -d. -f1)
 SOURCES  = $(wildcard src/*.c)
+HEADERS  = $(wildcard src/*.h)
 TESTS    = $(wildcard tests/test-*.c)
 OBJECTS  = $(SOURCES:src/%.c=build/%.o)
 OBJECTS += $(TESTS:tests/%.c=build/%.o)
@@ -11,7 +12,7 @@ TEST_PRODUCTS = $(TESTS:tests/%.c=%)
 CC       = gcc
 LIBS    := libpcre
 #CFLAGS  += -Isrc -std=c11 -O3 -Wall -fPIC -DWITH_PCRE -g -pg -DDEBUG_ENABLED
-CFLAGS  += -Isrc -std=c11 -Wall -fPIC -DWITH_PCRE -g -pg #-DDEBUG_ENABLED -DTRACE_ENABLED
+CFLAGS  += -Isrc -std=c11 -Wall -fPIC -DWITH_PCRE -g -pg #-DDEBUG_ENABLED # -DTRACE_ENABLED
 LDFLAGS :=  $(shell pkg-config --cflags --libs $(LIBS))
 
 # =============================================================================
@@ -44,6 +45,10 @@ tests: $(TEST_PRODUCTS)
 
 update-python-version: src/parsing.h
 	sed -i 's/VERSION \+= *"[^"]\+"/VERSION            = "$(VERSION)"/' python/libparsing/__init__.py 
+
+cppcheck: $(SOURCES) $(HEADER)
+	# SEE: http://sourceforge.net/p/cppcheck/wiki/ListOfChecks/
+	cppcheck --suppress=unusedFunction -Isrc --enable=all src/parsing.c
 
 # =============================================================================
 # PRODUCTS

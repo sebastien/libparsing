@@ -12,7 +12,7 @@
 VERSION = "0.0.0"
 LICENSE = "http://ffctn.com/doc/licenses/bsd"
 
-import ctypes, os, re, sys
+import ctypes, os, re, sys, traceback
 
 try:
 	import reporter as logging
@@ -25,6 +25,11 @@ C_API   = None
 # NOTE: This ctypes implementation is noticeably longer than the corresponding
 # CFII equivalent, while also being prone to random segfaults, which need
 # to be investigated (memory management).
+
+# NOTE: ctypes and Python3 is a little bit tricky regarding string types. In
+# particular, str have to be converted to bytes.
+# SEE <http://stackoverflow.com/questions/23852311/different-behaviour-of-ctypes-c-char-p>
+
 
 # -----------------------------------------------------------------------------
 #
@@ -90,6 +95,9 @@ class C:
 			return value._wrapped
 		if not CObjectWrapper and hasattr( value, "_wrapped"):
 			return value._wrapped
+		if isinstance(value, str):
+			# NOTE: Required by Python3
+			return value.encode("utf-8")
 		else:
 			return value
 
@@ -345,8 +353,12 @@ class CObjectWrapper(object):
 		def getter( self ):
 			value = getattr(self._wrapped.contents, name)
 			# print "g: ", cls.__name__ + "." + name, type, "=", value
+			# We manage string decoding here
+			if isinstance(value, bytes): value = value.decode("utf-8")
 			return self.LIBRARY.wrap(value)
 		def setter( self, value ):
+			# This is required for Python3
+			if isinstance(value, str): value = value.encode("utf-8")
 			value = self.LIBRARY.unwrapCast(value, type)
 			# print "s: ", cls.__name__ + "." + name, type, "<=", value
 			return setattr(self._wrapped.contents, name, value)
@@ -370,13 +382,13 @@ class CObjectWrapper(object):
 		def function(cls, *args):
 			# We unwrap the arguments, meaning that the arguments are now
 			# pure C types values
-			# print "F: ", proto[0], args
+			print ("F: ", proto[0], args, ":", ctypesFunction.argtypes, "→", ctypesFunction.restype)
 			args = [cls.LIBRARY.unwrap(_) for _ in args]
 			res  = ctypesFunction(*args)
 			if not is_constructor:
 				# Non-constructors must wrap the result
 				res  = cls.LIBRARY.wrap(res)
-			# print "F=>", res
+			print ("F=>", res)
 			return res
 		return function
 
@@ -740,12 +752,18 @@ class Word(ParsingElement):
 	void Word_free(ParsingElement* this);
 	"""
 
+	def _new( self, word ):
+		ParsingElement._new(self, word.encode("utf-8"))
+
 class Token(ParsingElement):
 
 	FUNCTIONS = """
 	ParsingElement* Token_new(const char* expr);
 	void Token_free(ParsingElement* this);
 	"""
+
+	def _new( self, expr ):
+		ParsingElement._new(self, expr.encode("utf-8"))
 
 class Condition(ParsingElement):
 	FUNCTIONS = """
@@ -874,6 +892,12 @@ class Match(CObjectWrapper):
 		for _ in []: yield _
 
 	@property
+	def element( self ):
+		"""the parsing element wrapped by the reference"""
+		assert not isinstance(self, ReferenceMatch)
+		return ctypes.cast(self._wrapped.contents.element, C.TYPES["ParsingElement*"]).contents
+
+	@property
 	def name( self ):
 		"""The name of the reference."""
 		return ctypes.cast(self._wrapped.contents.element, C.TYPES["ParsingElement*"]).contents.name
@@ -900,6 +924,10 @@ class Match(CObjectWrapper):
 	def isReference( self ):
 		"""A utility shorthand to know if a match is a reference."""
 		return self.getType() == TYPE_REFERENCE
+
+	def __repr__( self ):
+		element = ctypes.cast(self._wrapped.contents.element, C.TYPES["ParsingElement*"]).contents
+		return "<{0}:{1}#{2}({3}):{4}+{5}>".format(self.__class__.__name__, element.type, element.id, element.name, self.offset, self.length)
 
 class CompositeMatch(Match):
 
@@ -998,7 +1026,7 @@ class ReferenceMatch(CompositeMatch):
 		return self.cardinality == CARDINALITY_MANY
 
 	def __repr__( self ):
-		return "<ReferenceMatch:{0}#{1}({2})*{3}>".format(self.element.type, self.element.id, self.name, self.cardinality)
+		return "<{0}:{1}#{2}({3})*{4}>".format(self.__class__.__name__, self.element.type, self.element.id, self.element.name, self.cardinality)
 
 class WordMatch(Match):
 
@@ -1116,9 +1144,9 @@ class ParsingResult(CObjectWrapper):
 		i = " " * (o - s - 1) + "^"
 		return l + "\n" + i
 
-	def __del__( self ):
-		if self._mustFree:
-			self.free()
+	# def __del__( self ):
+	# 	if self._mustFree:
+	# 		self.free()
 
 # -----------------------------------------------------------------------------
 #
@@ -1216,13 +1244,13 @@ class Processor(object):
 		symbol itself."""
 		grammar.prepare()
 		for name, symbol in grammar._symbols.items():
-			print "SYMBOL:", name, symbol.id
+			print ("SYMBOL#{0:4d}={1}".format(symbol.id, name))
 			if symbol.id < 0:
 				logging.warn("Unused symbol: %s" % (repr(symbol)))
 				continue
 			if symbol.id in self.symbolByID:
 				raise Exception("Duplicate symbol id: %d, has %s already while trying to assign %s" % (symbol.id, self.symbolByID[symbol.id].name, symbol.name))
-			self.symbolByID[symbol.id] = symbol
+			self.symbolByID[symbol.id]     = symbol
 			self.symbolByName[symbol.name] = symbol
 
 	def _bindHandlers( self ):
@@ -1247,9 +1275,19 @@ class Processor(object):
 		return self
 
 	def process( self, match ):
+		"""The main entry point to processing a match."""
+		if isinstance(match, ParsingResult):
+			match = match.match
+		if isinstance(match, ReferenceMatch):
+			return self._processReferenceMatch(match)
+		elif isinstance(match, Match):
+			return self._processParsingElementMatch(match)
+		else:
+			return match
+
+	def _processParsingElementMatch( self, match ):
 		"""Processes the given match, applying the matching handlers when found."""
 		if not match: return None
-		if isinstance(match, ParsingResult): match = match.match
 		assert not isinstance(match, ReferenceMatch), "{0}.process: match expected not to be reference match, got {1}".format(self.__class__.__name__, match)
 		# We retrieve the element's id
 		eid     = match.element.id
@@ -1258,54 +1296,61 @@ class Processor(object):
 		if handler:
 			# A handler was found, so we apply it to the match. The handler
 			# returns a value that should be assigned to the match
-			print "process[H]: applying handler", handler, "TO", match
+			print ("process[H]: applying handler", handler, "TO", match)
 			result = self._applyHandler( handler, match )
-			print "processed[H]: {0}#{1} : {2} --> {3}".format(match.__class__.__name__, match.name, repr(match.value), repr(result))
-			return result if result is not None else match.value
+			print ("processed[H]: {0}#{1} : {2} --> {3}".format(match.__class__.__name__, match.name, repr(match.value), repr(result)))
+			if result is not None:
+				match.value = result
+			return result or match.value
 		else:
 			return self.defaultProcess(match)
 
 	def defaultProcess( self, match ):
+		assert not isinstance(match, ReferenceMatch)
 		if isinstance(match, GroupMatch):
-			result = self._processReferenceMatch(match.child)
+			result = match.value = self._processReferenceMatch(match.child)
 		elif isinstance(match, CompositeMatch):
-			result = [self._processReferenceMatch(_) for _ in match.children()]
+			result = match.value = [self._processReferenceMatch(_) for _ in match.children()]
 		else:
 			result = match.value
-		print "processed[*]: {0}#{1} : {2} --> {3}".format(match.__class__.__name__, match.name, repr(match.value), repr(result))
+		print ("processed[*]: {0}#{1} : {2} --> {3}".format(match.__class__.__name__, match.name, repr(match.value), repr(result)))
 		return result
 
 	def _processReferenceMatch( self, match ):
 		"""Processes the reference match."""
 		assert isinstance(match, ReferenceMatch)
 		if match.isOne() or match.isOptional():
-			value   = self.process(match.child)
-			results = value
+			result = self.process(match.child)
 		else:
-			value   = [self.process(_) for _ in match.children()]
-			results = value
-		print "_processReferenceMatch: {0}[{1}]#{2}({3}) : {4} -> {5} -> {6}".format(match.__class__.__name__, match.element.type, match.element.name, match.cardinality, repr(match.value), repr(value), repr(results))
-		return results
+			result  = [self.process(_) for _ in match.children()]
+		print ("_processReferenceMatch: {0}[{1}]#{2}({3}) : {4} -> {5}".format(match.__class__.__name__, match.element.type, match.element.name, match.cardinality, repr(match.value), repr(result)))
+		match.value = result
+		return result
 
 	def _applyHandler( self, handler, match ):
 		"""Applies the given handler to the given match, returning the value
 		produces but the handler."""
-		kwargs   = {}
 		# We only bind the arguments listed
-		varnames = handler.func_code.co_varnames
+		fcode    = handler.func_code
+		argnames = fcode.co_varnames[0:fcode.co_argcount]
+		assert argnames[0] == "self"
+		assert argnames[1] == "match"
+		# We skip self and match, which are required
+		kwargs   = dict((_,None) for _ in argnames if _ not in ("self", "match"))
 		for m in match.children():
 			k = m.name
 			assert isinstance(m, ReferenceMatch)
-			if k and k in varnames:
+			if k and k in argnames:
 				kwargs[k] = self._processReferenceMatch(m)
 		try:
-			value= match.value
-			result =  handler(match, **kwargs)
-			print "_applyHandler: {0}#{1} : {2} --> {3}".format(match.__class__.__name__, match.name, repr(value), repr(result))
+			value  = match.value
+			result = handler(match, **kwargs)
+			print ("_applyHandler: {0}#{1} : {2} --> {3}".format(match.__class__.__name__, match.name, repr(value), repr(result)))
+			match.result = result
 			return result
 		except TypeError as e:
 			args = ["match"] + list(kwargs.keys())
-			raise Exception(str(e) + " -- arguments: {0}".format(",".join([str(_) for _ in args])))
+			raise Exception(str(e) + " -- arguments of {2}: {0}, given {1}".format(",".join([str(_) for _ in args]), kwargs, handler))
 		except Exception as e:
 			raise e.__class__("in {2}({3}): {4}".format(e.__class__.__name__, self.__class__.__name__, handler, match, e))
 

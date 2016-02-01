@@ -66,7 +66,7 @@ typedef char  bool;
  * ENSURE(malloc(10)) { printf("Success!"); };
  * ```
 */
-#define ENSURE(v)  if (v==NULL) {printf("[!] %s\n", strerror(errno));} else
+#define ENSURE(v)  if (v==NULL) {printf("[!] %s\n", strerror(errno));}
 #define FAILED(v)  if (v!=NULL)
 
 /*

@@ -73,7 +73,7 @@ Iterator* Iterator_new( void ) {
 }
 
 bool Iterator_open( Iterator* this, const char *path ) {
-	NEW(FileInput,input, path);
+	NEW(FileInput, input, path);
 	assert(this->status == STATUS_INIT);
 	if (input!=NULL) {
 		this->input  = (void*)input;
@@ -83,8 +83,9 @@ bool Iterator_open( Iterator* this, const char *path ) {
 		// so that we ensure that the current position always has ITERATOR_BUFFER_AHEAD
 		// bytes ahead (if the input source has the data)
 		assert(this->buffer == NULL);
-		this->capacity= sizeof(iterated_t) * ITERATOR_BUFFER_AHEAD * 2;
-		this->buffer  = calloc(this->capacity + 1, 1);
+		// FIXME: Capacity should be in units, no?
+		this->capacity = sizeof(iterated_t) * ITERATOR_BUFFER_AHEAD * 2;
+		this->buffer   = calloc(this->capacity + 1, 1);
 		assert(this->buffer != NULL);
 		this->current = (iterated_t*)this->buffer;
 		// We make sure we have a trailing \0 sign to stop any string parsing
@@ -94,7 +95,7 @@ bool Iterator_open( Iterator* this, const char *path ) {
 		FileInput_preload(this);
 		DEBUG("Iterator_open: strlen(buffer)=%zd/%zd", strlen((char*)this->buffer), this->capacity);
 		this->move   = FileInput_move;
-		ENSURE(input->file) {};
+		ENSURE(input->file);
 		return TRUE;
 	} else {
 		return FALSE;
@@ -198,6 +199,7 @@ FileInput* FileInput_new(const char* path ) {
 	__ALLOC(FileInput, this);
 	assert(this != NULL);
 	// We open the file
+	this->path = path;
 	this->file = fopen(path, "r");
 	if (this->file==NULL) {
 		ERROR("Cannot open file: %s", path);
@@ -228,11 +230,11 @@ size_t FileInput_preload( Iterator* this ) {
 		// We move buffer[current:] to the begining of the buffer
 		// FIXME: We should make sure we don't call preload each time
 		// memmove((void*)this->buffer, (void*)this->current, left);
-		// We realloc the memory to make sure we
 		size_t delta  = this->current - this->buffer;
 		this->capacity += ITERATOR_BUFFER_AHEAD;
 		assert(this->capacity + 1 > 0);
 		DEBUG("<<< FileInput: growing buffer to %zd", this->capacity + 1)
+		// FIXME: Not sure that realloc is a good idea
 		this->buffer  = realloc((void*)this->buffer, this->capacity + 1);
 		assert(this->buffer != NULL);
 		this->current = this->buffer + delta;
@@ -290,7 +292,7 @@ bool FileInput_move   ( Iterator* this, int n ) {
 		// that we don't need anymore this would work.
 		ASSERT(this->capacity > this->offset, "FileInput_move: offset is greater than capacity (%zd > %zd)", this->offset, this->capacity)
 		// We make sure that `n` is not bigger than the length of the available buffer
-		n = this->capacity + n < 0 ? 0 - this->capacity : n;
+		n = ((int)this->capacity )+ n < 0 ? 0 - (int)this->capacity : n;
 		this->current = (((char*)this->current) + n);
 		this->offset += n;
 		if (n!=0) {this->status  = STATUS_PROCESSING;}
@@ -364,6 +366,7 @@ Match* Match_Success(size_t length, Element* element, ParsingContext* context) {
 
 Match* Match_new(void) {
 	__ALLOC(Match,this);
+	DEBUG("Allocating match: %p", this);
 	this->status    = STATUS_INIT;
 	this->element   = NULL;
 	this->length    = 0;
@@ -390,8 +393,10 @@ void Match_free(Match* this) {
 	if (this!=NULL && this!=FAILURE) {
 		TRACE("Match_free: %p", this);
 		// We free the children
+		assert(this->child != this);
 		Match_free(this->child);
 		// We free the next one
+		assert(this->next != this);
 		Match_free(this->next);
 		// If the match is from a parsing element
 		if (ParsingElement_Is(this->element)) {
@@ -855,7 +860,6 @@ Match* Token_recognize(ParsingElement* this, ParsingContext* context) {
 
 		// We create the token match
 		__ALLOC(TokenMatch, data);
-
 		data->count    = r;
 		data->groups   = (const char**)malloc(sizeof(const char*) * r);
 		// NOTE: We do this here, but it's probably better to do it later
@@ -863,6 +867,8 @@ Match* Token_recognize(ParsingElement* this, ParsingContext* context) {
 		// of preserving the input.
 		for (int j=0 ; j<r ; j++) {
 			const char* substring;
+			// This function copies the data into a freshly allocated
+			// substring.
 			pcre_get_substring(line, vector, r, j, &(substring));
 			data->groups[j] = substring;
 		}
