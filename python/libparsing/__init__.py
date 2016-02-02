@@ -696,8 +696,12 @@ class ParsingElement(CObjectWrapper):
 			return Rule(wrappedCObject=wrapped)
 		elif element_type == TYPE_GROUP:
 			return Group(wrappedCObject=wrapped)
+		elif element_type == TYPE_CONDITION:
+			return Condition(wrappedCObject=wrapped)
+		elif element_type == TYPE_PROCEDURE:
+			return Procedure(wrappedCObject=wrapped)
 		else:
-			raise ValueError
+			raise ValueError("ParsingElement type not supported yet: {0} from {1}".format(element_type, wrapped))
 
 	@property
 	def name( self ):
@@ -751,18 +755,23 @@ class Reference(CObjectWrapper):
 	@classmethod
 	def FromElement( cls, element ):
 		assert isinstance( element, ParsingElement)
-		res = cls._FromElement(element)
+		res          = cls._FromElement(element)
 		res._element = element
+		assert res.element == element
 		assert isinstance(res, Reference), "Expected reference, got: {0}".format(res)
 		res._mustFree = True
 		return res
+
+	def _init( self ):
+		self._element = None
 
 	def _new( self, element=None, name=None, cardinality=NOTHING ):
 		CObjectWrapper._new(self)
 		# NOTE: This is a precaustion to keep a reference to the element and
 		# to the name in case it is unwrapped/decoded.
-		self._element = element
-		self.element  = self._element
+		self.element  = element
+		assert isinstance(element,ParsingElement)
+		assert self.element == element
 		self._name    = C.Unwrap(name)
 		self.name     = self._name
 		if cardinality in (CARDINALITY_ONE, CARDINALITY_OPTIONAL, CARDINALITY_MANY_OPTIONAL, CARDINALITY_MANY):
@@ -794,6 +803,21 @@ class Reference(CObjectWrapper):
 		self._name = C.String(name)
 		self._wrapped.contents.name = self._name
 		assert self.name == self._name
+		return self
+
+	@property
+	def element( self ):
+		if self._element:
+			assert isinstance(self._element, ParsingElement)
+			assert self._element.id == self._wrapped.contents.element.contents.id if self._element and self._wrapped.contents.element else True
+		return self._element
+
+	@element.setter
+	def element( self, value ):
+		assert not self._element, "Element already set in {0}: current is {1}, trying to set {2}".format(self, self._element, value)
+		assert isinstance(value, ParsingElement)
+		self._wrapped.contents.element = value._wrapped
+		self._element                  = value
 		return self
 
 	def __repr__( self ):
