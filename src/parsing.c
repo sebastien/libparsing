@@ -762,7 +762,7 @@ Match* Word_recognize(ParsingElement* this, ParsingContext* context) {
 		LOG_IF(context->grammar->isVerbose, "[✓] Word %s:`%s` matched %zd-%zd", this->name, ((WordConfig*)this->config)->word, context->iterator->offset - config->length, context->iterator->offset);
 		return success;
 	} else {
-		LOG_IF(context->grammar->isVerbose, "    %s:%s failed at %zd", this->name, ((WordConfig*)this->config)->word, context->iterator->offset);
+		LOG_IF(context->grammar->isVerbose, "    Word %s:`%s` failed at %zd", this->name, ((WordConfig*)this->config)->word, context->iterator->offset);
 		return MATCH_STATS(FAILURE);
 	}
 }
@@ -863,7 +863,7 @@ Match* Token_recognize(ParsingElement* this, ParsingContext* context) {
 			case PCRE_ERROR_NOMEMORY     : ERROR("Token:%s Ran out of memory", config->expr);                       break;
 			default                      : ERROR("Token:%s Unknown error", config->expr);                           break;
 		};
-		LOG_IF(context->grammar->isVerbose, "    %s:%s failed at %zd", this->name, config->expr, context->iterator->offset);
+		LOG_IF(context->grammar->isVerbose, "    Token %s:`%s` failed at %zd", this->name, config->expr, context->iterator->offset);
 	} else {
 		if(r == 0) {
 			ERROR("Token: %s many substrings matched\n", config->expr);
@@ -961,21 +961,24 @@ Match* Group_recognize(ParsingElement* this, ParsingContext* context){
 	Reference* child = this->children;
 	Match*     match = NULL;
 	size_t     offset = context->iterator->offset;
+	int        step   = 0;
 	while (child != NULL ) {
 		match = Reference_recognize(child, context);
 		if (Match_isSuccess(match)) {
 			// The first succeding child wins
 			Match* result = Match_Success(match->length, this, context);
 			result->child = match;
+			LOG_IF( context->grammar->isVerbose && strcmp(this->name, "_") != 0, "[✓] Group %s#%d[%d] matched %zd-%zd[%zd]", this->name, this->id, step, offset, context->iterator->offset, result->length)
 			return MATCH_STATS(result);
 		} else {
 			// Otherwise we skip to the next child
-			child = child->next;
+			child  = child->next;
+			step  += 1;
 		}
 	}
 	// If no child has succeeded, the whole group fails
+	LOG_IF( context->grammar->isVerbose && strcmp(this->name, "_") != 0, "[!] Group %s#%d failed at %zd-%zd, backtracking to %zd", this->name, this->id, offset, context->iterator->offset, offset)
 	if (context->iterator->offset != offset ) {
-		LOG_IF(context->grammar->isVerbose && strcmp(this->name, "_") != 0,"[!] %s failed backtracking to %zd", this->name, offset);
 		Iterator_moveTo(context->iterator, offset);
 		assert( context->iterator->offset == offset );
 	}
@@ -1056,9 +1059,8 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 		// We increment the step counter, used for debugging as well.
 		step++;
 	}
-	LOG_IF( context->grammar->isVerbose && offset != context->iterator->offset && strcmp(this->name, "_") != 0 && !Match_isSuccess(result), "[!] %s#%d(%s) failed at %zd-%zd", this->name, step, step_name == NULL ? "-" : step_name, offset, context->iterator->offset)
-	LOG_IF( context->grammar->isVerbose && strcmp(this->name, "_") != 0 &&  Match_isSuccess(result), "[✓] Rule %s[%d] matched %zd-%zd[%zd]", this->name, step, offset, context->iterator->offset, result->length)
 	if (!Match_isSuccess(result)) {
+		LOG_IF( context->grammar->isVerbose && offset != context->iterator->offset && strcmp(this->name, "_") != 0, "[!] Rule %s#%d failed on step %d=%s at %zd-%zd", this->name, this->id, step, step_name == NULL ? "-" : step_name, offset, context->iterator->offset)
 		// If we had a failure, then we backtrack the iterator
 		if (offset != context->iterator->offset) {
 			DEBUG( "... backtracking to %zd", offset)
@@ -1069,6 +1071,7 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 		// In case of a success, we update the length based on the last
 		// match.
 		result->length = last->offset - result->offset + last->length;
+		LOG_IF( context->grammar->isVerbose && strcmp(this->name, "_") != 0, "[✓] Rule %s[%d] matched %zd-%zd[%zd]", this->name, step, offset, context->iterator->offset, result->length)
 	}
 	return MATCH_STATS(result);
 }
@@ -1115,7 +1118,7 @@ Match*  Condition_recognize(ParsingElement* this, ParsingContext* context) {
 		if      (result == (Match*)0) { result = FAILURE; }
 		else if (result == (Match*)1) { result = Match_Success(0, this, context);}
 		LOG_IF(context->grammar->isVerbose &&  Match_isSuccess(result), "[✓] Condition %s matched %zd-%zd", this->name, context->iterator->offset - result->length, context->iterator->offset)
-		LOG_IF(context->grammar->isVerbose && !Match_isSuccess(result), "[1] Condition %s failed at %zd",  this->name, context->iterator->offset)
+		LOG_IF(context->grammar->isVerbose && !Match_isSuccess(result), "[!] Condition %s failed at %zd",  this->name, context->iterator->offset)
 		return  MATCH_STATS(result);
 	} else {
 		LOG_IF(context->grammar->isVerbose, "[✓] Condition %s matched by default at %zd", this->name, context->iterator->offset)

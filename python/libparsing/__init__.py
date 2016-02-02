@@ -113,8 +113,6 @@ class C:
 		if not CObjectWrapper and hasattr( value, "_wrapped"):
 			return value._wrapped
 		if isinstance(value, str):
-			uv = cls.String(value)
-			print ("UNWRAPPING", (value, uv, type(value), type(uv), id(value), id(uv)))
 			return cls.String(value)
 		else:
 			return value
@@ -707,14 +705,13 @@ class ParsingElement(CObjectWrapper):
 
 	@name.setter
 	def name( self, value ):
-		self._name = C.Unwrap(value)
+		self._name                  = C.Unwrap(value)
 		self._wrapped.contents.name = self._name
 		return self
 
 	def _as( self, name ):
 		"""Returns a new Reference wrapping this parsing element."""
-		ref = Reference(element=self, name=name)
-		return ref
+		return Reference(element=self, name=name)
 
 	def one( self ):
 		return Reference(element=self, cardinality=CARDINALITY_ONE)
@@ -727,9 +724,6 @@ class ParsingElement(CObjectWrapper):
 
 	def oneOrMore( self ):
 		return Reference(element=self, cardinality=CARDINALITY_MANY)
-
-	def __div__( self, a ):
-		return self._as(name)
 
 class Reference(CObjectWrapper):
 
@@ -758,36 +752,52 @@ class Reference(CObjectWrapper):
 	def FromElement( cls, element ):
 		assert isinstance( element, ParsingElement)
 		res = cls._FromElement(element)
+		res._element = element
 		assert isinstance(res, Reference), "Expected reference, got: {0}".format(res)
 		res._mustFree = True
 		return res
 
 	def _new( self, element=None, name=None, cardinality=NOTHING ):
 		CObjectWrapper._new(self)
-		self.element = element
-		self.name    = name
+		# NOTE: This is a precaustion to keep a reference to the element and
+		# to the name in case it is unwrapped/decoded.
+		self._element = element
+		self.element  = self._element
+		self._name    = C.Unwrap(name)
+		self.name     = self._name
 		if cardinality in (CARDINALITY_ONE, CARDINALITY_OPTIONAL, CARDINALITY_MANY_OPTIONAL, CARDINALITY_MANY):
-			self.cardinality = cardinality
+			self._wrapped.contents.cardinality = cardinality
+			assert self.cardinality == cardinality
 
 	def one( self ):
-		self._wrapped.cardinality = CARDINALITY_ONE
+		self._wrapped.contents.cardinality = CARDINALITY_ONE
+		assert self.cardinality == CARDINALITY_ONE
 		return self
 
 	def optional( self ):
-		self._wrapped.cardinality = CARDINALITY_OPTIONAL
+		self._wrapped.contents.cardinality = CARDINALITY_OPTIONAL
+		assert self.cardinality == CARDINALITY_OPTIONAL
 		return self
 
 	def zeroOrMore( self ):
-		self._wrapped.cardinality = CARDINALITY_MANY_OPTIONAL
+		assert None
+		self._wrapped.contents.cardinality = CARDINALITY_MANY_OPTIONAL
+		assert self.cardinality == CARDINALITY_MANY_OPTIONAL
 		return self
 
 	def oneOrMore( self ):
-		self._wrapped.cardinality = CARDINALITY_MANY
+		self._wrapped.contents.cardinality = CARDINALITY_MANY
+		assert self.cardinality == CARDINALITY_MANY
 		return self
 
 	def _as( self, name ):
-		self.name = name
+		self._name = C.String(name)
+		self._wrapped.contents.name = self._name
+		assert self.name == self._name
 		return self
+
+	def __repr__( self ):
+		return "<Reference#{1}:{0}={2}({3}) at {4}>".format(self.name, self.id, self.element, self.cardinality, hex(id(self)))
 
 class Word(ParsingElement):
 
@@ -803,6 +813,9 @@ class Word(ParsingElement):
 		ParsingElement._new(self, word)
 		assert self.word == self._getWord(), "{0}: given word is different from set word {1} != {2}".format(self, repr(self.word), repr(self._getWord()))
 
+	def __repr__( self ):
+		return "<Word#{1}:{0}=`{2}` at {3}>".format(self.name, self.id, self._getWord(), hex(id(self)))
+
 class Token(ParsingElement):
 
 	FUNCTIONS = """
@@ -817,14 +830,20 @@ class Token(ParsingElement):
 		ParsingElement._new(self, self.expr)
 		assert self.expr == self._getExpr(), "{0}: given expression is different from set expression {1} != {2}".format(self, repr(self.expr), self._getExpr())
 
+	def __repr__( self ):
+		return "<Token#{1}:{0}=`{2}` at {3}>".format(self.name, self.id, self._getExpr(), hex(id(self)))
+
 class Condition(ParsingElement):
 	FUNCTIONS = """
 	ParsingElement* Condition_new(ConditionCallback c);
 	"""
 
 	def _new( self, callback ):
-		callback = C.TYPES["ConditionCallback"](callback)
-		return ParsingElement._new(self, callback)
+		self._callback = C.TYPES["ConditionCallback"](callback)
+		return ParsingElement._new(self, self._callback)
+
+	def __repr__( self ):
+		return "<Condition#{1}:{0}={2} at {3}>".format(self.name, self.id, self._callback, hex(id(self)))
 
 class Procedure(ParsingElement):
 	FUNCTIONS = """
@@ -832,8 +851,11 @@ class Procedure(ParsingElement):
 	"""
 
 	def _new( self, callback ):
-		callback = C.TYPES["ProcedureCallback"](callback)
-		ParsingElement._new(self, callback)
+		self._callback = C.TYPES["ProcedureCallback"](callback)
+		ParsingElement._new(self, self._callback)
+
+	def __repr__( self ):
+		return "<Procedure#{1}:{0}={2} at {3}>".format(self.name, self.id, self._callback, hex(id(self)))
 
 # -----------------------------------------------------------------------------
 #
@@ -846,12 +868,15 @@ class CompositeElement(ParsingElement):
 	WRAPPED   = TParsingElement
 	FUNCTIONS = """
 	this* ParsingElement_add(ParsingElement* this, Reference* child); // @as _add
-	this* ParsingElement_clear(ParsingElement* this);
+	this* ParsingElement_clear(ParsingElement* this); // @as _clear
 	"""
 
 	# NOTE: This is an attempt at memory management
 	# def _init( self ):
 	# 	self._children = []
+
+	def _init( self ):
+		self._children = []
 
 	def _new(self, *args):
 		ParsingElement._new(self, None)
@@ -859,14 +884,15 @@ class CompositeElement(ParsingElement):
 			self.add(_)
 
 	def add( self, *references ):
-		# argument = reference
 		for i, reference in enumerate(references):
+			argument = reference
 			assert reference, "{0}.add: no reference given, got {1} as argument #{2}".format(self.__class__.__name__, reference, i)
 			assert isinstance(reference, ParsingElement) or isinstance(reference, Reference), "{0}.add: Expected ParsingElement or Reference, got {1} as argument #{2}".format(self.__class__, reference, i)
 			reference = Reference.Ensure(reference)
 			assert isinstance(reference, Reference)
 			self._add(reference)
-			# self._children.append((reference, argument))
+			# NOTE: We might want to save argument as well
+			self._children.append(reference)
 			assert self.children
 		return self
 
@@ -875,6 +901,37 @@ class CompositeElement(ParsingElement):
 		self.add(*references)
 		return self
 
+	def clear( self ):
+		self._children = []
+		self._clear()
+		return self
+
+	def __getitem__( self, index ):
+		assert index >= 0
+		child = self._wrapped.contents.children
+		while child:
+			if index == 0:
+				return self.LIBRARY.wrap(child)
+			child = child.contents.next
+			index -= 1
+		return None
+
+	# def __len__(self):
+	# 	count = 0
+	# 	child = self._wrapped.contents.children
+	# 	while child:
+	# 		count += 1
+	# 		child = child.contents.next
+	# 	return count
+
+	def __iter__( self ):
+		# child = self._wrapped.contents.children
+		# while child:
+		# 	yield self.LIBRARY.wrap(child)
+		# 	child = child.contents.next
+		for child in self._children:
+			yield child
+
 class Rule(CompositeElement):
 
 	# FIXME: No free method here
@@ -882,12 +939,18 @@ class Rule(CompositeElement):
 	ParsingElement* Rule_new(void* children);
 	"""
 
+	def __repr__( self ):
+		return "<Rule#{1}:{0}=[2] at {3}>".format(self.name, self.id, len(list(self)), hex(id(self)))
+
 class Group(CompositeElement):
 
 	# FIXME: No free method here
 	FUNCTIONS = """
 	ParsingElement* Group_new(void* children);
 	"""
+
+	def __repr__( self ):
+		return "<Group#{1}:{0}=[2] at {3}>".format(self.name, self.id, len(list(self)), hex(id(self)))
 
 # -----------------------------------------------------------------------------
 #
