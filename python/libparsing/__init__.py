@@ -21,8 +21,9 @@ try:
 except ImportError as e:
 	import logging
 
-NOTHING = ctypes
-C_API   = None
+NOTHING    = ctypes
+C_API      = None
+IS_PYTHON3 = sys.version_info[0] >= 3
 
 # NOTE: This ctypes implementation is noticeably longer than the corresponding
 # CFII equivalent, while also being prone to random segfaults, which need
@@ -93,7 +94,16 @@ class C:
 	@classmethod
 	def String( cls, value ):
 		"""Ensures that the given value is a CString"""
-		return value.encode("utf-8") if isinstance(value, str) else value
+		if IS_PYTHON3:
+			# In Python3, ctypes requires bytes instead of str and does not
+			# do any automatic casting. So we need to store it.
+			wrapped = value.encode("utf-8") if isinstance(value, str) else value
+			assert isinstance(wrapped, bytes)
+			return wrapped
+		else:
+			# In Python2, strings are bytes from the get-go so they're
+			# simply passed as-is
+			return value
 
 	@classmethod
 	def Unwrap( cls, value ):
@@ -103,7 +113,8 @@ class C:
 		if not CObjectWrapper and hasattr( value, "_wrapped"):
 			return value._wrapped
 		if isinstance(value, str):
-			print ("UNWRAPPING", (value, cls.String(value)))
+			uv = cls.String(value)
+			print ("UNWRAPPING", (value, uv, type(value), type(uv), id(value), id(uv)))
 			return cls.String(value)
 		else:
 			return value
@@ -398,12 +409,12 @@ class CObjectWrapper(object):
 			# We unwrap the arguments, meaning that the arguments are now
 			# pure C types values
 			u_args = [cls.LIBRARY.unwrap(_) for _ in args]
-			print ("F: ", proto[0], args, "→", u_args, ":", ctypesFunction.argtypes, "→", ctypesFunction.restype)
+			# print ("F: ", proto[0], args, "→", u_args, ":", ctypesFunction.argtypes, "→", ctypesFunction.restype)
 			res  = ctypesFunction(*u_args)
 			if not is_constructor:
 				# Non-constructors must wrap the result
 				res  = cls.LIBRARY.wrap(res)
-			print ("F=>", res)
+			# print ("F=>", res)
 			return res
 		return function
 
@@ -790,6 +801,7 @@ class Word(ParsingElement):
 	def _new( self, word ):
 		self.word = C.String(word)
 		ParsingElement._new(self, word)
+		assert self.word == self._getWord(), "{0}: given word is different from set word {1} != {2}".format(self, repr(self.word), repr(self._getWord()))
 
 class Token(ParsingElement):
 
@@ -802,10 +814,8 @@ class Token(ParsingElement):
 
 	def _new( self, expr ):
 		self.expr = C.String(expr)
-		print ("NEW TOKEN", self.expr)
 		ParsingElement._new(self, self.expr)
-		assert self._getExpr() == self.expr
-		print ("EXPR", self._getExpr())
+		assert self.expr == self._getExpr(), "{0}: given expression is different from set expression {1} != {2}".format(self, repr(self.expr), self._getExpr())
 
 class Condition(ParsingElement):
 	FUNCTIONS = """

@@ -522,7 +522,6 @@ Match* ParsingElement_process( ParsingElement* this, Match* match ) {
 
 ParsingElement* ParsingElement_name( ParsingElement* this, const char* name ) {
 	if (this == NULL) {return this;}
-	printf("SETTING PARSING ELEMENT NAME %s\n", name);
 	this->name = name;
 	return this;
 }
@@ -790,7 +789,6 @@ ParsingElement* Token_new(const char* expr) {
 	this->recognize      = Token_recognize;
 	this->freeMatch      = TokenMatch_free;
 	config->expr         = expr;
-	printf("Creating new token:prep:%s\n", expr);
 #ifdef WITH_PCRE
 	const char* pcre_error;
 	int         pcre_error_offset = -1;
@@ -809,7 +807,6 @@ ParsingElement* Token_new(const char* expr) {
 		return NULL;
 	}
 #endif
-	printf("Creating new token:done:%s\n", config->expr);
 	this->config = config;
 	assert(config->expr == expr);
 	assert(Token_expr(this) == expr);
