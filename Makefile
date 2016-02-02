@@ -22,7 +22,7 @@ LDFLAGS :=  $(shell pkg-config --cflags --libs $(LIBS))
 all: $(PRODUCTS)
 	
 clean:
-	@find . -name __pycache__ -exec rm -rf '{}' ';'
+	@find . -name __pycache__ -exec rm -rf '{}' ';' ; true
 	@rm -rf dist *.egg-info $(OBJECTS) $(PRODUCTS) $(TEST_PRODUCTS); true
 
 build:

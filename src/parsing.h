@@ -513,6 +513,9 @@ void Word_free(ParsingElement* this);
 Match*          Word_recognize(ParsingElement* this, ParsingContext* context);
 
 // @method
+const char* Word_word(ParsingElement* this);
+
+// @method
 const char* WordMatch_group(Match* match);
 
 /**
@@ -552,6 +555,9 @@ void Token_free(ParsingElement*);
 // @method
 // The specialized match function for token parsing elements.
 Match*          Token_recognize(ParsingElement* this, ParsingContext* context);
+
+// @method
+const char* Token_expr(ParsingElement* this);
 
 // @method
 // Frees the `TokenMatch` created in `Token_recognize`

@@ -12,6 +12,7 @@
 #include "oo.h"
 
 #define MATCH_STATS(m) ParsingStats_registerMatch(context->stats, this, m)
+#define ANONYMOUS      "unnamed"
 
 // SEE: https://en.wikipedia.org/wiki/C_data_types
 // SEE: http://stackoverflow.com/questions/18329532/pcre-is-not-matching-utf8-characters
@@ -521,6 +522,7 @@ Match* ParsingElement_process( ParsingElement* this, Match* match ) {
 
 ParsingElement* ParsingElement_name( ParsingElement* this, const char* name ) {
 	if (this == NULL) {return this;}
+	printf("SETTING PARSING ELEMENT NAME %s\n", name);
 	this->name = name;
 	return this;
 }
@@ -733,6 +735,10 @@ ParsingElement* Word_new(const char* word) {
 	return this;
 }
 
+const char* Word_word(ParsingElement* this) {
+	return ((WordConfig*)this->config)->word;
+}
+
 // TODO: Implement Word_free and regfree
 void Word_free(ParsingElement* this) {
 	TRACE("Word_free: %p", this)
@@ -754,12 +760,21 @@ Match* Word_recognize(ParsingElement* this, ParsingContext* context) {
 		ASSERT(config->length > 0, "Word: %s configuration length == 0", config->word)
 		context->iterator->move(context->iterator, config->length);
 		LOG_IF(context->grammar->isVerbose, "Moving iterator from %zd to %zd", offset, context->iterator->offset);
-		LOG_IF(context->grammar->isVerbose, "[✓] %s:%s matched %zd-%zd", this->name, ((WordConfig*)this->config)->word, context->iterator->offset - config->length, context->iterator->offset);
+		LOG_IF(context->grammar->isVerbose, "[✓] Word %s:`%s` matched %zd-%zd", this->name, ((WordConfig*)this->config)->word, context->iterator->offset - config->length, context->iterator->offset);
 		return success;
 	} else {
 		LOG_IF(context->grammar->isVerbose, "    %s:%s failed at %zd", this->name, ((WordConfig*)this->config)->word, context->iterator->offset);
 		return MATCH_STATS(FAILURE);
 	}
+}
+
+const char* WordMatch_group(Match* match) {
+	return ((WordConfig*)((ParsingElement*)match->element)->config)->word;
+}
+
+void Word_print(ParsingElement* this) {
+	WordConfig* config = (WordConfig*)this->config;
+	printf("Word:%c:%s#%d<%s>\n", this->type, this->name != NULL ? this->name : ANONYMOUS, this->id, config->word);
 }
 
 // ----------------------------------------------------------------------------
@@ -774,7 +789,8 @@ ParsingElement* Token_new(const char* expr) {
 	this->type           = TYPE_TOKEN;
 	this->recognize      = Token_recognize;
 	this->freeMatch      = TokenMatch_free;
-	config->expr   = expr;
+	config->expr         = expr;
+	printf("Creating new token:prep:%s\n", expr);
 #ifdef WITH_PCRE
 	const char* pcre_error;
 	int         pcre_error_offset = -1;
@@ -793,8 +809,15 @@ ParsingElement* Token_new(const char* expr) {
 		return NULL;
 	}
 #endif
+	printf("Creating new token:done:%s\n", config->expr);
 	this->config = config;
+	assert(config->expr == expr);
+	assert(Token_expr(this) == expr);
 	return this;
+}
+
+const char* Token_expr(ParsingElement* this) {
+	return ((TokenConfig*)this->config)->expr;
 }
 
 void Token_free(ParsingElement* this) {
@@ -856,7 +879,7 @@ Match* Token_recognize(ParsingElement* this, ParsingContext* context) {
 		}
 		// FIXME: Make sure it is the length and not the end offset
 		result           = Match_Success(vector[1], this, context);
-		LOG_IF(context->grammar->isVerbose, "[✓] %s:%s matched %zd-%zd", this->name, config->expr, context->iterator->offset, context->iterator->offset + result->length);
+		LOG_IF(context->grammar->isVerbose, "[✓] Token %s:`%s` matched %zd-%zd", this->name, config->expr, context->iterator->offset, context->iterator->offset + result->length);
 
 		// We create the token match
 		__ALLOC(TokenMatch, data);
@@ -880,9 +903,6 @@ Match* Token_recognize(ParsingElement* this, ParsingContext* context) {
 	return MATCH_STATS(result);
 }
 
-const char* WordMatch_group(Match* match) {
-	return ((WordConfig*)((ParsingElement*)match->element)->config)->word;
-}
 
 const char* TokenMatch_group(Match* match, int index) {
 	assert (match                != NULL);
@@ -903,6 +923,12 @@ int TokenMatch_count(Match* match) {
 	TokenMatch* m = (TokenMatch*)match->data;
 	return m->count;
 }
+
+void Token_print(ParsingElement* this) {
+	TokenConfig* config = (TokenConfig*)this->config;
+	printf("Token:%c:%s#%d<%s>\n", this->type, this->name != NULL ? this->name : ANONYMOUS, this->id, config->expr);
+}
+
 
 void TokenMatch_free(Match* match) {
 	TRACE("TokenMatch_free: %p", match)
@@ -1033,8 +1059,8 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 		// We increment the step counter, used for debugging as well.
 		step++;
 	}
-	LOG_IF( context->grammar->isVerbose && offset != context->iterator->offset && strcmp(this->name, "_") != 0 && !Match_isSuccess(result), "[!] %s#%d(%s) failed at %zd", this->name, step, step_name == NULL ? "-" : step_name, context->iterator->offset)
-	LOG_IF( context->grammar->isVerbose && strcmp(this->name, "_") != 0 &&  Match_isSuccess(result), "[✓] %s[%d] matched %zd-%zd", this->name, step, context->iterator->offset - result->length, context->iterator->offset)
+	LOG_IF( context->grammar->isVerbose && offset != context->iterator->offset && strcmp(this->name, "_") != 0 && !Match_isSuccess(result), "[!] %s#%d(%s) failed at %zd-%zd", this->name, step, step_name == NULL ? "-" : step_name, offset, context->iterator->offset)
+	LOG_IF( context->grammar->isVerbose && strcmp(this->name, "_") != 0 &&  Match_isSuccess(result), "[✓] Rule %s[%d] matched %zd-%zd[%zd]", this->name, step, offset, context->iterator->offset, result->length)
 	if (!Match_isSuccess(result)) {
 		// If we had a failure, then we backtrack the iterator
 		if (offset != context->iterator->offset) {

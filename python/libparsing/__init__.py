@@ -6,8 +6,10 @@
 # License           : BSD License
 # -----------------------------------------------------------------------------
 # Creation date     : 2016-01-21
-# Last modification : 2016-01-28
+# Last modification : 2016-02-02
 # -----------------------------------------------------------------------------
+
+from __future__ import print_function
 
 VERSION = "0.0.0"
 LICENSE = "http://ffctn.com/doc/licenses/bsd"
@@ -89,6 +91,11 @@ class C:
 	# should probably be moved in the init.
 
 	@classmethod
+	def String( cls, value ):
+		"""Ensures that the given value is a CString"""
+		return value.encode("utf-8") if isinstance(value, str) else value
+
+	@classmethod
 	def Unwrap( cls, value ):
 		# CObjectWrapper might be garbage collected at this time
 		if CObjectWrapper and isinstance(value, CObjectWrapper):
@@ -96,8 +103,8 @@ class C:
 		if not CObjectWrapper and hasattr( value, "_wrapped"):
 			return value._wrapped
 		if isinstance(value, str):
-			# NOTE: Required by Python3
-			return value.encode("utf-8")
+			print ("UNWRAPPING", (value, cls.String(value)))
+			return cls.String(value)
 		else:
 			return value
 
@@ -247,6 +254,9 @@ class CLibrary:
 	class Symbols(object):
 		def __init__(self, d=None):
 			self.__dict__ = d or {}
+		def __iter__( self ):
+			for v in self.__dict__.values():
+				yield v
 
 	@classmethod
 	def Find( cls, name ):
@@ -326,6 +336,7 @@ class CObjectWrapper(object):
 	WRAPPED   = None
 	FUNCTIONS = None
 	LIBRARY   = None
+	ACCESSORS = None
 
 	@classmethod
 	def GetFunctions( cls ):
@@ -341,9 +352,13 @@ class CObjectWrapper(object):
 	def BindFields( cls ):
 		"""Binds the fields in this wrapped object."""
 		if cls.WRAPPED:
+			cls.ACCESSORS = {}
 			for name, type in cls.WRAPPED._fields_:
 				accessor = cls._CreateAccessor(name, type)
-				setattr(cls, name, accessor)
+				assert name not in cls.ACCESSORS, "Accessor registered twice: {0}".format(name)
+				cls.ACCESSORS[name] = accessor
+				if not hasattr(cls, name):
+					setattr(cls, name, accessor)
 
 	@classmethod
 	def _CreateAccessor( cls, name, type ):
@@ -382,9 +397,9 @@ class CObjectWrapper(object):
 		def function(cls, *args):
 			# We unwrap the arguments, meaning that the arguments are now
 			# pure C types values
-			print ("F: ", proto[0], args, ":", ctypesFunction.argtypes, "→", ctypesFunction.restype)
-			args = [cls.LIBRARY.unwrap(_) for _ in args]
-			res  = ctypesFunction(*args)
+			u_args = [cls.LIBRARY.unwrap(_) for _ in args]
+			print ("F: ", proto[0], args, "→", u_args, ":", ctypesFunction.argtypes, "→", ctypesFunction.restype)
+			res  = ctypesFunction(*u_args)
 			if not is_constructor:
 				# Non-constructors must wrap the result
 				res  = cls.LIBRARY.wrap(res)
@@ -529,6 +544,14 @@ class TWordConfig(ctypes.Structure):
 	size_t      length;
 	"""
 
+class TTokenConfig(ctypes.Structure):
+
+	STRUCTURE = """
+	const char* expr;
+	void*       regexp;
+	void*       extra;
+	"""
+
 class TReference(ctypes.Structure):
 
 	STRUCTURE = """
@@ -667,6 +690,16 @@ class ParsingElement(CObjectWrapper):
 		else:
 			raise ValueError
 
+	@property
+	def name( self ):
+		return self._wrapped.contents.name
+
+	@name.setter
+	def name( self, value ):
+		self._name = C.Unwrap(value)
+		self._wrapped.contents.name = self._name
+		return self
+
 	def _as( self, name ):
 		"""Returns a new Reference wrapping this parsing element."""
 		ref = Reference(element=self, name=name)
@@ -750,20 +783,29 @@ class Word(ParsingElement):
 	FUNCTIONS = """
 	ParsingElement* Word_new(const char* word);
 	void Word_free(ParsingElement* this);
+	void Word_print(ParsingElement* this); // @as _print
+	const char* Word_word(ParsingElement* this);  // @as _getWord
 	"""
 
 	def _new( self, word ):
-		ParsingElement._new(self, word.encode("utf-8"))
+		self.word = C.String(word)
+		ParsingElement._new(self, word)
 
 class Token(ParsingElement):
 
 	FUNCTIONS = """
 	ParsingElement* Token_new(const char* expr);
 	void Token_free(ParsingElement* this);
+	void Token_print(ParsingElement* this); // @as _print
+	const char* Token_expr(ParsingElement* this);  // @as _getExpr
 	"""
 
 	def _new( self, expr ):
-		ParsingElement._new(self, expr.encode("utf-8"))
+		self.expr = C.String(expr)
+		print ("NEW TOKEN", self.expr)
+		ParsingElement._new(self, self.expr)
+		assert self._getExpr() == self.expr
+		print ("EXPR", self._getExpr())
 
 class Condition(ParsingElement):
 	FUNCTIONS = """
@@ -1189,6 +1231,8 @@ class Grammar(CObjectWrapper):
 			return element
 		def named_creator( self, name, *args, **kwargs ):
 			element = c(*args, **kwargs)
+			# NOTE: This was causing some problems before as it was
+			# overriding the field
 			element.name = name
 			# The element will be freed by the grammar when its
 			# reference will be lost
@@ -1244,7 +1288,7 @@ class Processor(object):
 		symbol itself."""
 		grammar.prepare()
 		for name, symbol in grammar._symbols.items():
-			print ("SYMBOL#{0:4d}={1}".format(symbol.id, name))
+			# print ("SYMBOL#{0:4d}={1}".format(symbol.id, name))
 			if symbol.id < 0:
 				logging.warn("Unused symbol: %s" % (repr(symbol)))
 				continue
@@ -1296,9 +1340,9 @@ class Processor(object):
 		if handler:
 			# A handler was found, so we apply it to the match. The handler
 			# returns a value that should be assigned to the match
-			print ("process[H]: applying handler", handler, "TO", match)
+			# print ("process[H]: applying handler", handler, "TO", match)
 			result = self._applyHandler( handler, match )
-			print ("processed[H]: {0}#{1} : {2} --> {3}".format(match.__class__.__name__, match.name, repr(match.value), repr(result)))
+			# print ("processed[H]: {0}#{1} : {2} --> {3}".format(match.__class__.__name__, match.name, repr(match.value), repr(result)))
 			if result is not None:
 				match.value = result
 			return result or match.value
@@ -1313,7 +1357,7 @@ class Processor(object):
 			result = match.value = [self._processReferenceMatch(_) for _ in match.children()]
 		else:
 			result = match.value
-		print ("processed[*]: {0}#{1} : {2} --> {3}".format(match.__class__.__name__, match.name, repr(match.value), repr(result)))
+		# print ("processed[*]: {0}#{1} : {2} --> {3}".format(match.__class__.__name__, match.name, repr(match.value), repr(result)))
 		return result
 
 	def _processReferenceMatch( self, match ):
@@ -1323,7 +1367,7 @@ class Processor(object):
 			result = self.process(match.child)
 		else:
 			result  = [self.process(_) for _ in match.children()]
-		print ("_processReferenceMatch: {0}[{1}]#{2}({3}) : {4} -> {5}".format(match.__class__.__name__, match.element.type, match.element.name, match.cardinality, repr(match.value), repr(result)))
+		# print ("_processReferenceMatch: {0}[{1}]#{2}({3}) : {4} -> {5}".format(match.__class__.__name__, match.element.type, match.element.name, match.cardinality, repr(match.value), repr(result)))
 		match.value = result
 		return result
 
@@ -1345,7 +1389,7 @@ class Processor(object):
 		try:
 			value  = match.value
 			result = handler(match, **kwargs)
-			print ("_applyHandler: {0}#{1} : {2} --> {3}".format(match.__class__.__name__, match.name, repr(value), repr(result)))
+			# print ("_applyHandler: {0}#{1} : {2} --> {3}".format(match.__class__.__name__, match.name, repr(value), repr(result)))
 			match.result = result
 			return result
 		except TypeError as e:
@@ -1411,6 +1455,7 @@ C.Register(
 	TReference,
 	TWordConfig,
 	TTokenMatch,
+	TTokenConfig,
 	TMatch,
 	TIterator,
 	TParsingContext,

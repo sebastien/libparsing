@@ -832,6 +832,14 @@ Match*          Word_recognize(ParsingElement* this, ParsingContext* context);
 ```
 
 
+#### <a name="Word_word_method"><span class="classifier">method</span> `Word_word`</a>
+
+
+```c
+const char* Word_word(ParsingElement* this);
+```
+
+
 #### <a name="WordMatch_group_method"><span class="classifier">method</span> `WordMatch_group`</a>
 
 
@@ -897,6 +905,14 @@ void Token_free(ParsingElement*);
 
 ```c
 Match*          Token_recognize(ParsingElement* this, ParsingContext* context);
+```
+
+
+#### <a name="Token_expr_method"><span class="classifier">method</span> `Token_expr`</a>
+
+
+```c
+const char* Token_expr(ParsingElement* this);
 ```
 
 
