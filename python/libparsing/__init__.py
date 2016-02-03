@@ -1355,8 +1355,13 @@ class Grammar(CObjectWrapper):
 		setattr(cls, name,       named_creator)
 		setattr(cls, "a" + name, anonymous_creator)
 
-	def _new( self, isVerbose=False, axiom=None ):
+	def _init( self ):
+		assert "name" not in self.ACCESSORS
+		self.name = None
+
+	def _new( self, name=None, isVerbose=False, axiom=None ):
 		CObjectWrapper._new(self)
+		self.name      = name
 		self.isVerbose = isVerbose and 1 or 0
 		self.axiom     = axiom
 		self.symbols   = CLibrary.Symbols()
