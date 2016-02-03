@@ -222,35 +222,43 @@ size_t FileInput_preload( Iterator* this ) {
 	FileInput*   input         = (FileInput*)this->input;
 	size_t       read          = this->current   - this->buffer;
 	size_t       left          = this->available - read;
+	size_t       until_eob     = this->capacity  - read;
 	DEBUG("FileInput_preload: %zd read, %zd available/%zd buffer capacity [%c]", read, this->available, this->capacity, this->status);
 	assert (read >= 0);
 	assert (left >= 0);
-	assert (left  < this->capacity);
-	// Do we have less left than the buffer ahead?
-	if ( left < ITERATOR_BUFFER_AHEAD && this->status != STATUS_INPUT_ENDED) {
+	assert (left < this->capacity);
+	// Do the number of bytes up until the end of the buffer is less than
+	// ITERATOR_BUFFER_AHEAD, then we need to expand the the buffer and make
+	// sure we have ITERATOR_BUFFER_AHEAD data, unless we reach the end of the
+	// input stream.
+	if ( (this->available == 0 || until_eob < ITERATOR_BUFFER_AHEAD) && this->status != STATUS_INPUT_ENDED) {
 		// We move buffer[current:] to the begining of the buffer
 		// FIXME: We should make sure we don't call preload each time
 		// memmove((void*)this->buffer, (void*)this->current, left);
-		size_t delta  = this->current - this->buffer;
+		size_t delta    = this->current - this->buffer;
+		// We want to grow the buffer size by ITERATOR_BUFFER_AHEAD
 		this->capacity += ITERATOR_BUFFER_AHEAD;
+		// This assertion is a bit weird, but it does not hurt
 		assert(this->capacity + 1 > 0);
 		DEBUG("<<< FileInput: growing buffer to %zd", this->capacity + 1)
-		// FIXME: Not sure that realloc is a good idea
-		this->buffer  = realloc((void*)this->buffer, this->capacity + 1);
+		// FIXME: Not sure that realloc is a good idea, as any previous pointer
+		// to the buffer would change...
+		this->buffer= realloc((void*)this->buffer, this->capacity + 1);
 		assert(this->buffer != NULL);
+		// We need to update the current pointer as the buffer has changed
 		this->current = this->buffer + delta;
 		// We make sure we add a trailing \0 to the buffer
 		this->buffer[this->capacity] = '\0';
 		// We want to read as much as possible so that we fill the buffer
 		size_t to_read         = this->capacity - left;
-		size_t read            = fread((void*)this->buffer + this->available, sizeof(char), to_read, input->file);
+		size_t read            = fread((void*)this->buffer + this->available, sizeof(iterated_t), to_read, input->file);
 		this->available        += read;
 		left                   += read;
 		DEBUG("<<< FileInput: read %zd bytes from input, available %zd, remaining %zd", read, this->available, Iterator_remaining(this));
 		assert(Iterator_remaining(this) == left);
 		assert(Iterator_remaining(this) >= read);
 		if (read == 0) {
-			// DEBUG("FileInput_preload: End of file reached with %zd bytes available", this->available);
+			 DEBUG("FileInput_preload: End of file reached with %zd bytes available", this->available);
 			this->status = STATUS_INPUT_ENDED;
 		}
 	}
@@ -650,18 +658,22 @@ Match* Reference_recognize(Reference* this, ParsingContext* context) {
 	Match* match;
 	int    count    = 0;
 	int    offset   = context->iterator->offset;
-	while (Iterator_hasMore(context->iterator)) {
-		ASSERT(this->element->recognize, "Reference_recognize: Element %s has no recognize callback", this->element->name);
+	// If the wrapped element is a procedure, then the cardinality can only be one or optional, as a procedure does
+	// not consume input.
+	assert(this->element->type != TYPE_PROCEDURE || this->cardinality == CARDINALITY_ONE || this->cardinality == CARDINALITY_OPTIONAL );
+	while (Iterator_hasMore(context->iterator) || this->element->type == TYPE_PROCEDURE) {
+		ASSERT(this->element->recognize, "Reference_recognize: Element '%s' has no recognize callback", this->element->name);
 		// We ask the element to recognize the current iterator's position
 		match = this->element->recognize(this->element, context);
 		if (Match_isSuccess(match)) {
-			DEBUG("Reference_recognize: matched %s at %zd-%zd", this->element->name, context->iterator->offset - match->length, context->iterator->offset);
+			DEBUG("Reference_recognize: matched '%s' at %zd-%zd", this->element->name, context->iterator->offset - match->length, context->iterator->offset);
 			if (count == 0) {
 				// If it's the first match and we're in a ONE/OPTIONAL reference, we break
 				// the loop.
 				result = match;
 				head   = result;
 				if (this->cardinality == CARDINALITY_ONE || this->cardinality == CARDINALITY_OPTIONAL) {
+					count += 1;
 					break;
 				}
 			} else {
@@ -671,11 +683,11 @@ Match* Reference_recognize(Reference* this, ParsingContext* context) {
 			}
 			count++;
 		} else {
-			DEBUG("Reference_recognize: Failed %s at %zd", this->element->name, context->iterator->offset);
+			DEBUG("Reference_recognize: failed '%s' at %zd", this->element->name, context->iterator->offset);
 			break;
 		}
 	}
-	DEBUG("Reference_recognize: Count %s at %d", this->element->name, count);
+	DEBUG("Reference_recognize: matched '%s' %d times out of %c", this->element->name, count, this->cardinality);
 	// Depending on the cardinality, we might return FAILURE, or not
 	switch (this->cardinality) {
 		case CARDINALITY_ONE:
@@ -1093,6 +1105,7 @@ Match*  Procedure_recognize(ParsingElement* this, ParsingContext* context) {
 	if (this->config != NULL) {
 		((ProcedureCallback)(this->config))(this, context);
 	}
+	LOG_IF( context->grammar->isVerbose && strcmp(this->name, "_") != 0, "[✓] Procedure %s#%d executed at %zd", this->name, this->id, context->iterator->offset)
 	return MATCH_STATS(Match_Success(0, this, context));
 }
 
