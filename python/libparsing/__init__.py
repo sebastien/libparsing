@@ -1234,12 +1234,13 @@ class ParsingResult(CObjectWrapper):
 
 	WRAPPED   = TParsingResult
 	FUNCTIONS = """
-	void  ParsingResult_free(ParsingResult* this);
-	bool  ParsingResult_isFailure(ParsingResult* this);
-	bool  ParsingResult_isPartial(ParsingResult* this);
-	bool  ParsingResult_isSuccess(ParsingResult* this);
-	bool  ParsingResult_isComplete(ParsingResult* this);
-	int   ParsingResult_textOffset(ParsingResult* this); // @as _textOffset
+	void   ParsingResult_free(ParsingResult* this);
+	bool   ParsingResult_isFailure(ParsingResult* this);  // @as _isFailure
+	bool   ParsingResult_isPartial(ParsingResult* this);  // @as _isPartial
+	bool   ParsingResult_isSuccess(ParsingResult* this);  // @as _isSuccess
+	bool   ParsingResult_isComplete(ParsingResult* this); // @as _isComplete
+	int    ParsingResult_textOffset(ParsingResult* this); // @as _textOffset
+	size_t ParsingResult_remaining(ParsingResult* this);
 	"""
 
 	@property
@@ -1257,6 +1258,18 @@ class ParsingResult(CObjectWrapper):
 	@property
 	def textOffset( self ):
 		return self._textOffset()
+
+	def isSuccess( self ):
+		return True if self._isSuccess() != 0 else False
+
+	def isFailure( self ):
+		return True if self._isFailure() != 0 else False
+
+	def isComplete( self ):
+		return True if self._isComplete() != 0 else False
+
+	def isPartial( self ):
+		return True if self._isPartial() != 0 else False
 
 	def lastMatchRange( self ):
 		o = self.context.stats.contents.matchOffset
@@ -1474,8 +1487,11 @@ class Processor(object):
 		# We only bind the arguments listed
 		fcode    = handler.func_code
 		argnames = fcode.co_varnames[0:fcode.co_argcount]
-		assert argnames[0] == "self"
-		assert argnames[1] == "match"
+		# We want argnames to be anything after (self, match, ...) or (match, ...)
+		if argnames[0] == "self":
+			argnames = argnames[2:]
+		else:
+			argnames = argnames[1:]
 		# We skip self and match, which are required
 		kwargs   = dict((_,None) for _ in argnames if _ not in ("self", "match"))
 		for m in match.children():

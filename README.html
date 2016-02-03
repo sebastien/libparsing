@@ -758,6 +758,14 @@ make install               # You can set PREFIX</code></pre>
 <div id="method-parsingresult_text" class="section level4">
 <h4><a name="ParsingResult_text_method"><span class="classifier">method</span> <code>ParsingResult_text</code></a></h4>
 <pre class="sourceCode c"><code class="sourceCode c">iterated_t* ParsingResult_text(ParsingResult* this);</code></pre>
+</div>
+<div id="method-parsingresult_textoffset" class="section level4">
+<h4><a name="ParsingResult_textOffset_method"><span class="classifier">method</span> <code>ParsingResult_textOffset</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="dt">int</span> ParsingResult_textOffset(ParsingResult* this);</code></pre>
+</div>
+<div id="method-parsingresult_remaining" class="section level4">
+<h4><a name="ParsingResult_remaining_method"><span class="classifier">method</span> <code>ParsingResult_remaining</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c">size_t ParsingResult_remaining(ParsingResult* this);</code></pre>
 <p>The result of <em>recognizing</em> parsing elements at given offsets within the input stream is stored in <code>ParsingOffset</code>. Each parsing offset is a stack of <code>ParsingStep</code>, corresponding to successive attempts at matching parsing elements at the current position.</p>
 <p>The parsing offset is a stack of parsing steps, where the tail is the most specific parsing step. By following the tail's previous parsing step, you can unwind the stack.</p>
 <p>The parsing steps each have an offset within the iterated stream. Offsets where data has been fully extracted (ie, a leaf parsing element has matched and processing returned a NOTHING) can be freed as they are not necessary any more.</p>

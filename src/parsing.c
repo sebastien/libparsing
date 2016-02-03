@@ -105,7 +105,7 @@ bool Iterator_open( Iterator* this, const char *path ) {
 
 bool Iterator_hasMore( Iterator* this ) {
 	size_t remaining = Iterator_remaining(this);
-	DEBUG("Iterator_hasMore: %zd, offset=%zd available=%zd capacity=%zd ", remaining, this->offset, this->available, this->capacity)
+	// DEBUG("Iterator_hasMore: %zd, offset=%zd available=%zd capacity=%zd ", remaining, this->offset, this->available, this->capacity)
 	// NOTE: This used to be STATUS_ENDED, but I changed it to the actual.
 	return remaining > 0;
 }
@@ -115,7 +115,7 @@ size_t Iterator_remaining( Iterator* this ) {
 	// FIXME: Does not work if iterated_t is not the same as char
 	int remaining = this->available - buffer_offset;
 	assert(remaining >= 0);
-	DEBUG("Iterator_remaining: %zd, offset=%zd available=%zd capacity=%zd", remaining, this->offset, this->available, this->capacity)
+	//DEBUG("Iterator_remaining: %d, offset=%zd available=%zd capacity=%zd", remaining, this->offset, this->available, this->capacity)
 	return (size_t)remaining;
 }
 
@@ -367,7 +367,7 @@ Match* Match_Success(size_t length, Element* element, ParsingContext* context) {
 
 Match* Match_new(void) {
 	__ALLOC(Match,this);
-	DEBUG("Allocating match: %p", this);
+	// DEBUG("Allocating match: %p", this);
 	this->status    = STATUS_INIT;
 	this->element   = NULL;
 	this->length    = 0;
@@ -650,19 +650,18 @@ Match* Reference_recognize(Reference* this, ParsingContext* context) {
 	Match* match;
 	int    count    = 0;
 	int    offset   = context->iterator->offset;
-	// DEBUG("Reference_recognize: %s offset %d", this->element->name, offset);
 	while (Iterator_hasMore(context->iterator)) {
 		ASSERT(this->element->recognize, "Reference_recognize: Element %s has no recognize callback", this->element->name);
 		// We ask the element to recognize the current iterator's position
 		match = this->element->recognize(this->element, context);
 		if (Match_isSuccess(match)) {
-			// DEBUG("Reference_recognize: Matched %s at %zd-%zd", this->element->name, context->iterator->offset, context->iterator->offset + match->length);
+			DEBUG("Reference_recognize: matched %s at %zd-%zd", this->element->name, context->iterator->offset - match->length, context->iterator->offset);
 			if (count == 0) {
-				// If it's the first match and we're in a ONE reference, we break
+				// If it's the first match and we're in a ONE/OPTIONAL reference, we break
 				// the loop.
 				result = match;
 				head   = result;
-				if (this->cardinality == CARDINALITY_ONE ) {
+				if (this->cardinality == CARDINALITY_ONE || this->cardinality == CARDINALITY_OPTIONAL) {
 					break;
 				}
 			} else {
@@ -672,11 +671,11 @@ Match* Reference_recognize(Reference* this, ParsingContext* context) {
 			}
 			count++;
 		} else {
-			// DEBUG("Reference_recognize: Failed %s at %zd", this->element->name, context->iterator->offset);
+			DEBUG("Reference_recognize: Failed %s at %zd", this->element->name, context->iterator->offset);
 			break;
 		}
 	}
-	// DEBUG("Reference_recognize: Count %s at %d", this->element->name, count);
+	DEBUG("Reference_recognize: Count %s at %d", this->element->name, count);
 	// Depending on the cardinality, we might return FAILURE, or not
 	switch (this->cardinality) {
 		case CARDINALITY_ONE:
@@ -1071,7 +1070,7 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 		// In case of a success, we update the length based on the last
 		// match.
 		result->length = last->offset - result->offset + last->length;
-		LOG_IF( context->grammar->isVerbose && strcmp(this->name, "_") != 0, "[✓] Rule %s[%d] matched %zd-%zd[%zd]", this->name, step, offset, context->iterator->offset, result->length)
+		LOG_IF( context->grammar->isVerbose && strcmp(this->name, "_") != 0, "[✓] Rule %s[%d] matched %zd-%zd(%zdb)", this->name, step, offset, context->iterator->offset, result->length)
 	}
 	return MATCH_STATS(result);
 }
@@ -1276,7 +1275,7 @@ ParsingResult* ParsingResult_new(Match* match, ParsingContext* context) {
 			LOG_IF(context->grammar->isVerbose, "Partial success, parsed %zd bytes, %zd remaining", context->iterator->offset, Iterator_remaining(context->iterator));
 			this->status = STATUS_PARTIAL;
 		} else {
-			LOG_IF(context->grammar->isVerbose, "Succeeded, iterator at %zd, parsed %zd bytes", context->iterator->offset, context->stats->bytesRead);
+			LOG_IF(context->grammar->isVerbose, "Succeeded, iterator at %zd, parsed %zd bytes, %zd remaining", context->iterator->offset, context->stats->bytesRead, Iterator_remaining(context->iterator));
 			this->status = STATUS_SUCCESS;
 		}
 	} else {
@@ -1305,6 +1304,10 @@ bool ParsingResult_isSuccess(ParsingResult* this) {
 
 iterated_t* ParsingResult_text(ParsingResult* this) {
 	return this->context->iterator->buffer;
+}
+
+size_t ParsingResult_remaining(ParsingResult* this) {
+	return Iterator_remaining(this->context->iterator);
 }
 
 int ParsingResult_textOffset(ParsingResult* this) {

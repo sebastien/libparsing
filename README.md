@@ -1365,6 +1365,22 @@ iterated_t* ParsingResult_text(ParsingResult* this);
 ```
 
 
+#### <a name="ParsingResult_textOffset_method"><span class="classifier">method</span> `ParsingResult_textOffset`</a>
+
+
+```c
+int ParsingResult_textOffset(ParsingResult* this);
+```
+
+
+#### <a name="ParsingResult_remaining_method"><span class="classifier">method</span> `ParsingResult_remaining`</a>
+
+
+```c
+size_t ParsingResult_remaining(ParsingResult* this);
+```
+
+
 The result of _recognizing_ parsing elements at given offsets within the
 input stream is stored in `ParsingOffset`. Each parsing offset is a stack
 of `ParsingStep`, corresponding to successive attempts at matching

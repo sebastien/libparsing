@@ -1,4 +1,5 @@
 from libparsing import *
+import unittest
 
 # -----------------------------------------------------------------------------
 #
@@ -6,10 +7,7 @@ from libparsing import *
 #
 # -----------------------------------------------------------------------------
 
-import unittest
-
-class TestCollection(unittest.TestCase):
-#class TestCollection:
+class TestCollection:#(unittest.TestCase):
 
 	def testCTypesBehaviour( self ):
 		"""A few assertions about what to expect from CTypes."""
@@ -259,6 +257,40 @@ class TestCollection(unittest.TestCase):
 
 		res = p.process(r)
 		self.assertEquals(res, ("+", ("N", 1), ("N", 10)))
+
+# -----------------------------------------------------------------------------
+#
+# TEST ELEMENTS
+#
+# -----------------------------------------------------------------------------
+
+class TestElements(unittest.TestCase):
+
+
+	def testReferenceOptional( self ):
+		g = Grammar(isVerbose=True)
+		s = g.symbols
+		g.word("A", "a")
+		g.word("B", "b")
+		# We create a na optional rule
+		g.rule("Statement", s.A, s.B.optional())
+		# Make sure that the cardinality is set
+		self.assertEquals(s.Statement[1].cardinality, CARDINALITY_OPTIONAL)
+		g.axiom = s.Statement
+		# a -- must be complete
+		# r = g.parseString("a")
+		# self.assertTrue(r.isSuccess())
+		# self.assertTrue(r.isComplete())
+		# # ab -- must be complete
+		# r = g.parseString("ab")
+		# self.assertTrue(r.isSuccess())
+		# self.assertTrue(r.isComplete())
+		# abb -- must be partial
+		r = g.parseString("abb")
+		self.assertEquals(r.offset, 2)
+		self.assertTrue(r.isSuccess())
+		self.assertFalse(r.isComplete())
+
 
 if __name__ == "__main__":
 	unittest.main()

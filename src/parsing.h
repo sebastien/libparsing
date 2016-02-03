@@ -788,6 +788,12 @@ bool ParsingResult_isComplete(ParsingResult* this);
 // @method
 iterated_t* ParsingResult_text(ParsingResult* this);
 
+// @method
+int ParsingResult_textOffset(ParsingResult* this);
+
+// @method
+size_t ParsingResult_remaining(ParsingResult* this);
+
 /*
  * The result of _recognizing_ parsing elements at given offsets within the
  * input stream is stored in `ParsingOffset`. Each parsing offset is a stack
