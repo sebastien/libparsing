@@ -14,7 +14,7 @@ from __future__ import print_function
 VERSION = "0.0.0"
 LICENSE = "http://ffctn.com/doc/licenses/bsd"
 
-import ctypes, os, re, sys, traceback
+import ctypes, os, re, sys, linecache, traceback
 
 try:
 	import reporter as logging
@@ -1377,6 +1377,17 @@ class Grammar(CObjectWrapper):
 #
 # -----------------------------------------------------------------------------
 
+class HandlerException(Exception):
+
+	def __init__( self, exception, args, handler, context):
+		self.exception = exception
+		self.args      = args
+		self.handler   = handler
+		self.context   = context
+
+	def __str__( self ):
+		return "{0}: {1} in {2} with {3}".format(self.__class__.__name__, self.exception, self.handler, self.args)
+
 class Processor(object):
 	"""The main entry point when using `libparsing` form Python. Subclass
 	the processor and define parsing element handlers using the convention
@@ -1387,6 +1398,8 @@ class Processor(object):
 	as first argument as well as the named elements defined in the symbol,
 	if it is a composite symbol (rule, group, etc). The named elements
 	are the ones you declare using `_as`."""
+
+
 
 	def __init__( self, grammar ):
 		assert isinstance(grammar, Grammar)
@@ -1510,11 +1523,13 @@ class Processor(object):
 			# print ("_applyHandler: {0}#{1} : {2} --> {3}".format(match.__class__.__name__, match.name, repr(value), repr(result)))
 			match.result = result
 			return result
-		except TypeError as e:
-			args = ["match"] + list(kwargs.keys())
-			raise Exception(str(e) + " -- arguments of {2}: {0}, given {1}".format(",".join([str(_) for _ in args]), kwargs, handler))
+		except HandlerException as e:
+			raise e
 		except Exception as e:
-			raise e.__class__("in {2}({3}): {4}".format(e.__class__.__name__, self.__class__.__name__, handler, match, e))
+			args = ["match"] + list(kwargs.keys())
+			exc_type, exc_obj, tb = sys.exc_info()
+			context = traceback.format_exc().splitlines()
+			raise HandlerException(e, kwargs, handler, context)
 
 # -----------------------------------------------------------------------------
 #
