@@ -6,12 +6,12 @@
 # License           : BSD License
 # -----------------------------------------------------------------------------
 # Creation date     : 2016-01-21
-# Last modification : 2016-02-02
+# Last modification : 2016-02-05
 # -----------------------------------------------------------------------------
 
 from __future__ import print_function
 
-VERSION = "0.0.0"
+VERSION = "0.7.2"
 LICENSE = "http://ffctn.com/doc/licenses/bsd"
 
 import ctypes, os, re, sys, linecache, traceback
@@ -1064,6 +1064,10 @@ class Match(CObjectWrapper):
 		"""A utility shorthand to know if a match is a reference."""
 		return self.getType() == TYPE_REFERENCE
 
+	def text( self ):
+		s,e = self.range()
+		return self.context.text()[s:e]
+
 	def __repr__( self ):
 		element = ctypes.cast(self._wrapped.contents.element, C.TYPES["ParsingElement*"]).contents
 		return "<{0}:{1}#{2}({3}):{4}+{5}>".format(self.__class__.__name__, element.type, element.id, element.name, self.offset, self.length)
@@ -1076,7 +1080,7 @@ class CompositeMatch(Match):
 	def children( self ):
 		"""Iterates throught the children of this composite match."""
 		child = self.child
-		while child:
+		while child is not None:
 			assert isinstance(child, Match)
 			yield child
 			child = child.next
@@ -1108,9 +1112,6 @@ class CompositeMatch(Match):
 		else:
 			return self.getChild(index)
 
-	def __len__( self ):
-		return len(list(self.children()))
-
 class ReferenceMatch(CompositeMatch):
 
 	@property
@@ -1135,12 +1136,14 @@ class ReferenceMatch(CompositeMatch):
 
 	def _value( self ):
 		if self.isOne() or self.isOptional():
-			return self.child.value
+			return self.child.value if self.child is not None else None
 		else:
 			return [_.value for _ in self.children()]
 
 	def group( self, index=0 ):
-		if self.isOne():
+		if self.child is None:
+			return None
+		elif self.isOne():
 			return self.child.group(0)
 		else:
 			return self.getChild(index).group()
@@ -1204,10 +1207,16 @@ class TokenMatch(Match):
 
 class ProcedureMatch(Match):
 
+	def group( self, index=0):
+		return True
+
 	def _value( self ):
 		return True
 
 class ConditionMatch(Match):
+
+	def group( self, index=0):
+		return True
 
 	def _value( self ):
 		return True
@@ -1223,6 +1232,19 @@ class GroupMatch(CompositeMatch):
 		c = list(self.children())
 		assert len(c) <= 1
 		return c[0].value
+
+# -----------------------------------------------------------------------------
+#
+# PARSING CONTEXT
+#
+# -----------------------------------------------------------------------------
+
+class ParsingContext(CObjectWrapper):
+
+	WRAPPED   = TParsingContext
+	FUNCTIONS = """
+	char*  ParsingContext_text(ParsingContext* this);
+	"""
 
 # -----------------------------------------------------------------------------
 #
@@ -1455,6 +1477,7 @@ class Processor(object):
 		elif isinstance(match, Match):
 			return self._processParsingElementMatch(match)
 		else:
+			# Match is in that case a value that we pass as-is
 			return match
 
 	def _processParsingElementMatch( self, match ):
@@ -1516,7 +1539,7 @@ class Processor(object):
 			k = m.name
 			assert isinstance(m, ReferenceMatch)
 			if k and k in argnames:
-				kwargs[k] = self._processReferenceMatch(m)
+				kwargs[k] = self.process(m)
 		try:
 			value  = match.value
 			result = handler(match, **kwargs)
@@ -1607,6 +1630,7 @@ C_API = CLibrary(
 ).register(
 	Reference,
 	Match,
+	ParsingContext,
 	ParsingResult,
 	Grammar,
 	Word,      WordMatch,

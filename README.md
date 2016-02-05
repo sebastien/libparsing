@@ -1297,6 +1297,14 @@ ParsingContext* ParsingContext_new( Grammar* g, Iterator* iterator );
 ```
 
 
+#### <a name="ParsingContext_text_method"><span class="classifier">method</span> `ParsingContext_text`</a>
+
+
+```c
+iterated_t* ParsingContext_text( ParsingContext* this );
+```
+
+
 #### <a name="ParsingContext_free_destructor"><span class="classifier">destructor</span> `ParsingContext_free`</a>
 
 
