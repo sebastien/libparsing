@@ -666,7 +666,7 @@ Match* Reference_recognize(Reference* this, ParsingContext* context) {
 		// We ask the element to recognize the current iterator's position
 		match = this->element->recognize(this->element, context);
 		if (Match_isSuccess(match)) {
-			DEBUG("Reference_recognize: matched '%s' at %zd-%zd", this->element->name, context->iterator->offset - match->length, context->iterator->offset);
+			DEBUG("        Reference %s#%d@%s matched at %zd-%zd", this->element->name, this->element->id, this->name, context->iterator->offset - match->length, context->iterator->offset);
 			if (count == 0) {
 				// If it's the first match and we're in a ONE/OPTIONAL reference, we break
 				// the loop.
@@ -683,11 +683,11 @@ Match* Reference_recognize(Reference* this, ParsingContext* context) {
 			}
 			count++;
 		} else {
-			DEBUG("Reference_recognize: failed '%s' at %zd", this->element->name, context->iterator->offset);
+			DEBUG_IF(count > 0, "        Reference %s#%d@%s no more match at %zd", this->element->name, this->element->id, this->name, context->iterator->offset);
 			break;
 		}
 	}
-	DEBUG("Reference_recognize: matched '%s' %d times out of %c", this->element->name, count, this->cardinality);
+	DEBUG_IF(count > 0, "        Reference %s#%d@%s matched %d times out of %c",  this->element->name, this->element->id, this->name, count, this->cardinality);
 	// Depending on the cardinality, we might return FAILURE, or not
 	switch (this->cardinality) {
 		case CARDINALITY_ONE:
@@ -718,8 +718,10 @@ Match* Reference_recognize(Reference* this, ParsingContext* context) {
 		assert(result->element != NULL);
 		m->child        = result;
 		m->offset       = offset;
+		LOG_IF(context->grammar->isVerbose, "    [✓] Reference %s#%d@%s matched %d/%c times over %d-%d", this->element->name, this->element->id, this->name, count, this->cardinality, offset, offset+length)
 		return MATCH_STATS(m);
 	} else {
+		LOG_IF(context->grammar->isVerbose, "    [!] Reference %s#%d@%s failed %d/%c times at %d", this->element->name, this->element->id, this->name, count, this->cardinality, offset);
 		return MATCH_STATS(FAILURE);
 	}
 }
@@ -770,10 +772,10 @@ Match* Word_recognize(ParsingElement* this, ParsingContext* context) {
 		ASSERT(config->length > 0, "Word: %s configuration length == 0", config->word)
 		context->iterator->move(context->iterator, config->length);
 		LOG_IF(context->grammar->isVerbose, "Moving iterator from %zd to %zd", offset, context->iterator->offset);
-		LOG_IF(context->grammar->isVerbose, "[✓] Word %s:`%s` matched %zd-%zd", this->name, ((WordConfig*)this->config)->word, context->iterator->offset - config->length, context->iterator->offset);
+		LOG_IF(context->grammar->isVerbose, "[✓] Word %s#%d:`%s` matched %zd-%zd", this->name, this->id, ((WordConfig*)this->config)->word, context->iterator->offset - config->length, context->iterator->offset);
 		return success;
 	} else {
-		LOG_IF(context->grammar->isVerbose, "    Word %s:`%s` failed at %zd", this->name, ((WordConfig*)this->config)->word, context->iterator->offset);
+		LOG_IF(context->grammar->isVerbose, "    Word %s#%d:`%s` failed at %zd", this->name, this->id, ((WordConfig*)this->config)->word, context->iterator->offset);
 		return MATCH_STATS(FAILURE);
 	}
 }
@@ -874,7 +876,7 @@ Match* Token_recognize(ParsingElement* this, ParsingContext* context) {
 			case PCRE_ERROR_NOMEMORY     : ERROR("Token:%s Ran out of memory", config->expr);                       break;
 			default                      : ERROR("Token:%s Unknown error", config->expr);                           break;
 		};
-		LOG_IF(context->grammar->isVerbose, "    Token %s:`%s` failed at %zd", this->name, config->expr, context->iterator->offset);
+		LOG_IF(context->grammar->isVerbose, "    Token %s#%d:`%s` failed at %zd", this->name, this->id, config->expr, context->iterator->offset);
 	} else {
 		if(r == 0) {
 			ERROR("Token: %s many substrings matched\n", config->expr);
@@ -887,7 +889,7 @@ Match* Token_recognize(ParsingElement* this, ParsingContext* context) {
 		}
 		// FIXME: Make sure it is the length and not the end offset
 		result           = Match_Success(vector[1], this, context);
-		LOG_IF(context->grammar->isVerbose, "[✓] Token %s:`%s` matched %zd-%zd", this->name, config->expr, context->iterator->offset, context->iterator->offset + result->length);
+		LOG_IF(context->grammar->isVerbose, "[✓] Token %s#%d:`%s` matched %zd-%zd", this->name, this->id, config->expr, context->iterator->offset, context->iterator->offset + result->length);
 
 		// We create the token match
 		__ALLOC(TokenMatch, data);
@@ -905,6 +907,7 @@ Match* Token_recognize(ParsingElement* this, ParsingContext* context) {
 		}
 		result->data = data;
 		context->iterator->move(context->iterator,result->length);
+		assert (result->data != NULL);
 		assert(Match_isSuccess(result));
 	}
 #endif
@@ -1043,7 +1046,7 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 				// If the rule failed, we try to skip characters. We free any
 				// failure match, as we won't need it anymore.
 				Match_free(match);
-				DEBUG("Rule:%s[%d] skipped %d (%zd elements)", this->name, step, skip_count, context->iterator->offset - skip_offset);
+				DEBUG("Rule:%s#%d[%d] skipped %d (%zd elements)", this->name, this->id, step, skip_count, context->iterator->offset - skip_offset);
 				match = Reference_recognize(child, context);
 			}
 			// If we haven't matched even after the skip, then we have a failure.
@@ -1082,7 +1085,7 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 		// In case of a success, we update the length based on the last
 		// match.
 		result->length = last->offset - result->offset + last->length;
-		LOG_IF( context->grammar->isVerbose && strcmp(this->name, "_") != 0, "[✓] Rule %s[%d] matched %zd-%zd(%zdb)", this->name, step, offset, context->iterator->offset, result->length)
+		LOG_IF( context->grammar->isVerbose && strcmp(this->name, "_") != 0, "[✓] Rule %s#%d[%d] matched %zd-%zd(%zdb)", this->name, this->id, step, offset, context->iterator->offset, result->length)
 	}
 	return MATCH_STATS(result);
 }
@@ -1129,11 +1132,11 @@ Match*  Condition_recognize(ParsingElement* this, ParsingContext* context) {
 		// We support special cases where the condition can return a boolean
 		if      (result == (Match*)0) { result = FAILURE; }
 		else if (result == (Match*)1) { result = Match_Success(0, this, context);}
-		LOG_IF(context->grammar->isVerbose &&  Match_isSuccess(result), "[✓] Condition %s matched %zd-%zd", this->name, context->iterator->offset - result->length, context->iterator->offset)
-		LOG_IF(context->grammar->isVerbose && !Match_isSuccess(result), "[!] Condition %s failed at %zd",  this->name, context->iterator->offset)
+		LOG_IF(context->grammar->isVerbose &&  Match_isSuccess(result), "[✓] Condition %s#%d matched %zd-%zd", this->name, this->id, context->iterator->offset - result->length, context->iterator->offset)
+		LOG_IF(context->grammar->isVerbose && !Match_isSuccess(result), "[!] Condition %s#%d failed at %zd",  this->name, this->id, context->iterator->offset)
 		return  MATCH_STATS(result);
 	} else {
-		LOG_IF(context->grammar->isVerbose, "[✓] Condition %s matched by default at %zd", this->name, context->iterator->offset)
+		LOG_IF(context->grammar->isVerbose, "[✓] Condition %s#%d matched by default at %zd", this->name, this->id, context->iterator->offset)
 		Match* result = Match_Success(0, this, context);
 		assert(Match_isSuccess(result));
 		return  MATCH_STATS(result);
@@ -1206,6 +1209,10 @@ ParsingContext* ParsingContext_new( Grammar* g, Iterator* iterator ) {
 	return this;
 }
 
+iterated_t* ParsingContext_text( ParsingContext* this ) {
+	return this->iterator->buffer;
+}
+
 void ParsingContext_free( ParsingContext* this ) {
 	if (this!=NULL) {
 		Iterator_free(this->iterator);
@@ -1251,7 +1258,7 @@ void ParsingStats_setSymbolsCount(ParsingStats* this, size_t t) {
 
 Match* ParsingStats_registerMatch(ParsingStats* this, Element* e, Match* m) {
 	// We can convert ParsingElements to Reference and vice-versa as they
-	// have the same start sequence (cart type, int id).
+	// have the same start sequence (char type, int id).
 	Reference* r = (Reference*)e;
 	if (Match_isSuccess(m)) {
 		this->successBySymbol[r->id] += 1;

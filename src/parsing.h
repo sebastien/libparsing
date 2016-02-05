@@ -760,6 +760,9 @@ typedef struct ParsingContext {
 // @constructor
 ParsingContext* ParsingContext_new( Grammar* g, Iterator* iterator );
 
+// @method
+iterated_t* ParsingContext_text( ParsingContext* this );
+
 // @destructor
 void ParsingContext_free( ParsingContext* this );
 
