@@ -7,7 +7,7 @@ import unittest
 #
 # -----------------------------------------------------------------------------
 
-class TestCollection:#(unittest.TestCase):
+class TestCollection: #(unittest.TestCase):
 
 	def testCTypesBehaviour( self ):
 		"""A few assertions about what to expect from CTypes."""
@@ -142,7 +142,7 @@ class TestCollection:#(unittest.TestCase):
 		assert r.match.offset  == 0
 		assert r.match.length  == 2
 		assert r.match.range() == (0, 2)
-		assert len(r.match) == 2
+		assert len(r.match.children()) == 2
 		self.assertEquals([_.group() for _ in r.match], ["a", "b"])
 		# We test child 1
 		ma = r.match[0]
@@ -267,30 +267,80 @@ class TestCollection:#(unittest.TestCase):
 class TestElements(unittest.TestCase):
 
 
-	def testReferenceOptional( self ):
-		g = Grammar(isVerbose=True)
-		s = g.symbols
-		g.word("A", "a")
-		g.word("B", "b")
-		# We create a na optional rule
-		g.rule("Statement", s.A, s.B.optional())
-		# Make sure that the cardinality is set
-		self.assertEquals(s.Statement[1].cardinality, CARDINALITY_OPTIONAL)
-		g.axiom = s.Statement
-		# a -- must be complete
-		# r = g.parseString("a")
-		# self.assertTrue(r.isSuccess())
-		# self.assertTrue(r.isComplete())
-		# # ab -- must be complete
-		# r = g.parseString("ab")
-		# self.assertTrue(r.isSuccess())
-		# self.assertTrue(r.isComplete())
-		# abb -- must be partial
-		r = g.parseString("abb")
-		self.assertEquals(r.offset, 2)
-		self.assertTrue(r.isSuccess())
-		self.assertFalse(r.isComplete())
+	# def testReferenceOptional( self ):
+	# 	g = Grammar(isVerbose=True)
+	# 	s = g.symbols
+	# 	g.word("A", "a")
+	# 	g.word("B", "b")
+	# 	# We create a na optional rule
+	# 	g.rule("Statement", s.A, s.B.optional())
+	# 	# Make sure that the cardinality is set
+	# 	self.assertEquals(s.Statement[1].cardinality, CARDINALITY_OPTIONAL)
+	# 	g.axiom = s.Statement
+	# 	# a -- must be complete
+	# 	# r = g.parseString("a")
+	# 	# self.assertTrue(r.isSuccess())
+	# 	# self.assertTrue(r.isComplete())
+	# 	# # ab -- must be complete
+	# 	# r = g.parseString("ab")
+	# 	# self.assertTrue(r.isSuccess())
+	# 	# self.assertTrue(r.isComplete())
+	# 	# abb -- must be partial
+	# 	r = g.parseString("abb")
+	# 	self.assertEquals(r.offset, 2)
+	# 	self.assertTrue(r.isSuccess())
+	# 	self.assertFalse(r.isComplete())
 
+	def testReferenceMatch(self):
+		"""Reference matches are probably the hardest thing to understand
+		in therms of API. They wrap parsing element matches."""
+		NUMBER     = Token("\d+")
+		VARIABLE   = Token("\w+")
+		OPERATOR   = Token("[\+\-*\/]")
+		Value      = Group(NUMBER, VARIABLE)
+		Operation  = Rule(
+			Value._as("left"), OPERATOR._as("op"), Value._as("right")
+		)
+		g = Grammar(
+			isVerbose = False,
+			axiom     = Operation
+		)
+		# We parse, and make sure it completes
+		r = g.parseString("1+10")
+		self.assertTrue(r.isSuccess())
+		self.assertTrue(r.isComplete())
+
+		# The individual retrieval of object is slower than the one shot
+		left  = r.match.get("left")
+		op    = r.match.get("op")
+		right = r.match.get("right")
+
+		# We also assert the querying as a whole dictionary
+		v     = r.match.get()
+		assert "left"  in v
+		assert "op"    in v
+		assert "right" in v
+
+		print "XXX", v
+
+		# We have reference matches first
+		assert isinstance(left,     ReferenceMatch)
+		assert isinstance(op,       ReferenceMatch)
+		assert isinstance(right,    ReferenceMatch)
+
+		# Which themselves hold group matches
+		assert isinstance(left[0],  GroupMatch)
+		assert isinstance(op[0],    TokenMatch)
+		assert isinstance(right[0], GroupMatch)
+
+		self.assertEquals(left.group(),  "1")
+		self.assertEquals(op.group(),    "+")
+		self.assertEquals(right.group(), "10")
+
+		# We decompose the operator
+		self.assertEquals(op[0].group(), "+")
+		self.assertEquals(op.group(),    "+")
+		self.assertEquals(op.groups(),  ["+"])
 
 if __name__ == "__main__":
 	unittest.main()

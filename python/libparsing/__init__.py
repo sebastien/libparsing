@@ -25,6 +25,11 @@ NOTHING    = ctypes
 C_API      = None
 IS_PYTHON3 = sys.version_info[0] >= 3
 
+# TODO: Clear memory management/ownership/freeint
+# TODO: Check weird stuff with Reference.element @property accessor
+# TODO: Enable usage of C.CACHE, it seems that ctypes.addressof does not work
+#       the way it is expected.
+
 # NOTE: This ctypes implementation is noticeably longer than the corresponding
 # CFII equivalent, while also being prone to random segfaults, which need
 # to be investigated (memory management).
@@ -693,7 +698,7 @@ class ParsingElement(CObjectWrapper):
 		# Otherwise we access the type and return new specific instances
 		element_type = wrapped.contents.type
 		address      = ctypes.addressof(wrapped.contents)
-		if address in C.CACHE: return C.CACHE[address]
+		# if address in C.CACHE: return C.CACHE[address]
 		if element_type == TYPE_REFERENCE:
 			res = Reference(wrappedCObject=wrapped)
 		elif element_type == TYPE_WORD:
@@ -710,7 +715,7 @@ class ParsingElement(CObjectWrapper):
 			res = Procedure(wrappedCObject=wrapped)
 		else:
 			raise ValueError("ParsingElement type not supported yet: {0} from {1}".format(element_type, wrapped))
-		C.CACHE[address] = res
+		# C.CACHE[address] = res
 		return res
 
 	@property
@@ -1025,7 +1030,7 @@ class Match(CObjectWrapper):
 		element      = wrapped.contents.element.contents
 		element_type = element.type
 		address      = ctypes.addressof(element)
-		if address in C.CACHE: return C.CACHE[address]
+		# if address in C.CACHE: return C.CACHE[address]
 		if element_type == TYPE_REFERENCE:
 			res = ReferenceMatch(wrappedCObject=wrapped)
 		elif element_type == TYPE_WORD:
@@ -1042,11 +1047,11 @@ class Match(CObjectWrapper):
 			res = ProcedureMatch(wrappedCObject=wrapped)
 		else:
 			raise ValueError("Unsupported match type: {0}".format(element_type))
-		C.CACHE[address] = res
+		# C.CACHE[address] = res
 		return res
 
 	def _init( self ):
-		self._value_ = NOTHING
+		self._value = NOTHING
 
 	def group( self, index=0 ):
 		raise NotImplementedError
@@ -1072,15 +1077,15 @@ class Match(CObjectWrapper):
 	def value( self ):
 		"""Value is an accessor around this Match's value, which can
 		be transformed by a match processor. By default, there is no value."""
-		if self._value_ != NOTHING:
-			return self._value_
+		if self._value != NOTHING:
+			return self._value
 		else:
 			return self._extractValue()
 
 	@value.setter
 	def value( self, value ):
 		"""Sets the value in this specific match."""
-		self._value_ = value
+		self._value = value
 		return self
 
 	def range( self ):
@@ -1102,6 +1107,7 @@ class Match(CObjectWrapper):
 class CompositeMatch(Match):
 
 	def _init( self ):
+		Match._init(self)
 		self._children = NOTHING
 
 	def group( self, index=0 ):
@@ -1112,11 +1118,14 @@ class CompositeMatch(Match):
 		if self._children is NOTHING:
 			res   = []
 			child = self.child
+			index = 0
 			while child is not None:
 				assert isinstance(child, Match)
-				assert child != self
+				assert child      != self,  "Match is child of itself in {0}[{1}]".format(self, index)
+				assert child.next != child, "Duplicate child in {0}:{1}[{2}]=[{3}]={4}".format(self.__class__.__name__, self.name or "_", index, index + 1, child)
 				res.append(child)
-				child = child.next
+				child  = child.next
+				index += 1
 			self._children = tuple(res)
 		return self._children
 
@@ -1201,7 +1210,7 @@ class ReferenceMatch(CompositeMatch):
 		return self.cardinality == CARDINALITY_MANY
 
 	def __repr__( self ):
-		return "<{0}:{1}#{2}:{3}{4})>".format(self.__class__.__name__, self.element.type, self.element.id, self.element.name, self.cardinality)
+		return "<{0}:{1}#{2}:{3}{4}@{5}>".format(self.__class__.__name__, self.element.type, self.element.id, self.element.name, self.cardinality, hex(id(self)))
 
 class WordMatch(Match):
 
@@ -1300,15 +1309,15 @@ class ParsingResult(CObjectWrapper):
 
 	@property
 	def line( self ):
-		return self.context.iterator.contents.lines
+		return self.context.iterator.lines
 
 	@property
 	def offset( self ):
-		return self.context.iterator.contents.offset
+		return self.context.iterator.offset
 
 	@property
 	def text( self ):
-		return self.context.iterator.contents.buffer
+		return self.context.iterator.buffer
 
 	@property
 	def textOffset( self ):
@@ -1513,6 +1522,9 @@ class Processor(object):
 			# Match is in that case a value that we pass as-is
 			return match
 
+	def processChildren( self, match ):
+		return [self.process(_) for _ in match.children()]
+
 	def _processParsingElementMatch( self, match ):
 		"""Processes the given match, applying the matching handlers when found."""
 		if not match: return None
@@ -1534,7 +1546,7 @@ class Processor(object):
 			return self.defaultProcess(match)
 
 	def defaultProcess( self, match ):
-		assert not isinstance(match, ReferenceMatch)
+		assert not isinstance(match, ReferenceMatch), "defaultProcess expected a ParsingElementMatch, not a ReferenceMatch: {0}".format(match)
 		if isinstance(match, GroupMatch):
 			result = match.value = self._processReferenceMatch(match.child)
 		elif isinstance(match, CompositeMatch):
