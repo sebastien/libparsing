@@ -357,11 +357,6 @@ void Grammar_free(Grammar* this) {
 //
 // ----------------------------------------------------------------------------
 
-Match* Match_Empty(Element* element, ParsingContext* context) {
-	return Match_Success(0, element, context);
-}
-
-
 Match* Match_Success(size_t length, Element* element, ParsingContext* context) {
 	NEW(Match,this);
 	assert( element != NULL );
@@ -654,32 +649,34 @@ int Reference__walk( Reference* this, WalkingCallback callback, int step, void* 
 Match* Reference_recognize(Reference* this, ParsingContext* context) {
 	assert(this->element != NULL);
 	Match* result = FAILURE;
-	Match* head;
-	Match* match;
-	int    count    = 0;
-	int    offset   = context->iterator->offset;
+	Match* tail   = NULL;
+	int    count  = 0;
+	int    offset = context->iterator->offset;
 	// If the wrapped element is a procedure, then the cardinality can only be one or optional, as a procedure does
 	// not consume input.
 	assert(this->element->type != TYPE_PROCEDURE || this->cardinality == CARDINALITY_ONE || this->cardinality == CARDINALITY_OPTIONAL );
 	while (Iterator_hasMore(context->iterator) || this->element->type == TYPE_PROCEDURE) {
 		ASSERT(this->element->recognize, "Reference_recognize: Element '%s' has no recognize callback", this->element->name);
 		// We ask the element to recognize the current iterator's position
-		match = this->element->recognize(this->element, context);
+		Match* match = this->element->recognize(this->element, context);
 		if (Match_isSuccess(match)) {
 			DEBUG("        Reference %s#%d@%s matched at %zd-%zd", this->element->name, this->element->id, this->name, context->iterator->offset - match->length, context->iterator->offset);
 			if (count == 0) {
 				// If it's the first match and we're in a ONE/OPTIONAL reference, we break
 				// the loop.
 				result = match;
-				head   = result;
+				tail   = match;
 				if (this->cardinality == CARDINALITY_ONE || this->cardinality == CARDINALITY_OPTIONAL) {
+					// If we have cardinality that is either 0..1 or 1, then we can exit the iteration
+					// as we've recognized the reference properly.
 					count += 1;
 					break;
 				}
 			} else {
-				// If we're already had a match we append the head and update
-				// the head to be the current match
-				head = head->next = match;
+				// If we're already had a match we append the tail and update
+				// the tail to be the current match
+				tail->next = match;
+				tail       = match;
 			}
 			count++;
 		} else {
@@ -689,35 +686,38 @@ Match* Reference_recognize(Reference* this, ParsingContext* context) {
 	}
 	DEBUG_IF(count > 0, "        Reference %s#%d@%s matched %d times out of %c",  this->element->name, this->element->id, this->name, count, this->cardinality);
 	// Depending on the cardinality, we might return FAILURE, or not
+	bool is_success = Match_isSuccess(result) ? TRUE : FALSE;
 	switch (this->cardinality) {
 		case CARDINALITY_ONE:
 			break;
 		case CARDINALITY_OPTIONAL:
 			// For optional, we return an empty match if the match fails, which
 			// will make the reference succeed.
-			result = result == FAILURE ? Match_Empty((ParsingElement*)this, context) : result;
+			is_success = TRUE;
 			break;
 		case CARDINALITY_MANY:
-			result = count > 0 ? result : FAILURE;
+			assert(count > 0 || result == FAILURE);
 			break;
 		case CARDINALITY_MANY_OPTIONAL:
-			result = count > 0 ? result : Match_Empty((ParsingElement*)this, context);
+			assert(count > 0 || result == FAILURE);
+			is_success = TRUE;
 			break;
 		default:
 			// Unsuported cardinality
 			ERROR("Unsupported cardinality %c", this->cardinality);
 			return MATCH_STATS(FAILURE);
 	}
-	if (Match_isSuccess(result)) {
+	if (is_success == TRUE) {
 		// If we have a success, then we create a new match with the reference
 		// as element. The data will be NULL, but the `child` (and actually,
 		// the children) will match the cardinality and will contain parsing
 		// element matches.
 		int    length   = context->iterator->offset - offset;
 		Match* m        = Match_Success(length, (ParsingElement*)this, context);
-		assert(result->element != NULL);
-		m->child        = result;
+		// We make sure that if we had a success, that we add
+		m->child        = result == FAILURE ? NULL : result;
 		m->offset       = offset;
+		assert(m->child == NULL || m->child->element != NULL);
 		LOG_IF(context->grammar->isVerbose, "    [✓] Reference %s#%d@%s matched %d/%c times over %d-%d", this->element->name, this->element->id, this->name, count, this->cardinality, offset, offset+length)
 		return MATCH_STATS(m);
 	} else {
@@ -979,9 +979,10 @@ Match* Group_recognize(ParsingElement* this, ParsingContext* context){
 	while (child != NULL ) {
 		match = Reference_recognize(child, context);
 		if (Match_isSuccess(match)) {
-			// The first succeding child wins
-			Match* result = Match_Success(match->length, this, context);
-			result->child = match;
+			// The first succeeding child wins
+			Match* result  = Match_Success(match->length, this, context);
+			result->offset = offset;
+			result->child  = match;
 			LOG_IF( context->grammar->isVerbose && strcmp(this->name, "_") != 0, "[✓] Group %s#%d[%d] matched %zd-%zd[%zd]", this->name, this->id, step, offset, context->iterator->offset, result->length)
 			return MATCH_STATS(result);
 		} else {

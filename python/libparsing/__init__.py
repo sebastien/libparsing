@@ -1021,6 +1021,7 @@ class Match(CObjectWrapper):
 		# We return None if it's a reference to a NULL pointer
 		if not wrapped: return None
 		# Otherwise we access the type and return new specific instances
+		if not wrapped.contents.element: return None
 		element      = wrapped.contents.element.contents
 		element_type = element.type
 		address      = ctypes.addressof(element)
@@ -1120,10 +1121,7 @@ class CompositeMatch(Match):
 		return self._children
 
 	def getChild( self, index=0 ):
-		for i,_ in enumerate(self.children()):
-			if i == index:
-				return _
-		return None
+		return self.children()[index]
 
 	def get( self, name=NOTHING ):
 		if name is NOTHING:
