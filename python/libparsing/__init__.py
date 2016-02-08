@@ -10,13 +10,7 @@
 # -----------------------------------------------------------------------------
 
 from __future__ import print_function
-
 from   libparsing.api import *
-
-try:
-	import reporter as logging
-except ImportError as e:
-	import logging
 
 VERSION = "0.7.3"
 LICENSE = "http://ffctn.com/doc/licenses/bsd"

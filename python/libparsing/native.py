@@ -9,7 +9,7 @@
 # Last modification : 2016-02-08
 # -----------------------------------------------------------------------------
 
-import ctypes, os, re, sys, weakref
+import ctypes, os, re, sys, weakref, types
 
 IS_PYTHON3 = sys.version_info[0] >= 3
 
@@ -17,6 +17,10 @@ __doc__ = """
 An abstraction of `ctypes` that allows for the development of object-oriented
 bindings to C code written in an object-oriented style (à la glib).
 """
+
+
+C_FUNCTION_TYPE = type(ctypes.CFUNCTYPE(None))
+C_POINTER_TYPE  = type(ctypes.POINTER(None))
 
 # -----------------------------------------------------------------------------
 #
@@ -48,7 +52,7 @@ class C:
 		"size_t*"         : ctypes.POINTER(ctypes.c_size_t),
 	}
 
-	CACHE = weakref.WeakValueDictionary()
+	COBJECTS = weakref.WeakValueDictionary()
 
 	@classmethod
 	def String( cls, value ):
@@ -58,6 +62,8 @@ class C:
 			# do any automatic casting. So we need to store it.
 			wrapped = value.encode("utf-8") if isinstance(value, str) else value
 			assert isinstance(wrapped, bytes)
+			# FIXME: The problem here is that the wrapped string MUST be
+			# kept as reference.
 			return wrapped
 		else:
 			# In Python2, strings are bytes from the get-go so they're
@@ -65,16 +71,26 @@ class C:
 			return value
 
 	@classmethod
-	def Unwrap( cls, value ):
-		# CObject might be garbage collected at this time
-		if CObject and isinstance(value, CObject):
-			return value._cobject
-		if not CObject and hasattr( value, "_cobject"):
-			return value._cobject
-		if isinstance(value, str):
-			return cls.String(value)
+	def Unwrap( cls, value, cast=None ):
+		assert not isinstance(value, ctypes.Structure), "C.Unwrap: ctypes structures must be wrapped in CObjects {0}".format(value)
+		if type(cast) is C_FUNCTION_TYPE:
+			# A Python function must be wrapped in the callback
+			c_value = cast(value)
+		elif CObject and isinstance(value, CObject) or isinstance(value, object) and hasattr(value, "_cobjectPointer"):
+			# We pass the cobject structure by reference, CObject might be garbage collected at this time
+			return value._cobjectPointer
 		else:
-			return value
+			# Otherwise, CTypes will do the argument checking anyway
+			c_value = value
+		return c_value
+
+	@classmethod
+	def RegisterCObject( cls, cobject ):
+		"""Registers the given CObject to be bound to the given data structure."""
+		address = ctypes.addressof(cobject._cobject)
+		assert address not in cls.COBJECTS
+		cls.COBJECTS[address] = cobject
+		return cobject
 
 	@classmethod
 	def ParseStructure( cls, text ):
@@ -119,12 +135,14 @@ class C:
 			c_name = _.__name__.rsplit(".", 1)[-1]
 			assert c_name.startswith("T"), c_name
 			c_name = c_name[1:] + "*"
-			types[c_name]       = ctypes.POINTER(_)
-			types[c_name + "*"] = ctypes.POINTER(types[c_name])
 			# It's important to update the type directly here
 			# print ("C:Register: type {0} from {1}".format(c_name, _))
-			cls.TYPES[c_name]       = types[c_name]
-			cls.TYPES[c_name + "*"] = types[c_name + "*"]
+			for t in (cls.TYPES, types):
+				pointer         = ctypes.POINTER(_)
+				t[c_name]       = pointer
+				t[c_name + "*"] = ctypes.POINTER(pointer)
+				t[_]            = pointer
+				t[pointer]      = _
 		for _ in ctypeClasses:
 			# We bind the fields of the structure as a separate iteration, so
 			# as to ensure that the types are already available.
@@ -256,11 +274,11 @@ class CLibrary:
 
 	def wrap( self, cValue ):
 		"""Wraps the given C value in a Python object."""
-		return C.Wrap(cValue)
+		raise NotImplementedError
 
-	def unwrap( self, wrapped):
+	def unwrap( self, wrapped, type=None ):
 		"""Returns a C value corresponding to the given (wrapped) value."""
-		return C.Unwrap(wrapped)
+		return C.Unwrap(wrapped, type)
 
 # -----------------------------------------------------------------------------
 #
@@ -273,14 +291,30 @@ class CObject(object):
 	(ie. abstractions of underlying C structures) in an object-oriented API. This
 	class seamlessly integrates with the `Library` class to dynamically load
 	and type functions from the underlying C library and manage the
-	conversion of values to and from C types."""
+	conversion of values to and from C types.
 
-	WRAPPED   = None
-	FUNCTIONS = None
-	LIBRARY   = None
-	ACCESSORS = None
+	Each class defines static properties:
 
+	- `WRAPPED` references the `ctypes.Structure` type wrapped by this CObject
 
+	- `FUNCTIONS` is a string containing the `.h` declaration of the proptotypes
+	   in the form `ClassName_methodName`. Special return value `this*` returns
+	   the object reference, and special first argument `this*` indicates
+	   a method as opposed to a function.
+
+	- `ACCESSORS` is a map of property setter/getters created from the wrapped
+	   structure `_fields_` property (see `ctypes` documentation for that)
+
+	- `LIBRARY` wil be automatically set to the `CLibrary` instance in which
+	  the `CObject` is registered. This reference should be used to access
+	  symbols and wrap/unwrap functions.
+	"""
+
+	WRAPPED    = None
+	FUNCTIONS  = None
+	LIBRARY    = None
+	ACCESSORS  = None
+	PROTOTYPES = None
 
 	# =========================================================================
 	# PROPERTIES / C STRUCTURE FIELDS
@@ -288,14 +322,21 @@ class CObject(object):
 
 	@classmethod
 	def BindFields( cls ):
-		"""Binds the fields in this wrapped object."""
+		"""Binds the fields in this wrapped object. Fields that have a
+		corresponding entry in the class's dict won't be bound, but all Will
+		be registered in the `ACCESSORS` dictionary."""
 		if cls.WRAPPED:
-			cls.ACCESSORS = {}
+			# We explicitely refer to the DICT to bypass the inheritance
+			# mechanism and get the class's own accessors.
+			if "ACCESSORS" not in cls.__dict__: setattr(cls, "ACCESSORS", {})
+			accessors = cls.ACCESSORS
 			for name, type in cls.WRAPPED._fields_:
 				accessor = cls._CreateAccessor(name, type)
-				assert name not in cls.ACCESSORS, "Accessor registered twice: {0}".format(name)
-				cls.ACCESSORS[name] = accessor
+				assert name not in accessors, "Accessor registered twice: {0}".format(name)
+				# We register the accessors in the accessors map
+				accessors[name] = accessor
 				if not hasattr(cls, name):
+					# and only set the attribute if we're not redefining it.
 					setattr(cls, name, accessor)
 
 	@classmethod
@@ -304,17 +345,21 @@ class CObject(object):
 		definition."""
 		c = C
 		def getter( self ):
-			value = getattr(self._cobject.contents, name)
-			# print "g: ", cls.__name__ + "." + name, type, "=", value
-			# We manage string decoding here
-			if isinstance(value, bytes): value = value.decode("utf-8")
-			return self.LIBRARY.wrap(value)
+			# The getter queries the cobjectCache first.
+			if name in self._cobjectCache:
+				return self._cobjectCache[name][0]
+			else:
+				c_value = getattr(self._cobject, name)
+				value   = self.LIBRARY.wrap(c_value)
+				# print "g: ", cls.__name__ + "." + name, type, "=", value
+				self._cobjectCache[name] = (value, c_value)
+				return value
 		def setter( self, value ):
 			# This is required for Python3
-			if isinstance(value, str): value = value.encode("utf-8")
-			value = self.LIBRARY.unwrap(value)
+			c_value = self.LIBRARY.unwrap(value)
+			self._cobjectCache[name] = (value, c_value)
 			# print "s: ", cls.__name__ + "." + name, type, "<=", value
-			return setattr(self._cobject.contents, name, value)
+			setattr(self._cobject, name, c_value)
 		return property(getter, setter)
 
 	# =========================================================================
@@ -339,6 +384,7 @@ class CObject(object):
 		res = []
 		for f, proto in functions:
 			res.append(cls.BindFunction(f, proto))
+		cls.PROTOTYPES = dict((_[0], _) for _ in res)
 		return res
 
 	@classmethod
@@ -346,105 +392,107 @@ class CObject(object):
 		class_name = cls.__name__.rsplit(".",1)[-1]
 		# We need to keep a reference to C as otherwise it might
 		# be freed before we invoke self.LIBRARY.unwrap.
-		method    = None
-		is_method = len(proto[1]) >= 1 and proto[1][0][1] == "this"
-		if is_method:
-			method = cls._CreateMethod(ctypesFunction, proto)
+		method         = None
+		name           = proto[0][1] or proto[0][0].split("_", 1)[1]
+		slot           = name
+		is_method      = len(proto[1]) >= 1 and proto[1][0][1] == "this"
+		is_constructor = name == "new"
+		# Factory methods
+		if is_constructor:
+			method = cls._CreateConstructor(name, ctypesFunction, proto)
+			slot   = "_constructor"
+		elif is_method:
+			method = cls._CreateMethod(name, ctypesFunction, proto)
 		else:
-			method = cls._CreateFunction(ctypesFunction, proto)
-		# We assume the convention is <Classname>_methodName, but in practice
-		# Classname could be the name of a super class.
-		#assert proto[0].startswith(class_name + "_"), "Prototype does not start with class name: {0} != {1}".format(proto[0], class_name)
-		name = proto[0][1] or proto[0][0].split("_", 1)[1]
-		# If we're not binding a method, we bind it as a static method
-		if name == "new":
-			# Any method called "new" will be bound as the constructor
-			assert not is_method
-			name   = "_constructor"
-			method = classmethod(method)
-		elif not is_method:
 			assert proto[0][0][0].upper() == proto[0][0][0], "Class functions must start be CamelCase: {0}".format(proto[0][0])
+			method = cls._CreateFunction(name, ctypesFunction, proto)
 			method = classmethod(method)
+		# Binding to the class
 		# print ("O:{1} bound as {3} {0}.{2}".format(cls.__name__, proto[0][0], name, "method" if is_method else "function"))
-		setattr(cls, name, method)
-		assert hasattr(cls, name)
-		return (name, method)
+		setattr(cls, slot, method)
+		return (name, method, ctypesFunction, proto)
 
 	@classmethod
-	def _CreateFunction( cls, ctypesFunction, proto):
-		c = C
-		assert proto[2][2] != "this*", "Function cannot return this"
-		is_constructor = proto[0][0].endswith("_new")
-		def function(cls, *args):
+	def _CreateConstructor( cls, name, ctypesFunction, proto):
+		# Constructors do not wrap the result
+		return cls._CreateFunction(name, ctypesFunction, proto, addThis=False, cacheArgs=True, wrapResult=False)
+
+	@classmethod
+	def _CreateMethod( cls, name, ctypesFunction, proto):
+		# Methods add the this argument automatically
+		return cls._CreateFunction(name, ctypesFunction, proto, addThis=True)
+
+	@classmethod
+	def _CreateFunction( cls, name, ctypesFunction, proto, addThis=False, cacheArgs=False, wrapResult=True):
+		def function(self, *args):
 			# We unwrap the arguments, meaning that the arguments are now
 			# pure C types values
-			u_args = [cls.LIBRARY.unwrap(_) for _ in args]
+			c_args = [self.LIBRARY.unwrap(_, proto[1][i][0]) for i,_ in enumerate(args)]
+			if cacheArgs: self._cobjectCache[name] = args
+			if addThis:   c_args.insert(0, self._cobject)
 			# print ("F: ", proto[0], args, "→", u_args, ":", ctypesFunction.argtypes, "→", ctypesFunction.restype)
-			res  = ctypesFunction(*u_args)
-			if not is_constructor:
-				# Non-constructors must wrap the result
-				res  = cls.LIBRARY.wrap(res)
+			try:
+				res  = ctypesFunction(*c_args)
+			except ctypes.ArgumentError as e:
+				raise ValueError("Bad arguments for {0}.{1}: {2}→{3} -- {4}".format(cls.__name__, name, args, c_args, e))
+			# Non-constructors must wrap the result
+			res  = self.LIBRARY.wrap(res) if wrapResult else res
+			# TODO: We could check that the "this" returns the same object
 			# print ("F=>", res)
 			return res
 		return function
 
-	@classmethod
-	def _CreateMethod( cls, ctypesFunction, proto):
-		c = C
-		returns_this = proto[2][2] == "this*"
-		def method(self, *args):
-			# We unwrap the arguments, meaning that the arguments are now
-			# pure C types values
-			# print "M: ", proto[0], args
-			args = [self.LIBRARY.unwrap(self)] + [self.LIBRARY.unwrap(_) for _ in args]
-			assert args[0], "CObject: method {0} `this` is None in {1}".format(proto[0], self)
-			try:
-				res  = ctypesFunction(*args)
-			except ctypes.ArgumentError as e:
-				raise ValueError("{1} failed with {2}: {3}".format(cls.__name__, proto[0][0], args, e))
-			res  = self if returns_this else self.LIBRARY.wrap(res)
-			# print "M=>", res
-			return res
-		return method
-
 	# =========================================================================
 	# OBJECT CREATION
 	# =========================================================================
+
+	@classmethod
+	def Wrap( cls, cobject ):
+		assert cobject
+		return cls(wrappedCObject=cobject)
 
 	def __init__( self, *args, **kwargs ):
 		"""Creates a new CObject or wraps this CObject if `wrappedCObject`
 		is given as keyword argument."""
-		self._cobject = None
+		self._cobject        = None
+		self._cobjectPointer = None
+		self._cobjectCache   = {}
 		self._init()
 		if "wrappedCObject" in kwargs:
 			assert not args and len(kwargs) == 1, "Additional arguments other than `wrappedCObject` were given: {0} {1}".format(args, kwargs)
-			self._fromCOBject(kwargs["wrappedCObject"])
+			self._fromCObject(kwargs["wrappedCObject"])
 		else:
 			self._new(*args, **kwargs)
 
-	def _fromCOBject( self, cValue ):
+	def _fromCObject( self, cValue ):
 		"""This CObject will wrap the given cValue."""
 		assert not self._cobject
-		self._cobject = cValue
-		assert isinstance(self._cobject, ctypes.POINTER(self.WRAPPED))
+		assert isinstance(cValue, ctypes.POINTER(self.WRAPPED))
+		assert cValue
+		self._cobjectPointer = cValue
+		self._cobject        = cValue.contents
 		assert self._cobject != None, "{0}(wrappedCObject): wrappedCObject expected, got: {1}".format(self.__class__.__name__, self._cobject)
 		self._mustFree = False
+		C.RegisterCObject(self)
 
 	# =========================================================================
 	# OBJECT CREATION
 	# =========================================================================
 
-	def _new( self, *args, **kwargs ):
+	def _new( self, *args ):
 		"""Creates a new allocated instance of this object."""
+		argtypes = self.PROTOTYPES["new"][2]
 		# We ensure that the _cobject value returned by the creator is
 		# unwrapped. In fact, we might want to implement a special case
 		# for new that returns directly an unwrapped value.
-		instance       = self.__class__._constructor(*args)
+		instance       = self._constructor(*args)
 		assert isinstance( instance, ctypes.POINTER(self.WRAPPED)), "{0}(): {1} pointer expected, got {2}".format(self.__class__.__name__, self.WRAPPED, instance)
 		assert not self._cobject
 		assert instance != None, "{0}(): created instance seems to have no value: {1}".format(self.__class__.__name__, self._cobject)
-		self._cobject  = instance
-		self._mustFree = True
+		self._cobjectPointer = instance
+		self._cobject        = instance.contents
+		self._mustFree       = True
+		C.RegisterCObject(self)
 
 	def _init ( self ):
 		"""Called before the object is assigned a wrapped value."""
@@ -456,7 +504,41 @@ class CObject(object):
 	# 	if self._cobject and self._mustFree:
 	# 		# FIXME: There are some issues with the __DEL__ when other stuff is not available
 	# 		if hasattr(self, "free") and getattr(self, "free"):
-	# 			print ("FREEING", self)
-	# 			self.free(self._cobject)
+	# 			self.free(self._cobjectPointer)
+
+# -----------------------------------------------------------------------------
+#
+# DECORATORS
+#
+# -----------------------------------------------------------------------------
+
+def cproperty( method, readonly=False ):
+	"""Wraps a method that retrieves the current value of the underlying
+	C data structure property as in a Python object. A reference to
+	the Python object will be kept in cache and served upon later accesses.
+
+	What this does in essence is execute the given method if there is no
+	value found in cache for the given property, and store its results
+	in cache. From then on,  it's up to the CObject to ensure consistency
+	between the object's `_cobjectCache` and the underlying `_cobject`
+	properties."""
+	name = method.func_name
+	def getter( self ):
+		if name not in self._cobjectCache:
+			value = method(self)
+			value = self.LIBRARY.wrap(getattr(self._cobject, name)) if value is cproperty else value
+			self._cobjectCache[name] = (value, None)
+		return self._cobjectCache[name][0]
+	def setter_ro( self, value ):
+		raise ValueError("{0}.{1} is a read-only property".format(self, name))
+	def setter_rw( self, value ):
+		c_value = self.LIBRARY.unwrap(value)
+		self._cobjectCache[name] = (value, c_value)
+		setattr(self._cobject, name, c_value)
+	return property(getter, setter_ro if readonly else setter_rw)
+
+def caccessor( method, readonly=True ):
+	"""A variant of `cproperty` that does not allow to set the value."""
+	return cproperty(method, readonly=True)
 
 # EOF - vim: ts=4 sw=4 noet

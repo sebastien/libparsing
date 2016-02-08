@@ -12,6 +12,10 @@
 from __future__ import print_function
 import sys
 from   libparsing.bindings import *
+try:
+	import reporter as logging
+except ImportError as e:
+	import logging
 
 __doc__ = """
 Object-oriented bindings to the libparsing C library.
@@ -30,23 +34,12 @@ class ParsingElement(CObject):
 
 	WRAPPED   = TParsingElement
 	FUNCTIONS = """
-	this* ParsingElement_name( ParsingElement* this, const char* name ); // @as setName
 	void  ParsingElement_free(ParsingElement* this);
 	"""
 
-	def _init( self ):
-		self._name = None
-
-	@property
+	@cproperty
 	def name( self ):
-		if self._name is None: self._name = self._cobject.contents.name
-		return self._name
-
-	@name.setter
-	def name( self, value ):
-		self._name                  = value
-		self._cobject.contents.name = self.LIBRARY.unwrap(self._name)
-		return self
+		return cproperty
 
 	@property
 	def children( self ):
@@ -80,33 +73,23 @@ class CompositeElement(ParsingElement):
 	WRAPPED   = TParsingElement
 	FUNCTIONS = """
 	this* ParsingElement_add(ParsingElement* this, Reference* child); // @as _add
-	this* ParsingElement_clear(ParsingElement* this); // @as _clear
+	this* ParsingElement_clear(ParsingElement* this);                 // @as _clear
 	"""
-
-	# NOTE: This is an attempt at memory management
-	# def _init( self ):
-	# 	self._children = []
-
-	def _init( self ):
-		self._children = []
 
 	def _new(self, *args):
 		ParsingElement._new(self, None)
 		for _ in args:
 			self.add(_)
 
-	def add( self, *references ):
-		for i, reference in enumerate(references):
-			argument = reference
-			assert reference, "{0}.add: no reference given, got {1} as argument #{2}".format(self.__class__.__name__, reference, i)
-			assert isinstance(reference, ParsingElement) or isinstance(reference, Reference), "{0}.add: Expected ParsingElement or Reference, got {1} as argument #{2}".format(self.__class__, reference, i)
-			reference = Reference.Ensure(reference)
-			assert isinstance(reference, Reference)
-			self._add(reference)
-			# NOTE: We might want to save argument as well
-			self._children.append(reference)
-			assert self.children
-		return self
+	@caccessor
+	def children(self):
+		"""Returns the children of this ParsingElement as a tuple."""
+		child_cvalue  = self._cobject.children
+		children      = []
+		while child_cvalue:
+			children.append(self.LIBRARY.wrap(child_cvalue))
+			child_cvalue  = child_cvalue.contents.next
+		return tuple(children)
 
 	def set( self, *references ):
 		self.clear()
@@ -114,19 +97,26 @@ class CompositeElement(ParsingElement):
 		return self
 
 	def clear( self ):
-		self._children = []
 		self._clear()
+		self._cobjectCache["children"] = ((), ())
 		return self
 
-	def __getitem__( self, index ):
-		assert index >= 0
-		child = self._cobject.contents.children
-		while child:
-			if index == 0:
-				return self.LIBRARY.wrap(child)
-			child = child.contents.next
-			index -= 1
-		return None
+	def add( self, *references ):
+		res = list(self.children)
+		for i, reference in enumerate(references):
+			assert reference, "{0}.add: no reference given, got {1} as argument #{2}".format(self.__class__.__name__, reference, i)
+			assert isinstance(reference, ParsingElement) or isinstance(reference, Reference), "{0}.add: Expected ParsingElement or Reference, got {1} as argument #{2}".format(self.__class__, reference, i)
+			reference = Reference.Ensure(reference)
+			assert isinstance(reference, Reference)
+			# TODO: Should update the underlying children as well
+			res.append(reference)
+		# FIXME: Not sure what we should do with the second argument of the cache
+		self._cobjectCache["children"] = (res, None)
+		return self
+
+	def __iter__( self ):
+		for _ in self.children:
+			yield _
 
 # -----------------------------------------------------------------------------
 #
@@ -139,97 +129,79 @@ class Reference(CObject):
 	WRAPPED   = TReference
 
 	FUNCTIONS = """
-	Reference* Reference_Ensure(void* element); // @as _Ensure
-	Reference* Reference_FromElement(ParsingElement* element); // @as _FromElement
+	Reference* Reference_FromElement(ParsingElement* element);           // @as _FromElement
 	Reference* Reference_new(void);
 	void       Reference_free(Reference* this);
-	Reference* Reference_cardinality(Reference* this, char cardinality); // @as setCardinality
-	Reference* Reference_name(Reference* this, const char* name); // @as setName
 	bool       Reference_hasElement(Reference* this);
 	bool       Reference_hasNext(Reference* this);
 	"""
 
 	@classmethod
 	def Ensure( cls, element ):
-		if isinstance( element, ParsingElement):
-			return cls.FromElement(element)
-		else:
-			assert isinstance(element, Reference)
-			return element
+		return element if isinstance(element, Reference) else cls.FromElement(element)
 
 	@classmethod
 	def FromElement( cls, element ):
 		assert isinstance( element, ParsingElement)
-		res          = cls._FromElement(element)
-		res._element = element
 		assert element._cobject
-		res._cobject.contents.element = cls.LIBRARY.unwrap(element)
-		# assert res.element is element
+		res = cls._FromElement(element)
 		assert isinstance(res, Reference), "Expected reference, got: {0}".format(res)
+		res.element = element
+		assert ctypes.addressof(res._cobject.element.contents) == ctypes.addressof(element._cobject), "CObject refernce transparency is broken: {0} != {1}".format(res._cobject.element, element._cobjectPointer)
+		assert res.element is element
 		res._mustFree = True
 		return res
 
-	def _init( self ):
-		self._name    = None
-		self._element = None
-
 	def _new( self, element=None, name=None, cardinality=NOTHING ):
 		CObject._new(self)
-		# NOTE: This is a precaustion to keep a reference to the element and
-		# to the name in case it is unwrapped/decoded.
 		if element:
-			assert isinstance(element,ParsingElement)
-			self._cobject.contents.element = self.LIBRARY.unwrap(element)
-			self._element = element
-			# assert self.element is element
-		self._name    = self.LIBRARY.unwrap(name)
-		self.name     = self._name
+			self.element = element
+			assert self.element is element
 		if cardinality in (CARDINALITY_ONE, CARDINALITY_OPTIONAL, CARDINALITY_MANY_OPTIONAL, CARDINALITY_MANY):
-			self._cobject.contents.cardinality = cardinality
+			self._cobject.cardinality = cardinality
 			assert self.cardinality == cardinality
 
+	# =========================================================================
+	# PROPERTIES
+	# =========================================================================
+
+	@cproperty
+	def name( self ):
+		return cproperty
+
+	@cproperty
+	def element( self ):
+		return cproperty
+
+	# =========================================================================
+	# PREDICATES
+	# =========================================================================
+
 	def one( self ):
-		self._cobject.contents.cardinality = CARDINALITY_ONE
+		self._cobject.cardinality = CARDINALITY_ONE
 		assert self.cardinality == CARDINALITY_ONE
 		return self
 
 	def optional( self ):
-		self._cobject.contents.cardinality = CARDINALITY_OPTIONAL
+		self._cobject.cardinality = CARDINALITY_OPTIONAL
 		assert self.cardinality == CARDINALITY_OPTIONAL
 		return self
 
 	def zeroOrMore( self ):
 		assert None
-		self._cobject.contents.cardinality = CARDINALITY_MANY_OPTIONAL
+		self._cobject.cardinality = CARDINALITY_MANY_OPTIONAL
 		assert self.cardinality == CARDINALITY_MANY_OPTIONAL
 		return self
 
 	def oneOrMore( self ):
-		self._cobject.contents.cardinality = CARDINALITY_MANY
+		self._cobject.cardinality = CARDINALITY_MANY
 		assert self.cardinality == CARDINALITY_MANY
 		return self
 
 	def _as( self, name ):
-		self._name = C.String(name)
-		self._cobject.contents.name = self._name
-		assert self.name == self._name
+		self.name = name
+		assert self.name == name
 		return self
-
-	# @property
-	# def element( self ):
-	# 	print ("GET ELEMETN", self, self._element)
-	# 	if self._element is None: return None
-	# 	assert isinstance(self._element, ParsingElement)
-	# 	assert self._element.id == self._cobject.contents.element.contents.id if self._element and self._cobject.contents.element else True
-	# 	return self._element
-
-	# @element.setter
-	# def element( self, value ):
-	# 	print ("GST ELEMETN", self.__class__.__name__, self.name, self.id, value)
-	# 	assert not self._element, "Element already set in {0}: current is {1}, trying to set {2}".format(self, self._element, value)
-	# 	assert isinstance(value, ParsingElement)
-	# 	self._element                  = value
-	# 	self._cobject.contents.element = self.LIBRARY.unwrap(value)
 
 	def __repr__( self ):
 		return "<Reference#{1}:{0}={2}({3}) at {4}>".format(self.name, self.id, self.element, self.cardinality, hex(id(self)))
@@ -249,11 +221,6 @@ class Word(ParsingElement):
 	const char* Word_word(ParsingElement* this);  // @as _getWord
 	"""
 
-	def _new( self, word ):
-		self.word = C.String(word)
-		ParsingElement._new(self, word)
-		assert self.word == self._getWord(), "{0}: given word is different from set word {1} != {2}".format(self, repr(self.word), repr(self._getWord()))
-
 	def __repr__( self ):
 		return "<Word#{1}:{0}=`{2}` at {3}>".format(self.name, self.id, self._getWord(), hex(id(self)))
 
@@ -265,11 +232,6 @@ class Token(ParsingElement):
 	void Token_print(ParsingElement* this); // @as _print
 	const char* Token_expr(ParsingElement* this);  // @as _getExpr
 	"""
-
-	def _new( self, expr ):
-		self.expr = C.String(expr)
-		ParsingElement._new(self, self.expr)
-		assert self.expr == self._getExpr(), "{0}: given expression is different from set expression {1} != {2}".format(self, repr(self.expr), self._getExpr())
 
 	def __repr__( self ):
 		return "<Token#{1}:{0}=`{2}` at {3}>".format(self.name, self.id, self._getExpr(), hex(id(self)))
@@ -286,14 +248,15 @@ class Condition(ParsingElement):
 	"""
 
 	def _init( self ):
-		self._callback = None
+		ParsingElement._init(self)
+		self.callback = None
 
 	def _new( self, callback ):
-		self._callback = C.TYPES["ConditionCallback"](callback)
-		return ParsingElement._new(self, self._callback)
+		self.callback = (callback, C.TYPES["ConditionCallback"](callback))
+		return ParsingElement._new(self, self.callback[1])
 
 	def __repr__( self ):
-		return "<Condition#{1}:{0}={2} at {3}>".format(self.name, self.id, self._callback, hex(id(self)))
+		return "<Condition#{1}:{0}={2} at {3}>".format(self.name, self.id, self.callback[0], hex(id(self)))
 
 # -----------------------------------------------------------------------------
 #
@@ -307,14 +270,15 @@ class Procedure(ParsingElement):
 	"""
 
 	def _init( self ):
-		self._callback = None
+		ParsingElement._init(self)
+		self.callback = None
 
 	def _new( self, callback ):
-		self._callback = C.TYPES["ProcedureCallback"](callback)
-		ParsingElement._new(self, self._callback)
+		self.callback = (callback, C.TYPES["ProcedureCallback"](callback))
+		return ParsingElement._new(self, self.callback[1])
 
 	def __repr__( self ):
-		return "<Procedure#{1}:{0}={2} at {3}>".format(self.name, self.id, self._callback, hex(id(self)))
+		return "<Procedure#{1}:{0}={2} at {3}>".format(self.name, self.id, self.callback[0], hex(id(self)))
 
 # -----------------------------------------------------------------------------
 #
@@ -365,7 +329,6 @@ class Match(CObject):
 	int Match__walk(Match* this, WalkingCallback callback, int step, void* context );
 	"""
 
-
 	def _init( self ):
 		self._value = NOTHING
 
@@ -382,7 +345,7 @@ class Match(CObject):
 	def element( self ):
 		"""the parsing element wrapped by the reference"""
 		assert not isinstance(self, ReferenceMatch)
-		return self.LIBRARY.wrap(ctypes.cast(self._cobject.contents.element, C.TYPES["ParsingElement*"]).contents)
+		return self.LIBRARY.wrap(ctypes.cast(self._cobject.element, C.TYPES["ParsingElement*"]).contents)
 
 	@property
 	def name( self ):
@@ -417,7 +380,7 @@ class Match(CObject):
 		return self.context.text()[s:e]
 
 	def __repr__( self ):
-		element = ctypes.cast(self._cobject.contents.element, C.TYPES["ParsingElement*"]).contents
+		element = ctypes.cast(self._cobject.element, C.TYPES["ParsingElement*"]).contents
 		return "<{0}:{1}#{2}({3}):{4}+{5}>".format(self.__class__.__name__, element.type, element.id, element.name, self.offset, self.length)
 
 class CompositeMatch(Match):
@@ -471,43 +434,41 @@ class CompositeMatch(Match):
 
 class ReferenceMatch(CompositeMatch):
 
-	@property
-	def reference( self ):
-		"""The reference wrapping the parsing element."""
-		# if not self._reference:
-		# 	self._reference = ctypes.cast(self._cobject.contents.element, C.TYPES["Reference*"]).contents
-		# print "REFERENENCE", self._reference
-		# return self._reference
-		return self.LIBRARY.wrap(ctypes.cast(self._cobject.contents.element, C.TYPES["Reference*"]))
+	# @property
+	# def reference( self ):
+	# 	"""The reference wrapping the parsing element."""
+	# 	return
+	# 	# if not self._reference:
+	# 	# 	self._reference = ctypes.cast(self._cobject.element, C.TYPES["Reference*"]).contents
+	# 	# print "REFERENENCE", self._reference
+	# 	# return self._reference
+	# 	return self.LIBRARY.wrap(ctypes.cast(self._cobject.element, C.TYPES["Reference*"]))
 
-	@property
-	def element( self ):
-		"""the parsing element wrapped by the reference"""
-		#return c.unwrapcast(self.reference().element, c.types["ParsingElement*"]).contents
-		element = self.reference.element
-		return element
+	# @caccessor
+	# def element( self ):
+	# 	return caccessor
 
 	@property
 	def name( self ):
 		"""The name of the reference."""
-		return self.reference.name
+		return self.element.name
 
-	def _extractValue( self ):
-		if self.isOne() or self.isOptional():
-			return self.child.value if self.child is not None else None
-		else:
-			return [_.value for _ in self.children()]
+	# def _extractValue( self ):
+	# 	if self.isOne() or self.isOptional():
+	# 		return self.child.value if self.child is not None else None
+	# 	else:
+	# 		return [_.value for _ in self.children()]
 
-	def group( self, index=0 ):
-		if self.child is None:
-			return None
-		elif self.isOne():
-			return self.child.group(0)
-		else:
-			return self.getChild(index).group()
+	# def group( self, index=0 ):
+	# 	if self.child is None:
+	# 		return None
+	# 	elif self.isOne():
+	# 		return self.child.group(0)
+	# 	else:
+	# 		return self.getChild(index).group()
 
-	def groups( self ):
-		return [_.group() for _ in self]
+	# def groups( self ):
+	# 	return [_.group() for _ in self]
 
 	@property
 	def cardinality( self ):
@@ -541,8 +502,8 @@ class WordMatch(Match):
 		"""Returns the word matched"""
 		if index != 0: raise IndexError
 		assert index == 0
-		element = ctypes.cast(self._cobject.contents.element,   C.TYPES["ParsingElement*"])
-		config  = ctypes.cast(element.contents.config, C.TYPES["WordConfig*"])
+		element = ctypes.cast(self._cobject.element,   C.TYPES["ParsingElement*"])
+		config  = ctypes.cast(element.config, C.TYPES["WordConfig*"])
 		return config.contents.word
 
 class TokenMatch(Match):
@@ -559,8 +520,8 @@ class TokenMatch(Match):
 		return self._group(index)
 
 	def groups( self ):
-		element = ctypes.cast(self._cobject.contents.element, C.TYPES["ParsingElement*"]).contents
-		match   = ctypes.cast(self._cobject.contents.data,    C.TYPES["TokenMatch*"]).contents
+		element = ctypes.cast(self._cobject.element, C.TYPES["ParsingElement*"]).contents
+		match   = ctypes.cast(self._cobject.data,    C.TYPES["TokenMatch*"]).contents
 		return [self.group(i) for i in range(match.count)]
 
 class ProcedureMatch(Match):
@@ -652,8 +613,8 @@ class ParsingResult(CObject):
 		return True if self._isPartial() != 0 else False
 
 	def lastMatchRange( self ):
-		o = self.context.stats.contents.matchOffset
-		r = self.context.stats.contents.matchLength
+		o = self.context.stats.matchOffset
+		r = self.context.stats.matchLength
 		return (o, o + r)
 
 	# def textAround( self, line=None ):
@@ -985,15 +946,19 @@ class Libparsing(CLibrary):
 		# the Grammar.
 		Grammar.Register(Word, Token, Group, Rule, Condition, Procedure)
 
-	def unwrap( self, wrapped ):
-		return wrapped
-
 	def wrap( cls, value ):
 		"""This classmethod acts as a factory to produce specialized instances
 		of `ParsingElement` subclasses based on the element's type."""
 		# We return None if it's a reference to a NULL pointer
 		if not value: return None
-		return value
+		py_value      = value
+		resolved_type = C.TYPES.get(type(value))
+		if resolved_type:
+			if resolved_type is TReference:
+				struct      = value.contents
+				struct_type = struct.type
+				py_value    = Reference.Wrap(value)
+		return py_value
 		# # Otherwise we access the type and return new specific instances
 		# element_type = wrapped.contents.type
 		# address      = ctypes.addressof(wrapped.contents)

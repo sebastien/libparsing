@@ -10,7 +10,7 @@
 # -----------------------------------------------------------------------------
 
 from __future__ import print_function
-from   libparsing.native import C, CObject, CLibrary, ctypes
+from   libparsing.native import C, CObject, CLibrary, ctypes, cproperty, caccessor, C_POINTER_TYPE
 
 __doc__ = """
 Low-level bindings to the libparsing C API.
