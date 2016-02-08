@@ -68,9 +68,9 @@ class C:
 	def Unwrap( cls, value ):
 		# CObject might be garbage collected at this time
 		if CObject and isinstance(value, CObject):
-			return value._wrapped
-		if not CObject and hasattr( value, "_wrapped"):
-			return value._wrapped
+			return value._cobject
+		if not CObject and hasattr( value, "_cobject"):
+			return value._cobject
 		if isinstance(value, str):
 			return cls.String(value)
 		else:
@@ -195,10 +195,10 @@ class CLibrary:
 	`CObject` subclasses register themselves."""
 
 	PATHS   = [
-		".",
 		__file__,
 		os.path.join(__file__, ".."),
 		os.path.join(__file__, "..", ".."),
+		".",
 		"/usr/local/lib",
 		"/usr/lib",
 		"/lib",
@@ -229,7 +229,9 @@ class CLibrary:
 
 	@classmethod
 	def Load( cls, name ):
-		return ctypes.cdll.LoadLibrary(cls.Find(name))
+		path = cls.Find(name)
+		assert path, "Cannot find native library `{0}`".format(name)
+		return ctypes.cdll.LoadLibrary(path)
 
 	def __init__( self, path ):
 		self._cdll   = self.Load(path)
@@ -260,7 +262,6 @@ class CLibrary:
 		"""Returns a C value corresponding to the given (wrapped) value."""
 		return C.Unwrap(wrapped)
 
-
 # -----------------------------------------------------------------------------
 #
 # OBJECT WRAPPER
@@ -279,15 +280,11 @@ class CObject(object):
 	LIBRARY   = None
 	ACCESSORS = None
 
-	@classmethod
-	def GetFunctions( cls ):
-		res = []
-		for _ in cls.__bases__:
-			if hasattr(_, "GetFunctions"):
-				f = _.GetFunctions()
-				if f: res.append(f)
-		if cls.FUNCTIONS: res.append(cls.FUNCTIONS)
-		return "\n".join(res)
+
+
+	# =========================================================================
+	# PROPERTIES / C STRUCTURE FIELDS
+	# =========================================================================
 
 	@classmethod
 	def BindFields( cls ):
@@ -307,7 +304,7 @@ class CObject(object):
 		definition."""
 		c = C
 		def getter( self ):
-			value = getattr(self._wrapped.contents, name)
+			value = getattr(self._cobject.contents, name)
 			# print "g: ", cls.__name__ + "." + name, type, "=", value
 			# We manage string decoding here
 			if isinstance(value, bytes): value = value.decode("utf-8")
@@ -317,8 +314,22 @@ class CObject(object):
 			if isinstance(value, str): value = value.encode("utf-8")
 			value = self.LIBRARY.unwrap(value)
 			# print "s: ", cls.__name__ + "." + name, type, "<=", value
-			return setattr(self._wrapped.contents, name, value)
+			return setattr(self._cobject.contents, name, value)
 		return property(getter, setter)
+
+	# =========================================================================
+	# FUNCTIONS
+	# =========================================================================
+
+	@classmethod
+	def GetFunctions( cls ):
+		res = []
+		for _ in cls.__bases__:
+			if hasattr(_, "GetFunctions"):
+				f = _.GetFunctions()
+				if f: res.append(f)
+		if cls.FUNCTIONS: res.append(cls.FUNCTIONS)
+		return "\n".join(res)
 
 	@classmethod
 	def BindFunctions( cls, functions ):
@@ -329,6 +340,35 @@ class CObject(object):
 		for f, proto in functions:
 			res.append(cls.BindFunction(f, proto))
 		return res
+
+	@classmethod
+	def BindFunction( cls, ctypesFunction, proto ):
+		class_name = cls.__name__.rsplit(".",1)[-1]
+		# We need to keep a reference to C as otherwise it might
+		# be freed before we invoke self.LIBRARY.unwrap.
+		method    = None
+		is_method = len(proto[1]) >= 1 and proto[1][0][1] == "this"
+		if is_method:
+			method = cls._CreateMethod(ctypesFunction, proto)
+		else:
+			method = cls._CreateFunction(ctypesFunction, proto)
+		# We assume the convention is <Classname>_methodName, but in practice
+		# Classname could be the name of a super class.
+		#assert proto[0].startswith(class_name + "_"), "Prototype does not start with class name: {0} != {1}".format(proto[0], class_name)
+		name = proto[0][1] or proto[0][0].split("_", 1)[1]
+		# If we're not binding a method, we bind it as a static method
+		if name == "new":
+			# Any method called "new" will be bound as the constructor
+			assert not is_method
+			name   = "_constructor"
+			method = classmethod(method)
+		elif not is_method:
+			assert proto[0][0][0].upper() == proto[0][0][0], "Class functions must start be CamelCase: {0}".format(proto[0][0])
+			method = classmethod(method)
+		# print ("O:{1} bound as {3} {0}.{2}".format(cls.__name__, proto[0][0], name, "method" if is_method else "function"))
+		setattr(cls, name, method)
+		assert hasattr(cls, name)
+		return (name, method)
 
 	@classmethod
 	def _CreateFunction( cls, ctypesFunction, proto):
@@ -367,81 +407,56 @@ class CObject(object):
 			return res
 		return method
 
-	@classmethod
-	def BindFunction( cls, ctypesFunction, proto ):
-		class_name = cls.__name__.rsplit(".",1)[-1]
-		# We need to keep a reference to C as otherwise it might
-		# be freed before we invoke self.LIBRARY.unwrap.
-		method    = None
-		is_method = len(proto[1]) >= 1 and proto[1][0][1] == "this"
-		if is_method:
-			method = cls._CreateMethod(ctypesFunction, proto)
-		else:
-			method = cls._CreateFunction(ctypesFunction, proto)
-		# We assume the convention is <Classname>_methodName, but in practice
-		# Classname could be the name of a super class.
-		#assert proto[0].startswith(class_name + "_"), "Prototype does not start with class name: {0} != {1}".format(proto[0], class_name)
-		name = proto[0][1] or proto[0][0].split("_", 1)[1]
-		# If we're not binding a method, we bind it as a static method
-		if name == "new":
-			# Any method called "new" will be bound as the constructor
-			assert not is_method
-			name   = "_constructor"
-			method = classmethod(method)
-		elif not is_method:
-			assert proto[0][0][0].upper() == proto[0][0][0], "Class functions must start be CamelCase: {0}".format(proto[0][0])
-			method = classmethod(method)
-		# print ("O:{1} bound as {3} {0}.{2}".format(cls.__name__, proto[0][0], name, "method" if is_method else "function"))
-		setattr(cls, name, method)
-		assert hasattr(cls, name)
-		return (name, method)
-
-	@classmethod
-	def Wrap( cls, wrapped ):
-		"""Wraps the given object in this CObject. The given
-		object must be a ctypes value, usually a pointer to a struct."""
-		return cls( wrappedCObject=wrapped )
-
-	@classmethod
-	def _Create( cls, *args ):
-		return cls._constructor(*args)
+	# =========================================================================
+	# OBJECT CREATION
+	# =========================================================================
 
 	def __init__( self, *args, **kwargs ):
-		self._wrapped = None
+		"""Creates a new CObject or wraps this CObject if `wrappedCObject`
+		is given as keyword argument."""
+		self._cobject = None
 		self._init()
 		if "wrappedCObject" in kwargs:
-			self._wrap(kwargs["wrappedCObject"])
+			assert not args and len(kwargs) == 1, "Additional arguments other than `wrappedCObject` were given: {0} {1}".format(args, kwargs)
+			self._fromCOBject(kwargs["wrappedCObject"])
 		else:
 			self._new(*args, **kwargs)
 
-	def _wrap( self, wrapped ):
-		assert not self._wrapped
-		self._wrapped = wrapped
-		assert isinstance(self._wrapped, ctypes.POINTER(self.WRAPPED))
-		assert self._wrapped != None, "{0}(wrappedCObject): wrappedCObject expected, got: {1}".format(self.__class__.__name__, self._wrapped)
+	def _fromCOBject( self, cValue ):
+		"""This CObject will wrap the given cValue."""
+		assert not self._cobject
+		self._cobject = cValue
+		assert isinstance(self._cobject, ctypes.POINTER(self.WRAPPED))
+		assert self._cobject != None, "{0}(wrappedCObject): wrappedCObject expected, got: {1}".format(self.__class__.__name__, self._cobject)
 		self._mustFree = False
 
+	# =========================================================================
+	# OBJECT CREATION
+	# =========================================================================
+
 	def _new( self, *args, **kwargs ):
-		# We ensure that the _wrapped value returned by the creator is
+		"""Creates a new allocated instance of this object."""
+		# We ensure that the _cobject value returned by the creator is
 		# unwrapped. In fact, we might want to implement a special case
 		# for new that returns directly an unwrapped value.
-		instance       = self.__class__._Create(*args)
+		instance       = self.__class__._constructor(*args)
 		assert isinstance( instance, ctypes.POINTER(self.WRAPPED)), "{0}(): {1} pointer expected, got {2}".format(self.__class__.__name__, self.WRAPPED, instance)
-		assert not self._wrapped
-		assert instance != None, "{0}(): created instance seems to have no value: {1}".format(self.__class__.__name__, self._wrapped)
-		self._wrapped  = instance
+		assert not self._cobject
+		assert instance != None, "{0}(): created instance seems to have no value: {1}".format(self.__class__.__name__, self._cobject)
+		self._cobject  = instance
 		self._mustFree = True
 
 	def _init ( self ):
+		"""Called before the object is assigned a wrapped value."""
 		pass
 
 	# FIXME: We experience many problems with destructors, ie. segfaults in GC.
 	# This needs to be sorted out.
 	# def __del__( self ):
-	# 	if self._wrapped and self._mustFree:
+	# 	if self._cobject and self._mustFree:
 	# 		# FIXME: There are some issues with the __DEL__ when other stuff is not available
 	# 		if hasattr(self, "free") and getattr(self, "free"):
 	# 			print ("FREEING", self)
-	# 			self.free(self._wrapped)
+	# 			self.free(self._cobject)
 
 # EOF - vim: ts=4 sw=4 noet
