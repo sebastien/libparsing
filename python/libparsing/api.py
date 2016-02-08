@@ -951,37 +951,29 @@ class Libparsing(CLibrary):
 		of `ParsingElement` subclasses based on the element's type."""
 		# We return None if it's a reference to a NULL pointer
 		if not value: return None
+		if isinstance(value, str) or isinstance(value, int): return value
 		py_value      = value
 		resolved_type = C.TYPES.get(type(value))
 		if resolved_type:
-			if resolved_type is TReference:
-				struct      = value.contents
-				struct_type = struct.type
+			# FIXME: It might be better if we could directly get the pointer
+			address = ctypes.addressof(value.contents)
+			if address in C.COBJECTS:
+				py_value = C.COBJECTS[address]
+			elif resolved_type is TReference:
 				py_value    = Reference.Wrap(value)
+			elif resolved_type is TParsingElement:
+				element_type = value.contents.type
+				if element_type == TYPE_REFERENCE:   py_value = Reference.Wrap(value)
+				elif element_type == TYPE_WORD:      py_value = Word.Wrap(value)
+				elif element_type == TYPE_TOKEN:     py_value = Token.Wrap(value)
+				elif element_type == TYPE_RULE:      py_value = Rule.Wrap(value)
+				elif element_type == TYPE_GROUP:     py_value = Group.Wrap(value)
+				elif element_type == TYPE_CONDITION: py_value = Condition.Wrap(value)
+				elif element_type == TYPE_PROCEDURE: py_value = Procedure.Wrap(value)
+				else: raise ValueError("ParsingElement type not supported yet: {0} from {1}".format(element_type, wrapped))
+		else:
+			print ("UNRESOLVED TYPE", value)
 		return py_value
-		# # Otherwise we access the type and return new specific instances
-		# element_type = wrapped.contents.type
-		# address      = ctypes.addressof(wrapped.contents)
-		# if address in C.CACHE:
-		# 	return C.CACHE[address]
-		# if element_type == TYPE_REFERENCE:
-		# 	res = Reference(wrappedCObject=wrapped)
-		# elif element_type == TYPE_WORD:
-		# 	res = Word(wrappedCObject=wrapped)
-		# elif element_type == TYPE_TOKEN:
-		# 	res = Token(wrappedCObject=wrapped)
-		# elif element_type == TYPE_RULE:
-		# 	res = Rule(wrappedCObject=wrapped)
-		# elif element_type == TYPE_GROUP:
-		# 	res = Group(wrappedCObject=wrapped)
-		# elif element_type == TYPE_CONDITION:
-		# 	res = Condition(wrappedCObject=wrapped)
-		# elif element_type == TYPE_PROCEDURE:
-		# 	res = Procedure(wrappedCObject=wrapped)
-		# else:
-		# 	raise ValueError("ParsingElement type not supported yet: {0} from {1}".format(element_type, wrapped))
-		# C.CACHE[address] = res
-		# return res
 
 	#@classmethod
 	#def Wrap( cls, wrapped ):
