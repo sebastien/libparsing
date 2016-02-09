@@ -142,7 +142,7 @@ class TestCollection: #(unittest.TestCase):
 		assert r.match.offset  == 0
 		assert r.match.length  == 2
 		assert r.match.range() == (0, 2)
-		assert len(r.match.children()) == 2
+		assert len(r.match.children) == 2
 		self.assertEquals([_.group() for _ in r.match], ["a", "b"])
 		# We test child 1
 		ma = r.match[0]

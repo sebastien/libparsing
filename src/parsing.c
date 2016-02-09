@@ -493,7 +493,8 @@ void ParsingElement_free(ParsingElement* this) {
 	Reference* child = this->children;
 	while (child != NULL) {
 		Reference* next = child->next;
-		__DEALLOC(child);
+		assert(Reference_Is(child));
+		Reference_free(child);
 		child = next;
 	}
 	__DEALLOC(this);
@@ -1350,8 +1351,6 @@ void ParsingResult_free(ParsingResult* this) {
 	}
 	__DEALLOC(this);
 }
-
-
 
 // ----------------------------------------------------------------------------
 //

@@ -16,8 +16,6 @@ VERSION = "0.7.3"
 LICENSE = "http://ffctn.com/doc/licenses/bsd"
 LIB     = Libparsing()
 
-for k,v in sorted(C.TYPES.items()):
-	print (k, "→", v)
 # TODO: Clear memory management/ownership/freeint
 # TODO: Check weird stuff with Reference.element @property accessor
 # TODO: Enable usage of C.CACHE, it seems that ctypes.addressof does not work
