@@ -50,7 +50,7 @@ update-python-version: src/parsing.h
 # PRODUCTS
 # =============================================================================
 
-libparsing: lib$(PROJECT).so lib$(PROJECT).so.$(VERSION)
+libparsing: lib$(PROJECT).so lib$(PROJECT).so.$(VERSION) python/libparsing/libparsing.so
 	
 lib$(PROJECT).so: build/parsing.o
 	$(LD) -shared -lpcre $< -o $@
@@ -72,6 +72,9 @@ test-%: build/test-%.o build/parsing.o
 python/libparsing/libparsing.ffi: src/parsing.h
 	rm -f $@
 	cd python && python libparsing/__init__.py
+
+python/libparsing/libparsing.so: lib$(PROJECT).so
+	cp $< $@
 
 # =============================================================================
 # OBJECTS
