@@ -240,6 +240,10 @@ make install               # You can set PREFIX</code></pre>
 <h4><a name="Grammar_parseString_method"><span class="classifier">method</span> <code>Grammar_parseString</code></a></h4>
 <pre class="sourceCode c"><code class="sourceCode c">ParsingResult* Grammar_parseString( Grammar* this, <span class="dt">const</span> <span class="dt">char</span>* text );</code></pre>
 </div>
+<div id="method-grammar_freeelements" class="section level4">
+<h4><a name="Grammar_freeElements_method"><span class="classifier">method</span> <code>Grammar_freeElements</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="dt">void</span> Grammar_freeElements(Grammar* this);</code></pre>
+</div>
 </div>
 <div id="elements" class="section level2">
 <h2>Elements</h2>
@@ -745,6 +749,7 @@ make install               # You can set PREFIX</code></pre>
 </div>
 <div id="method-parsingresult_free" class="section level4">
 <h4><a name="ParsingResult_free_method"><span class="classifier">method</span> <code>ParsingResult_free</code></a></h4>
+<p>Frees this parsing result instance as well as all the matches it referes to.</p>
 <pre class="sourceCode c"><code class="sourceCode c"><span class="dt">void</span> ParsingResult_free(ParsingResult* this);</code></pre>
 </div>
 <div id="method-parsingresult_isfailure" class="section level4">

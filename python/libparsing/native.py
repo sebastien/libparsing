@@ -129,6 +129,7 @@ class C:
 		to the given structure."""
 		types = {}
 		for _ in ctypeClasses:
+			print ("REGISTER", _)
 			assert issubclass(_, ctypes.Structure)
 			# And we register, possibly overriding the already
 			# registered type.
@@ -254,6 +255,7 @@ class CLibrary:
 	def __init__( self, path ):
 		self._cdll   = self.Load(path)
 		self.symbols = CLibrary.Symbols()
+		self.ctypeToCObject = {}
 
 	def register( self, *wrapperClasses ):
 		"""Register the given `CObject` in this library, loading the
@@ -270,6 +272,7 @@ class CLibrary:
 			# We bind the functions declared in the wrapper
 			_.BindFunctions(functions)
 			_.BindFields()
+			self.ctypeToCObject[_.WRAPPED] = _
 		return self
 
 	def wrap( self, cValue ):
@@ -500,11 +503,12 @@ class CObject(object):
 
 	# FIXME: We experience many problems with destructors, ie. segfaults in GC.
 	# This needs to be sorted out.
-	# def __del__( self ):
-	# 	if self._cobject and self._mustFree:
-	# 		# FIXME: There are some issues with the __DEL__ when other stuff is not available
-	# 		if hasattr(self, "free") and getattr(self, "free"):
-	# 			self.free(self._cobjectPointer)
+	def __del__( self ):
+		if self._cobject and self._mustFree:
+			# FIXME: There are some issues with the __DEL__ when other stuff is not available
+			if hasattr(self, "free") and getattr(self, "free"):
+				# print ("FREEING {0}".format(self))
+				self.free(self._cobjectPointer)
 
 # -----------------------------------------------------------------------------
 #

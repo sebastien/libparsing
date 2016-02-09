@@ -296,6 +296,8 @@ Grammar* Grammar_new(void);
 // @destructor
 void Grammar_free(Grammar* this);
 
+
+
 // @method
 void Grammar_prepare ( Grammar* this );
 
@@ -310,6 +312,9 @@ ParsingResult* Grammar_parsePath( Grammar* this, const char* path );
 
 // @method
 ParsingResult* Grammar_parseString( Grammar* this, const char* text );
+
+// @method
+void Grammar_freeElements(Grammar* this);
 
 /**
  * Elements
@@ -777,6 +782,7 @@ typedef struct ParsingResult {
 ParsingResult* ParsingResult_new(Match* match, ParsingContext* context);
 
 // @method
+// Frees this parsing result instance as well as all the matches it referes to.
 void ParsingResult_free(ParsingResult* this);
 
 // @method

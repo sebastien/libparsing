@@ -333,21 +333,29 @@ int Grammar_symbolsCount(Grammar* this) {
 	return this->axiomCount + this->skipCount;
 }
 
-void Grammar_free(Grammar* this) {
-	TRACE("Grammar_free: %p", this)
+void Grammar_freeElements(Grammar* this) {
 	int count = (this->axiomCount + this->skipCount);
 	for (int i = 0; i < count ; i++ ) {
 		Element* element = this->elements[i];
 		if (ParsingElement_Is(element)) {
 			ParsingElement* e = (ParsingElement*)element;
-			DEBUG("Grammar_free(%p):[%d/%d]->ParsingElement %p %c.%d#%s", this, i, count, element, e->type, e->id, e->name)
+			DEBUG("Grammar_freeElements(%p):[%d/%d]->ParsingElement %p %c.%d#%s", this, i, count, element, e->type, e->id, e->name)
 			ParsingElement_free(e);
 		} else {
 			Reference* r = (Reference*)element;
-			DEBUG("Grammar_free(%p):[%d/%d]->Reference %p.%c(%d)[%c]#%s", this, i, count, element, r->type, r->id, r->cardinality, r->name)
+			DEBUG("Grammar_freeElements(%p):[%d/%d]->Reference %p.%c(%d)[%c]#%s", this, i, count, element, r->type, r->id, r->cardinality, r->name)
 			Reference_free(r);
 		}
 	}
+	this->axiomCount = 0;
+	this->skipCount  = 0;
+	this->skip       = NULL;
+	this->axiom      = NULL;
+	this->elements   = NULL;
+}
+
+void Grammar_free(Grammar* this) {
+	TRACE("Grammar_free: %p", this)
 	__DEALLOC(this);
 }
 
@@ -395,7 +403,6 @@ int Match_getLength(Match *this) {
 // fewer allocs.
 void Match_free(Match* this) {
 	if (this!=NULL && this!=FAILURE) {
-		TRACE("Match_free: %p", this);
 		// We free the children
 		assert(this->child != this);
 		Match_free(this->child);

@@ -406,6 +406,14 @@ ParsingResult* Grammar_parseString( Grammar* this, const char* text );
 ```
 
 
+#### <a name="Grammar_freeElements_method"><span class="classifier">method</span> `Grammar_freeElements`</a>
+
+
+```c
+void Grammar_freeElements(Grammar* this);
+```
+
+
 Elements
 --------
 
@@ -1335,6 +1343,7 @@ ParsingResult* ParsingResult_new(Match* match, ParsingContext* context);
 
 #### <a name="ParsingResult_free_method"><span class="classifier">method</span> `ParsingResult_free`</a>
 
+ Frees this parsing result instance as well as all the matches it referes to.
 
 ```c
 void ParsingResult_free(ParsingResult* this);

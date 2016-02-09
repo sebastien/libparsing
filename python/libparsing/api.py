@@ -637,10 +637,6 @@ class ParsingResult(CObject):
 		i = " " * (o - s - 1) + "^"
 		return l + "\n" + i
 
-	# def __del__( self ):
-	# 	if self._mustFree:
-	# 		self.free()
-
 # -----------------------------------------------------------------------------
 #
 # GRAMMAR
@@ -937,21 +933,21 @@ class Libparsing(CLibrary):
 			Grammar,
 			Word,      WordMatch,
 			Token,     TokenMatch,
-			Rule,      #RuleMatch,
-			Group,     #GroupMatch,
-			Condition, #ConditionMatch,
-			Procedure, #ConditionMatch,
+			Rule,      RuleMatch,
+			Group,     GroupMatch,
+			Condition, ConditionMatch,
+			Procedure, ProcedureMatch,
 		)
 		# We dynamically register shorthand factory methods for parsing elements in
 		# the Grammar.
 		Grammar.Register(Word, Token, Group, Rule, Condition, Procedure)
 
-	def wrap( cls, value ):
+	def wrap( self, value ):
 		"""This classmethod acts as a factory to produce specialized instances
 		of `ParsingElement` subclasses based on the element's type."""
 		# We return None if it's a reference to a NULL pointer
-		if not value: return None
 		if isinstance(value, str) or isinstance(value, int): return value
+		if not value: return None
 		py_value      = value
 		resolved_type = C.TYPES.get(type(value))
 		if resolved_type:
@@ -971,8 +967,13 @@ class Libparsing(CLibrary):
 				elif element_type == TYPE_CONDITION: py_value = Condition.Wrap(value)
 				elif element_type == TYPE_PROCEDURE: py_value = Procedure.Wrap(value)
 				else: raise ValueError("ParsingElement type not supported yet: {0} from {1}".format(element_type, wrapped))
-		else:
-			print ("UNRESOLVED TYPE", value)
+			elif resolved_type in self.ctypeToCObject:
+				cobject_class = self.ctypeToCObject[resolved_type]
+				py_value = cobject_class.Wrap(value)
+			else:
+				# In this case, we have a pointer to a structure, so we return
+				# the pointer content's in order to manipulate/access it.
+				py_value = value.contents
 		return py_value
 
 	#@classmethod
