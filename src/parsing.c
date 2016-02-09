@@ -342,9 +342,9 @@ void Grammar_freeElements(Grammar* this) {
 			DEBUG("Grammar_freeElements(%p):[%d/%d]->ParsingElement %p %c.%d#%s", this, i, count, element, e->type, e->id, e->name)
 			ParsingElement_free(e);
 		} else {
-			Reference* r = (Reference*)element;
+			// Reference* r = (Reference*)element;
 			DEBUG("Grammar_freeElements(%p):[%d/%d]->Reference %p.%c(%d)[%c]#%s", this, i, count, element, r->type, r->id, r->cardinality, r->name)
-			Reference_free(r);
+			// Reference_free(r);
 		}
 	}
 	this->axiomCount = 0;

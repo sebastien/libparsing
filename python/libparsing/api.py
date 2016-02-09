@@ -152,7 +152,8 @@ class Reference(CObject):
 		assert res.element is element
 		if name        is not None: res.name        = name
 		if cardinality is not None: res.cardinality = cardinality
-		res._mustFree = True
+		# The reference will be freed automatically by the element
+		res._mustFree = False
 		return res
 
 	def _new( self, element=None, name=None, cardinality=NOTHING ):
