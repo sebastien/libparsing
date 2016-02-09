@@ -112,7 +112,8 @@ class TMatch(ctypes.Structure):
 	ParsingContext* context;
 	void*           data;      // The matched data (usually a subset of the input stream)
 	Match*          next;      // A pointer to the next  match (see `References`)
-	Match*          child;     // A pointer to the child match (see `References`)
+	Match*          children;  // A pointer to the child match (see `References`)
+	void*           result;    // A pointer to the result of the match
 	"""
 
 class TTokenMatch(ctypes.Structure):

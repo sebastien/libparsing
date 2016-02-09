@@ -358,8 +358,8 @@ typedef struct Match {
 	ParsingContext* context;
 	void*           data;      // The matched data (usually a subset of the input stream)
 	struct Match*   next;      // A pointer to the next  match (see `References`)
-	struct Match*   child;     // A pointer to the child match (see `References`)
-	//void*           result;    // A pointer to the result of the match
+	struct Match*   children;  // A pointer to the child match (see `References`)
+	void*           result;    // A pointer to the result of the match
 } Match;
 
 // @define
@@ -443,7 +443,6 @@ int Match_getLength(Match* this);
 // @method
 int Match__walk(Match* this, WalkingCallback callback, int step, void* context );
 
-
 // @type ParsingElement
 typedef struct ParsingElement {
 	char           type;       // Type is used du differentiate ParsingElement from Reference
@@ -455,7 +454,6 @@ typedef struct ParsingElement {
 	struct Match*         (*process)   (struct ParsingElement*, ParsingContext*, Match*);
 	void                  (*freeMatch) (Match*);
 } ParsingElement;
-
 
 // @operation
 // Tells if the given pointer is a pointer to a ParsingElement.
@@ -863,7 +861,7 @@ void ParsingStep_free( ParsingStep* this );
 typedef struct Processor Processor;
 
 // @callback
-typedef int (*ProcessorCallback)(Processor* processor, Match* match);
+typedef void (*ProcessorCallback)(Processor* processor, Match* match);
 
 typedef struct Processor {
 	ProcessorCallback   fallback;
@@ -877,7 +875,6 @@ Processor* Processor_new( );
 
 // @method
 void Processor_free(Processor* this);
-
 
 // @method
 void Processor_register (Processor* this, int symbolID, ProcessorCallback callback) ;

@@ -88,7 +88,7 @@ class CompositeElement(ParsingElement):
 		children      = []
 		while child_cvalue:
 			children.append(self.LIBRARY.wrap(child_cvalue))
-			child_cvalue  = child_cvalue.contents.next
+			child_cvalue = child_cvalue.contents.next
 		return tuple(children)
 
 	def set( self, *references ):
@@ -359,7 +359,6 @@ class Match(CObject):
 	@property
 	def name( self ):
 		"""The name of the reference."""
-		print ("MATCH NAME", self, ":", self.element.name)
 		return self.element.name
 
 	@property
@@ -404,8 +403,8 @@ class CompositeMatch(Match):
 
 	@caccessor
 	def children(self):
-		"""Returns the children of this ParsingElement as a tuple."""
-		child_cvalue  = self._cobject.child
+		"""Returns the children of this Match as a tuple."""
+		child_cvalue  = self._cobject.children
 		children      = []
 		while child_cvalue:
 			children.append(self.LIBRARY.wrap(child_cvalue))
@@ -466,7 +465,7 @@ class ReferenceMatch(CompositeMatch):
 
 	def _extractValue( self ):
 		if self.isOne() or self.isOptional():
-			return self.child.value if self.child is not None else None
+			return self.children[0].value if self.children else None
 		else:
 			return [_.value for _ in self.children]
 
@@ -519,6 +518,9 @@ class WordMatch(Match):
 		assert index == 0
 		return element.config.word
 
+	def __getitem__( self, index ):
+		return self.group(index)
+
 # -----------------------------------------------------------------------------
 #
 # TOKEN MATCH
@@ -544,6 +546,9 @@ class TokenMatch(Match):
 
 	def groups( self ):
 		return [self.group(i) for i in range(self.match.count)]
+
+	def __getitem__( self, index ):
+		return self.group(index)
 
 # -----------------------------------------------------------------------------
 #
@@ -798,6 +803,10 @@ class Processor(CObject):
 
 	def _new( self, grammar ):
 		CObject._new(self)
+		# py_callback = self._defaultHandler
+		# c_callback  = C.TYPES["ProcessorCallback"](py_callback)
+		# self._cobjectCache["fallback"] = (py_callback, c_callback)
+		# self._cobject.fallback         = c_callback
 		self._bindSymbols(grammar)
 		self._bindHandlers()
 
@@ -827,16 +836,10 @@ class Processor(CObject):
 			if name not in self.symbolByName:
 				logging.warn("Handler `{0}` does not match any of {1}".format(k, ", ".join(self.symbolByName.keys())))
 			else:
-				symbol = self.symbolByName[name]
-				#self.handlerByID[symbol.id] = getattr(self, k)
-				py_callback = getattr(self, k)
-				#py_callback = lambda p,m:print("POUET EXEC", p, m)
-				def py_callback(processor, match):
-					print ("HANDLER", processor, match)
-					return None
+				symbol      = self.symbolByName[name]
+				py_method   = getattr(self, k)
+				py_callback = lambda processor, match, method=py_method: self._applyHandler(method, self.LIBRARY.wrap(match))
 				c_callback  = C.TYPES["ProcessorCallback"](py_callback)
-				#c_type      = ctypes.CFUNCTYPE(None, ctypes.POINTER(TProcessor), ctypes.POINTER(TMatch))
-				#c_callback  = c_type(py_callback)
 				self._callbacks[symbol.id] = (py_callback, c_callback)
 				self._register(symbol.id, c_callback)
 
@@ -848,7 +851,6 @@ class Processor(CObject):
 		return self
 
 	def process( self, match ):
-		print ("PROCESSING MATCH", match)
 		self._process(match, 0)
 
 	def XXXprocess( self, match ):
@@ -875,9 +877,29 @@ class Processor(CObject):
 				result = match.value
 			return result
 
+	def _defaultHandler( self, handler, match ):
+		child = match.contents.children
+		while child:
+			self._process(child, 0)
+			child = child.contents.next
+		# NOTE: Slow below
+		# match       = self.LIBRARY.wrap(match)
+		# result      = []
+		# match.value = result
+		# for _ in match.children:
+		# 	result.append(self.process(_) if isinstance(_, Match) else _)
+
 	def _applyHandler( self, handler, match ):
+		result      = []
+		match.value = result
+		for _ in match.children:
+			result.append(self.process(_) if isinstance(_, Match) else _)
+
+	def XXX_applyHandler( self, handler, match ):
 		"""Applies the given handler to the given match, returning the value
 		produces but the handler."""
+		match.value = "OK"
+		return True
 		# We only bind the arguments listed
 		fcode    = handler.func_code
 		argnames = fcode.co_varnames[0:fcode.co_argcount]

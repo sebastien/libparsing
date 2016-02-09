@@ -274,9 +274,9 @@ make install               # You can set PREFIX</code></pre>
     ParsingContext* context;
     <span class="dt">void</span>*           data;      <span class="co">// The matched data (usually a subset of the input stream)</span>
     <span class="kw">struct</span> Match*   next;      <span class="co">// A pointer to the next  match (see `References`)</span>
-    <span class="kw">struct</span> Match*   child;     <span class="co">// A pointer to the child match (see `References`)</span></code></pre>
-<p>void* result; // A pointer to the result of the match</p>
-<pre class="sourceCode c"><code class="sourceCode c">} Match;</code></pre>
+    <span class="kw">struct</span> Match*   children;  <span class="co">// A pointer to the child match (see `References`)</span>
+    <span class="dt">void</span>*           result;    <span class="co">// A pointer to the result of the match</span>
+} Match;</code></pre>
 </div>
 <div id="define-status_init" class="section level4">
 <h4><a name="STATUS_INIT_define"><span class="classifier">define</span> <code>STATUS_INIT</code></a></h4>
@@ -819,7 +819,7 @@ make install               # You can set PREFIX</code></pre>
 <pre class="sourceCode c"><code class="sourceCode c"><span class="kw">typedef</span> <span class="kw">struct</span> Processor Processor;</code></pre>
 <div id="callback-processorcallback" class="section level4">
 <h4><a name="ProcessorCallback_callback"><span class="classifier">callback</span> <code>ProcessorCallback</code></a></h4>
-<pre class="sourceCode c"><code class="sourceCode c"><span class="kw">typedef</span> <span class="dt">int</span> (*ProcessorCallback)(Processor* processor, Match* match);
+<pre class="sourceCode c"><code class="sourceCode c"><span class="kw">typedef</span> <span class="dt">void</span> (*ProcessorCallback)(Processor* processor, Match* match);
 
 <span class="kw">typedef</span> <span class="kw">struct</span> Processor {
     ProcessorCallback   fallback;

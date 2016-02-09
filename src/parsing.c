@@ -385,8 +385,9 @@ Match* Match_new(void) {
 	this->offset    = 0;
 	this->context   = NULL;
 	this->data      = NULL;
-	this->child     = NULL;
+	this->children  = NULL;
 	this->next      = NULL;
+	this->result    = NULL;
 	return this;
 }
 
@@ -404,8 +405,8 @@ int Match_getLength(Match *this) {
 void Match_free(Match* this) {
 	if (this!=NULL && this!=FAILURE) {
 		// We free the children
-		assert(this->child != this);
-		Match_free(this->child);
+		assert(this->children != this);
+		Match_free(this->children);
 		// We free the next one
 		assert(this->next != this);
 		Match_free(this->next);
@@ -429,8 +430,8 @@ bool Match_isSuccess(Match* this) {
 
 int Match__walk(Match* this, WalkingCallback callback, int step, void* context ){
 	step = callback(this, step, context);
-	if (this->child != NULL && step >= 0) {
-		step = Match__walk(this->child, callback, step + 1, context);
+	if (this->children != NULL && step >= 0) {
+		step = Match__walk(this->children, callback, step + 1, context);
 	}
 	if (this->next != NULL && step >= 0) {
 		step = Match__walk(this->next, callback, step + 1, context);
@@ -723,9 +724,9 @@ Match* Reference_recognize(Reference* this, ParsingContext* context) {
 		int    length   = context->iterator->offset - offset;
 		Match* m        = Match_Success(length, (ParsingElement*)this, context);
 		// We make sure that if we had a success, that we add
-		m->child        = result == FAILURE ? NULL : result;
+		m->children     = result == FAILURE ? NULL : result;
 		m->offset       = offset;
-		assert(m->child == NULL || m->child->element != NULL);
+		assert(m->children == NULL || m->children->element != NULL);
 		LOG_IF(context->grammar->isVerbose, "    [✓] Reference %s#%d@%s matched %d/%c times over %d-%d", this->element->name, this->element->id, this->name, count, this->cardinality, offset, offset+length)
 		return MATCH_STATS(m);
 	} else {
@@ -988,9 +989,9 @@ Match* Group_recognize(ParsingElement* this, ParsingContext* context){
 		match = Reference_recognize(child, context);
 		if (Match_isSuccess(match)) {
 			// The first succeeding child wins
-			Match* result  = Match_Success(match->length, this, context);
-			result->offset = offset;
-			result->child  = match;
+			Match* result    = Match_Success(match->length, this, context);
+			result->offset   = offset;
+			result->children = match;
 			LOG_IF( context->grammar->isVerbose && strcmp(this->name, "_") != 0, "[✓] Group %s#%d[%d] matched %zd-%zd[%zd]", this->name, this->id, step, offset, context->iterator->offset, result->length)
 			return MATCH_STATS(result);
 		} else {
@@ -1070,8 +1071,8 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 			// If this is the first child (ie. last == NULL), we create
 			// a new match success at the original parsing offset.
 			result = Match_Success(0, this, context);
-			result->offset = offset;
-			result->child  = last = match;
+			result->offset   = offset;
+			result->children = last = match;
 		} else {
 			last = last->next = match;
 		}
@@ -1514,21 +1515,21 @@ void Processor_register (Processor* this, int symbolID, ProcessorCallback callba
 }
 
 int Processor_process (Processor* this, Match* match, int step) {
+	ProcessorCallback handler = this->fallback;
 	if (ParsingElement_Is(match->element)) {
 		int element_id = ((ParsingElement*)match->element)->id;
 		if (element_id >= 0 && element_id < this->callbacksCount) {
-			ProcessorCallback handler = this->callbacks[element_id];
-			LOG("PROCESSING MATCH FOR ELEMENT: %d#%d handler=%p", element_id, step, handler);
-			if (handler != NULL) {
-				handler(this, match);
-			}
+			handler = this->callbacks[element_id];
 		}
 	}
-	step += 1;
-	Match* child = match->child;
-	while (child) {
-		step  = Processor_process(this, child, step);
-		child = child->next;
+	if (handler != NULL) {
+		handler (this, match);
+	} else {
+		Match* child = match->children;
+		while (child) {
+			step  = Processor_process(this, child, step);
+			child = child->next;
+		}
 	}
 	return step;
 }

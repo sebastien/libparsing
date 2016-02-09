@@ -469,12 +469,8 @@ typedef struct Match {
 	ParsingContext* context;
 	void*           data;      // The matched data (usually a subset of the input stream)
 	struct Match*   next;      // A pointer to the next  match (see `References`)
-	struct Match*   child;     // A pointer to the child match (see `References`)
-```
-
-void*           result;    // A pointer to the result of the match
-
-```c
+	struct Match*   children;  // A pointer to the child match (see `References`)
+	void*           result;    // A pointer to the result of the match
 } Match;
 ```
 
@@ -1490,7 +1486,7 @@ typedef struct Processor Processor;
 
 
 ```c
-typedef int (*ProcessorCallback)(Processor* processor, Match* match);
+typedef void (*ProcessorCallback)(Processor* processor, Match* match);
 
 typedef struct Processor {
 	ProcessorCallback   fallback;
