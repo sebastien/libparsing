@@ -75,7 +75,7 @@ class C:
 		assert not isinstance(value, ctypes.Structure), "C.Unwrap: ctypes structures must be wrapped in CObjects {0}".format(value)
 		if type(cast) is C_FUNCTION_TYPE:
 			# A Python function must be wrapped in the callback
-			c_value = cast(value)
+			c_value = cast(value) if value else None
 		elif CObject and isinstance(value, CObject) or isinstance(value, object) and hasattr(value, "_cobjectPointer"):
 			# We pass the cobject structure by reference, CObject might be garbage collected at this time
 			return value._cobjectPointer
@@ -503,7 +503,7 @@ class CObject(object):
 	# FIXME: We experience many problems with destructors, ie. segfaults in GC.
 	# This needs to be sorted out.
 	def __del__( self ):
-		if self._cobjectPointer and self._mustFree:
+		if hasattr(self, "_cobjectPointer") and self._cobjectPointer and self._mustFree:
 			# FIXME: There are some issues with the __DEL__ when other stuff is not available
 			if hasattr(self, "free") and getattr(self, "free"):
 				self.free(self._cobjectPointer)

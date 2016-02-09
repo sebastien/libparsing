@@ -255,14 +255,19 @@ class Condition(ParsingElement):
 
 	def _init( self ):
 		ParsingElement._init(self)
-		self.callback = None
+		self._callback = None
 
 	def _new( self, callback ):
-		self.callback = (callback, C.TYPES["ConditionCallback"](callback))
-		return ParsingElement._new(self, self.callback[1])
+		py_callback = lambda element, context: None
+		c_callback  = C.TYPES["ConditionCallback"](py_callback)
+		self._callback = (py_callback, c_callback)
+		return ParsingElement._new(self, c_callback)
+
+
+		return ParsingElement._new(self, None)
 
 	def __repr__( self ):
-		return "<Condition#{1}:{0}={2} at {3}>".format(self.name, self.id, self.callback[0], hex(id(self)))
+		return "<Condition#{1}:{0}={2} at {3}>".format(self.name, self.id, None, hex(id(self)))
 
 # -----------------------------------------------------------------------------
 #
@@ -271,20 +276,23 @@ class Condition(ParsingElement):
 # -----------------------------------------------------------------------------
 
 class Procedure(ParsingElement):
+
 	FUNCTIONS = """
 	ParsingElement* Procedure_new(ProcedureCallback c);
 	"""
 
 	def _init( self ):
 		ParsingElement._init(self)
-		self.callback = None
+		self._callback = None
 
 	def _new( self, callback ):
-		self.callback = (callback, C.TYPES["ProcedureCallback"](callback))
-		return ParsingElement._new(self, self.callback[1])
+		py_callback = lambda element, context: None
+		c_callback  = C.TYPES["ProcedureCallback"](py_callback)
+		self._callback = (py_callback, c_callback)
+		return ParsingElement._new(self, c_callback)
 
 	def __repr__( self ):
-		return "<Procedure#{1}:{0}={2} at {3}>".format(self.name, self.id, self.callback[0], hex(id(self)))
+		return "<Procedure#{1}:{0}={2} at {3}>".format(self.name, self.id, None, hex(id(self)))
 
 # -----------------------------------------------------------------------------
 #
@@ -822,10 +830,15 @@ class Processor(CObject):
 				symbol = self.symbolByName[name]
 				#self.handlerByID[symbol.id] = getattr(self, k)
 				py_callback = getattr(self, k)
-				# print ("CALLBACK", py_callback)
-				#c_callback  = C.TYPES["ProcessorCallback"](py_callback)
-				# self._callbacks[symbol.id] = (py_callback, c_callback)
-				# self._register(symbol.id, c_callback)
+				#py_callback = lambda p,m:print("POUET EXEC", p, m)
+				def py_callback(processor, match):
+					print ("HANDLER", processor, match)
+					return None
+				c_callback  = C.TYPES["ProcessorCallback"](py_callback)
+				#c_type      = ctypes.CFUNCTYPE(None, ctypes.POINTER(TProcessor), ctypes.POINTER(TMatch))
+				#c_callback  = c_type(py_callback)
+				self._callbacks[symbol.id] = (py_callback, c_callback)
+				self._register(symbol.id, c_callback)
 
 	def on( self, symbol, callback ):
 		"""Binds a handler for the given symbol."""
@@ -835,6 +848,7 @@ class Processor(CObject):
 		return self
 
 	def process( self, match ):
+		print ("PROCESSING MATCH", match)
 		self._process(match, 0)
 
 	def XXXprocess( self, match ):

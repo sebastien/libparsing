@@ -219,8 +219,8 @@ C.TYPES.update({
 	"ConditionCallback"  : ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.POINTER(TParsingElement), ctypes.POINTER(TParsingContext)),
 	"ProcedureCallback"  : ctypes.CFUNCTYPE(None, ctypes.POINTER(TParsingElement), ctypes.POINTER(TParsingContext)),
 	"ProcessorCallback"  : ctypes.CFUNCTYPE(None, ctypes.POINTER(TProcessor), ctypes.POINTER(TMatch)),
-	"ProcessorCallback*" : ctypes.POINTER(ctypes.CFUNCTYPE(None, ctypes.POINTER(TProcessor), ctypes.POINTER(TMatch))),
 })
+C.TYPES["ProcessorCallback*"] = ctypes.POINTER(C.TYPES["ProcessorCallback"])
 
 # We register structure definitions that we want to be accessible
 # through C types

@@ -1115,7 +1115,8 @@ ParsingElement* Procedure_new(ProcedureCallback c) {
 
 Match*  Procedure_recognize(ParsingElement* this, ParsingContext* context) {
 	if (this->config != NULL) {
-		((ProcedureCallback)(this->config))(this, context);
+		// FIXME: Executing handlers is still quite problematic
+		//((ProcedureCallback)(this->config))(this, context);
 	}
 	LOG_IF( context->grammar->isVerbose && strcmp(this->name, "_") != 0, "[✓] Procedure %s#%d executed at %zd", this->name, this->id, context->iterator->offset)
 	return MATCH_STATS(Match_Success(0, this, context));
@@ -1137,7 +1138,9 @@ ParsingElement* Condition_new(ConditionCallback c) {
 
 Match*  Condition_recognize(ParsingElement* this, ParsingContext* context) {
 	if (this->config != NULL) {
-		Match* result = ((ConditionCallback)this->config)(this, context);
+		// FIXME: Executing handlers is still quite problematic
+		//Match* result = ((ConditionCallback)this->config)(this, context);
+		Match* result = (Match*)1;
 		// We support special cases where the condition can return a boolean
 		if      (result == (Match*)0) { result = FAILURE; }
 		else if (result == (Match*)1) { result = Match_Success(0, this, context);}
@@ -1492,7 +1495,7 @@ Processor* Processor_new() {
 }
 
 void Processor_free(Processor* this) {
-	__DEALLOC(this);
+	//__DEALLOC(this);
 }
 
 void Processor_register (Processor* this, int symbolID, ProcessorCallback callback ) {
@@ -1516,7 +1519,9 @@ int Processor_process (Processor* this, Match* match, int step) {
 		if (element_id >= 0 && element_id < this->callbacksCount) {
 			ProcessorCallback handler = this->callbacks[element_id];
 			LOG("PROCESSING MATCH FOR ELEMENT: %d#%d handler=%p", element_id, step, handler);
-			// handler(this, match);
+			if (handler != NULL) {
+				handler(this, match);
+			}
 		}
 	}
 	step += 1;
