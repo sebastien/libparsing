@@ -274,8 +274,9 @@ make install               # You can set PREFIX</code></pre>
     ParsingContext* context;
     <span class="dt">void</span>*           data;      <span class="co">// The matched data (usually a subset of the input stream)</span>
     <span class="kw">struct</span> Match*   next;      <span class="co">// A pointer to the next  match (see `References`)</span>
-    <span class="kw">struct</span> Match*   child;     <span class="co">// A pointer to the child match (see `References`)</span>
-} Match;</code></pre>
+    <span class="kw">struct</span> Match*   child;     <span class="co">// A pointer to the child match (see `References`)</span></code></pre>
+<p>void* result; // A pointer to the result of the match</p>
+<pre class="sourceCode c"><code class="sourceCode c">} Match;</code></pre>
 </div>
 <div id="define-status_init" class="section level4">
 <h4><a name="STATUS_INIT_define"><span class="classifier">define</span> <code>STATUS_INIT</code></a></h4>
@@ -811,6 +812,36 @@ make install               # You can set PREFIX</code></pre>
 <div id="destructor-parsingstep_free" class="section level4">
 <h4><a name="ParsingStep_free_destructor"><span class="classifier">destructor</span> <code>ParsingStep_free</code></a></h4>
 <pre class="sourceCode c"><code class="sourceCode c"><span class="dt">void</span> ParsingStep_free( ParsingStep* this );</code></pre>
+</div>
+</div>
+<div id="processor" class="section level2">
+<h2>Processor</h2>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="kw">typedef</span> <span class="kw">struct</span> Processor Processor;</code></pre>
+<div id="callback-processorcallback" class="section level4">
+<h4><a name="ProcessorCallback_callback"><span class="classifier">callback</span> <code>ProcessorCallback</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="kw">typedef</span> <span class="dt">int</span> (*ProcessorCallback)(Processor* processor, Match* match);
+
+<span class="kw">typedef</span> <span class="kw">struct</span> Processor {
+    ProcessorCallback   fallback;
+    ProcessorCallback*  callbacks;
+    <span class="dt">int</span>                 callbacksCount;
+} Processor;</code></pre>
+</div>
+<div id="constructor-processor" class="section level4">
+<h4><a name="Processor_constructor"><span class="classifier">constructor</span> <code>Processor</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c">Processor* Processor_new( );</code></pre>
+</div>
+<div id="method-processor_free" class="section level4">
+<h4><a name="Processor_free_method"><span class="classifier">method</span> <code>Processor_free</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="dt">void</span> Processor_free(Processor* this);</code></pre>
+</div>
+<div id="method-processor_register" class="section level4">
+<h4><a name="Processor_register_method"><span class="classifier">method</span> <code>Processor_register</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="dt">void</span> Processor_register (Processor* this, <span class="dt">int</span> symbolID, ProcessorCallback callback) ;</code></pre>
+</div>
+<div id="method-processor_process" class="section level4">
+<h4><a name="Processor_process_method"><span class="classifier">method</span> <code>Processor_process</code></a></h4>
+<pre class="sourceCode c"><code class="sourceCode c"><span class="dt">int</span> Processor_process (Processor* this, Match* match, <span class="dt">int</span> step);</code></pre>
 </div>
 </div>
 <div id="utilities" class="section level2">

@@ -470,6 +470,11 @@ typedef struct Match {
 	void*           data;      // The matched data (usually a subset of the input stream)
 	struct Match*   next;      // A pointer to the next  match (see `References`)
 	struct Match*   child;     // A pointer to the child match (see `References`)
+```
+
+void*           result;    // A pointer to the result of the match
+
+```c
 } Match;
 ```
 
@@ -1470,6 +1475,60 @@ ParsingStep* ParsingStep_new( ParsingElement* element );
 
 ```c
 void ParsingStep_free( ParsingStep* this );
+```
+
+
+Processor
+---------
+
+```c
+typedef struct Processor Processor;
+```
+
+
+#### <a name="ProcessorCallback_callback"><span class="classifier">callback</span> `ProcessorCallback`</a>
+
+
+```c
+typedef int (*ProcessorCallback)(Processor* processor, Match* match);
+
+typedef struct Processor {
+	ProcessorCallback   fallback;
+	ProcessorCallback*  callbacks;
+	int                 callbacksCount;
+} Processor;
+```
+
+
+#### <a name="Processor_constructor"><span class="classifier">constructor</span> `Processor`</a>
+
+
+```c
+Processor* Processor_new( );
+```
+
+
+#### <a name="Processor_free_method"><span class="classifier">method</span> `Processor_free`</a>
+
+
+```c
+void Processor_free(Processor* this);
+```
+
+
+#### <a name="Processor_register_method"><span class="classifier">method</span> `Processor_register`</a>
+
+
+```c
+void Processor_register (Processor* this, int symbolID, ProcessorCallback callback) ;
+```
+
+
+#### <a name="Processor_process_method"><span class="classifier">method</span> `Processor_process`</a>
+
+
+```c
+int Processor_process (Processor* this, Match* match, int step);
 ```
 
 

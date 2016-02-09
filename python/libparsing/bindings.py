@@ -191,6 +191,14 @@ class TGrammar(ctypes.Structure):
 	bool             isVerbose;
 	"""
 
+class TProcessor(ctypes.Structure):
+
+	STRUCTURE = """
+	ProcessorCallback   fallback;
+	ProcessorCallback*  callbacks;
+	int                 callbacksCount;
+	"""
+
 # -----------------------------------------------------------------------------
 #
 # C LIB PARSING
@@ -198,17 +206,20 @@ class TGrammar(ctypes.Structure):
 # -----------------------------------------------------------------------------
 
 C.TYPES.update({
-	"iterated_t"        : ctypes.c_char,
-	"iterated_t*"       : ctypes.c_char_p,
-	"Iterator*"         : ctypes.c_void_p,
-	"Element*"          : ctypes.c_void_p,
-	"Element**"         : ctypes.POINTER(ctypes.c_void_p),
-	"ParsingContext*"   : ctypes.c_void_p,
-	"ParsingOffset*"    : ctypes.c_void_p,
-	"IteratorCallback"  : ctypes.CFUNCTYPE(ctypes.c_bool, ctypes.POINTER(TIterator), ctypes.c_int),
-	"WalkingCallback"   : ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p),
-	"ConditionCallback" : ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.POINTER(TParsingElement), ctypes.POINTER(TParsingContext)),
-	"ProcedureCallback" : ctypes.CFUNCTYPE(None, ctypes.POINTER(TParsingElement), ctypes.POINTER(TParsingContext)),
+	"iterated_t"         : ctypes.c_char,
+	"iterated_t*"        : ctypes.c_char_p,
+	"Iterator*"          : ctypes.c_void_p,
+	"Element*"           : ctypes.c_void_p,
+	"Element**"          : ctypes.POINTER(ctypes.c_void_p),
+	"Processor*"         : ctypes.c_void_p,
+	"ParsingContext*"    : ctypes.c_void_p,
+	"ParsingOffset*"     : ctypes.c_void_p,
+	"IteratorCallback"   : ctypes.CFUNCTYPE(ctypes.c_bool, ctypes.POINTER(TIterator), ctypes.c_int),
+	"WalkingCallback"    : ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p),
+	"ConditionCallback"  : ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.POINTER(TParsingElement), ctypes.POINTER(TParsingContext)),
+	"ProcedureCallback"  : ctypes.CFUNCTYPE(None, ctypes.POINTER(TParsingElement), ctypes.POINTER(TParsingContext)),
+	"ProcessorCallback"  : ctypes.CFUNCTYPE(None, ctypes.POINTER(TProcessor), ctypes.POINTER(TMatch)),
+	"ProcessorCallback*" : ctypes.POINTER(ctypes.CFUNCTYPE(None, ctypes.POINTER(TProcessor), ctypes.POINTER(TMatch))),
 })
 
 # We register structure definitions that we want to be accessible
@@ -225,6 +236,7 @@ C.Register(
 	TParsingContext,
 	TParsingStats,
 	TParsingResult,
+	TProcessor,
 	TGrammar,
 )
 

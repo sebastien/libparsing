@@ -361,7 +361,8 @@ class Match(CObject):
 		if self._value != NOTHING:
 			return self._value
 		else:
-			return self._extractValue()
+			self._value = self._extractValue()
+			return self._value
 
 	@value.setter
 	def value( self, value ):
@@ -461,6 +462,7 @@ class ReferenceMatch(CompositeMatch):
 		else:
 			return [_.value for _ in self.children]
 
+	# TODO: We might want to restore that
 	# def group( self, index=0 ):
 	# 	if self.child is None:
 	# 		return None
@@ -468,7 +470,7 @@ class ReferenceMatch(CompositeMatch):
 	# 		return self.child.group(0)
 	# 	else:
 	# 		return self.getChild(index).group()
-
+	#
 	# def groups( self ):
 	# 	return [_.group() for _ in self]
 
@@ -507,9 +509,7 @@ class WordMatch(Match):
 		"""Returns the word matched"""
 		if index != 0: raise IndexError
 		assert index == 0
-		element = ctypes.cast(self._cobject.element,   C.TYPES["ParsingElement*"])
-		config  = ctypes.cast(element.config, C.TYPES["WordConfig*"])
-		return config.contents.word
+		return element.config.word
 
 # -----------------------------------------------------------------------------
 #
@@ -524,6 +524,10 @@ class TokenMatch(Match):
 	int TokenMatch_count(Match* this);
 	"""
 
+	@caccessor
+	def data( self ):
+		return ctypes.cast(self._cobject.data,    C.TYPES["TokenMatch*"]).contents
+
 	def _extractValue( self ):
 		return self._group(0)
 
@@ -531,9 +535,7 @@ class TokenMatch(Match):
 		return self._group(index)
 
 	def groups( self ):
-		element = ctypes.cast(self._cobject.element, C.TYPES["ParsingElement*"]).contents
-		match   = ctypes.cast(self._cobject.data,    C.TYPES["TokenMatch*"]).contents
-		return [self.group(i) for i in range(match.count)]
+		return [self.group(i) for i in range(self.match.count)]
 
 # -----------------------------------------------------------------------------
 #
@@ -739,10 +741,6 @@ class Grammar(CObject):
 		self.symbols   = CLibrary.Symbols()
 		self._symbols  = self.symbols.__dict__
 
-	#def __del__( self ):
-	#	if self._mustFree:
-	#		self.free()
-
 # -----------------------------------------------------------------------------
 #
 # PROCESS
@@ -764,7 +762,7 @@ class HandlerException(Exception):
 	def __str__( self ):
 		return "{0}: {1} in {2} with {3}".format(self.__class__.__name__, self.exception, self.handler, self.args)
 
-class Processor(object):
+class Processor(CObject):
 	"""The main entry point when using `libparsing` form Python. Subclass
 	the processor and define parsing element handlers using the convention
 	`on<ParsingElement's name`. For instance, if your grammar has a `NAME`
@@ -775,12 +773,23 @@ class Processor(object):
 	if it is a composite symbol (rule, group, etc). The named elements
 	are the ones you declare using `_as`."""
 
-	def __init__( self, grammar ):
-		assert isinstance(grammar, Grammar)
+	WRAPPED   = TProcessor
+	FUNCTIONS = """
+	Processor* Processor_new( );
+	void Processor_free(Processor* this);
+	void Processor_register (Processor* this, int symbolID, ProcessorCallback callback) ; // @as _register
+	int  Processor_process (Processor* this, Match* match, int step);                     // @as _process
+	"""
+
+	def _init( self ):
+		CObject._init(self)
 		self.symbolByName = {}
 		self.symbolByID   = {}
 		self.handlerByID  = {}
-		self.grammar      = grammar
+		self._callbacks   = {}
+
+	def _new( self, grammar ):
+		CObject._new(self)
 		self._bindSymbols(grammar)
 		self._bindHandlers()
 
@@ -811,7 +820,12 @@ class Processor(object):
 				logging.warn("Handler `{0}` does not match any of {1}".format(k, ", ".join(self.symbolByName.keys())))
 			else:
 				symbol = self.symbolByName[name]
-				self.handlerByID[symbol.id] = getattr(self, k)
+				#self.handlerByID[symbol.id] = getattr(self, k)
+				py_callback = getattr(self, k)
+				# print ("CALLBACK", py_callback)
+				#c_callback  = C.TYPES["ProcessorCallback"](py_callback)
+				# self._callbacks[symbol.id] = (py_callback, c_callback)
+				# self._register(symbol.id, c_callback)
 
 	def on( self, symbol, callback ):
 		"""Binds a handler for the given symbol."""
@@ -821,61 +835,31 @@ class Processor(object):
 		return self
 
 	def process( self, match ):
-		"""The main entry point to processing a match."""
-		if isinstance(match, ParsingResult):
-			match = match.match
+		self._process(match, 0)
+
+	def XXXprocess( self, match ):
 		if isinstance(match, ReferenceMatch):
-			return self._processReferenceMatch(match)
-		elif isinstance(match, Match):
-			return self._processParsingElementMatch(match)
+			result = [self.process(_) for _ in match]
+			if result and (match.isOne() or match.isOptional()): result = result[0]
+			match.value = result
+			return result
 		else:
-			# Match is in that case a value that we pass as-is
-			return match
-
-	def processChildren( self, match ):
-		return [self.process(_) for _ in match.children]
-
-	def _processParsingElementMatch( self, match ):
-		"""Processes the given match, applying the matching handlers when found."""
-		if not match: return None
-		assert not isinstance(match, ReferenceMatch), "{0}.process: match expected not to be reference match, got {1}".format(self.__class__.__name__, match)
-		# We retrieve the element's id
-		eid     = match.element.id
-		# We retrieve the handler for
-		handler = self.handlerByID.get(eid)
-		if handler:
-			# A handler was found, so we apply it to the match. The handler
-			# returns a value that should be assigned to the match
-			# print ("process[H]: applying handler", handler, "TO", match)
-			result = self._applyHandler( handler, match )
-			# print ("processed[H]: {0}#{1} : {2} --> {3}".format(match.__class__.__name__, match.name, repr(match.value), repr(result)))
-			if result is not None:
-				match.value = result
-			return result or match.value
-		else:
-			return self.defaultProcess(match)
-
-	def defaultProcess( self, match ):
-		assert not isinstance(match, ReferenceMatch), "defaultProcess expected a ParsingElementMatch, not a ReferenceMatch: {0}".format(match)
-		if isinstance(match, GroupMatch):
-			result = match.value = self._processReferenceMatch(match.child)
-		elif isinstance(match, CompositeMatch):
-			result = match.value = [self._processReferenceMatch(_) for _ in match.children]
-		else:
-			result = match.value
-		# print ("processed[*]: {0}#{1} : {2} --> {3}".format(match.__class__.__name__, match.name, repr(match.value), repr(result)))
-		return result
-
-	def _processReferenceMatch( self, match ):
-		"""Processes the reference match."""
-		assert isinstance(match, ReferenceMatch)
-		if match.isOne() or match.isOptional():
-			result = self.process(match.child)
-		else:
-			result  = [self.process(_) for _ in match.children]
-		# print ("_processReferenceMatch: {0}[{1}]#{2}({3}) : {4} -> {5}".format(match.__class__.__name__, match.element.type, match.element.name, match.cardinality, repr(match.value), repr(result)))
-		match.value = result
-		return result
+			assert isinstance(match, Match), "Match expected, got: {0}".format(match)
+			eid     = match.element.id
+			handler = self.handlerByID.get(eid)
+			if handler:
+				# A handler was found, so we apply it to the match. The handler
+				# returns a value that should be assigned to the match
+				# print ("process[H]: applying handler", handler, "TO", match)
+				result = match.value = self._applyHandler( handler, match )
+				# print ("processed[H]: {0}#{1} : {2} --> {3}".format(match.__class__.__name__, match.name, repr(match.value), repr(result)))
+			elif isinstance(match, GroupMatch):
+				result = match.value = self.process(match[0])
+			elif isinstance(match, CompositeMatch):
+				result = match.value = [self.process(_) for _ in match]
+			else:
+				result = match.value
+			return result
 
 	def _applyHandler( self, handler, match ):
 		"""Applies the given handler to the given match, returning the value
@@ -889,7 +873,7 @@ class Processor(object):
 		else:
 			argnames = argnames[1:]
 		# We skip self and match, which are required
-		kwargs   = dict((_,None) for _ in argnames if _ not in ("self", "match"))
+		kwargs  = dict((_,None) for _ in argnames if _ not in ("self", "match"))
 		for m in match.children:
 			k = m.name
 			assert isinstance(m, ReferenceMatch)
@@ -965,6 +949,7 @@ class Libparsing(CLibrary):
 			ParsingContext,
 			ParsingResult,
 			Grammar,
+			Processor,
 			Word,      WordMatch,
 			Token,     TokenMatch,
 			Rule,      RuleMatch,
@@ -1022,5 +1007,7 @@ class Libparsing(CLibrary):
 				# the pointer content's in order to manipulate/access it.
 				py_value = value.contents
 		return py_value
+
+LIB = LIB or Libparsing()
 
 # EOF - vim: ts=4 sw=4 noet
