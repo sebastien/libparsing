@@ -359,6 +359,7 @@ typedef struct Match {
 	void*           data;      // The matched data (usually a subset of the input stream)
 	struct Match*   next;      // A pointer to the next  match (see `References`)
 	struct Match*   child;     // A pointer to the child match (see `References`)
+	//void*           result;    // A pointer to the result of the match
 } Match;
 
 // @define
@@ -853,6 +854,36 @@ ParsingStep* ParsingStep_new( ParsingElement* element );
 
 // @destructor
 void ParsingStep_free( ParsingStep* this );
+
+/**
+ * Processor
+ * ---------
+*/
+
+typedef struct Processor Processor;
+
+// @callback
+typedef int (*ProcessorCallback)(Processor* processor, Match* match);
+
+typedef struct Processor {
+	ProcessorCallback   fallback;
+	ProcessorCallback*  callbacks;
+	int                 callbacksCount;
+} Processor;
+
+
+// @constructor
+Processor* Processor_new( );
+
+// @method
+void Processor_free(Processor* this);
+
+
+// @method
+void Processor_register (Processor* this, int symbolID, ProcessorCallback callback) ;
+
+// @method
+int Processor_process (Processor* this, Match* match, int step);
 
 /**
  * Utilities

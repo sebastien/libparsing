@@ -1479,6 +1479,57 @@ ParsingResult* Grammar_parseString( Grammar* this, const char* text ) {
 
 // ----------------------------------------------------------------------------
 //
+// PROCESSOR
+//
+// ----------------------------------------------------------------------------
+
+Processor* Processor_new() {
+	__ALLOC(Processor,this);
+	this->callbacksCount = 100;
+	this->callbacks      = calloc(this->callbacksCount, sizeof(ProcessorCallback));
+	this->fallback       = NULL;
+	return this;
+}
+
+void Processor_free(Processor* this) {
+	__DEALLOC(this);
+}
+
+void Processor_register (Processor* this, int symbolID, ProcessorCallback callback ) {
+	if (this->callbacksCount < (symbolID + 1)) {
+		int cur_count        = this->callbacksCount;
+		int new_count        = symbolID + 100;
+		this->callbacks      = realloc(this->callbacks, sizeof(ProcessorCallback) * new_count);
+		this->callbacksCount = new_count;
+		// We zero the new values, as `realloc` does not guarantee zero data.
+		while (cur_count < new_count) {
+			this->callbacks[cur_count] = NULL;
+			cur_count++;
+		}
+	}
+	this->callbacks[symbolID] = callback;
+}
+
+int Processor_process (Processor* this, Match* match, int step) {
+	if (ParsingElement_Is(match->element)) {
+		int element_id = ((ParsingElement*)match->element)->id;
+		if (element_id >= 0 && element_id < this->callbacksCount) {
+			ProcessorCallback handler = this->callbacks[element_id];
+			LOG("PROCESSING MATCH FOR ELEMENT: %d#%d handler=%p", element_id, step, handler);
+			// handler(this, match);
+		}
+	}
+	step += 1;
+	Match* child = match->child;
+	while (child) {
+		step  = Processor_process(this, child, step);
+		child = child->next;
+	}
+	return step;
+}
+
+// ----------------------------------------------------------------------------
+//
 // MAIN
 //
 // ----------------------------------------------------------------------------
