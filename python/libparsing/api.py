@@ -523,13 +523,17 @@ class WordMatch(Match):
 	"""
 
 	def _extractValue( self ):
-		return self._group()
+		return self.group()
 
 	def group( self, index=0 ):
 		"""Returns the word matched"""
 		if index != 0: raise IndexError
 		assert index == 0
-		return self.LIBRARY.wrap(ctypes.cast(self.element.config, C.TYPES["WordConfig*"]).contents.word)
+		if "group" not in self._cobjectCache:
+			c_value  = self._group()
+			py_value = c_value.decode("utf8")
+			self._cobjectCache["group"] = (py_value, c_value)
+		return self._cobjectCache["group"][0]
 
 	def __getitem__( self, index ):
 		return self.group(index)
@@ -549,13 +553,18 @@ class TokenMatch(Match):
 
 	@caccessor
 	def data( self ):
-		return ctypes.cast(self._cobject.data,    C.TYPES["TokenMatch*"]).contents
+		return ctypes.cast(self._cobject.data,    C.TYPES["TokenMatch*"]).contents.decode("utf-8")
 
 	def _extractValue( self ):
-		return self._group(0)
+		return self.group(0)
 
 	def group( self, index=0 ):
-		return self._group(index)
+		groups = self._cobjectCache.setdefault("group", {})
+		if index not in groups:
+			c_value  = self._group(index)
+			py_value = c_value.decode("utf8") if c_value is not None else None
+			groups[index] = (py_value, c_value)
+		return groups[index][0]
 
 	def groups( self ):
 		return [self.group(i) for i in range(self.match.count)]
@@ -682,6 +691,7 @@ class ParsingResult(CObject):
 
 	def textAround( self ):
 		# We should get the offset range covered by the iterator's buffer
+		# FIXME: This does not work
 		o = self.offset - self.textOffset
 		t = self.text
 		s = o
@@ -690,7 +700,6 @@ class ParsingResult(CObject):
 		while e < len(t) and t[e] != "\n": e += 1
 		l = t[s:e]
 		i = " " * (o - s - 1) + "^"
-		return "ERROR AT {0} {1}".format(self.offset, self.textOffset)
 		return l.decode("utf8") + "\n" + i
 
 # -----------------------------------------------------------------------------

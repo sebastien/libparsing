@@ -432,7 +432,8 @@ class CObject(object):
 			# We unwrap the arguments, meaning that the arguments are now
 			# pure C types values
 			c_args = [self.LIBRARY.unwrap(_, proto[1][i][0]) for i,_ in enumerate(args)]
-			if cacheArgs: self._cobjectCache[name] = args
+			if cacheArgs:
+				self._cobjectCache[name] = (args, c_args)
 			if addThis:   c_args.insert(0, self._cobject)
 			# print ("F: ", proto[0], args, "→", u_args, ":", ctypesFunction.argtypes, "→", ctypesFunction.restype)
 			try:
