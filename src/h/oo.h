@@ -5,7 +5,7 @@
 // License           : BSD License
 // ----------------------------------------------------------------------------
 // Creation date     : 12-Dec-2014
-// Last modification : 12-Dec-2014
+// Last modification : 27-Jan-2016
 // ----------------------------------------------------------------------------
 
 #ifndef __OO__
@@ -66,7 +66,7 @@ typedef char  bool;
  * ENSURE(malloc(10)) { printf("Success!"); };
  * ```
 */
-#define ENSURE(v)  if (v==NULL) {printf("[!] %s\n", strerror(errno));} else
+#define ENSURE(v)  if (v==NULL) {printf("[!] %s\n", strerror(errno));}
 #define FAILED(v)  if (v!=NULL)
 
 /*
@@ -92,19 +92,19 @@ typedef char  bool;
 
 #ifdef DEBUG_ENABLED
 #define DEBUG(msg,...)   fprintf(DEBUG_STREAM,   "--- ");fprintf(DEBUG_STREAM,   msg, __VA_ARGS__);fprintf(DEBUG_STREAM,   "\n");
-#else
-#define DEBUG(msg,...)   ;
-#endif
-
-#ifdef DEBUG_ENABLED
-#define DEBUG(msg,...)   fprintf(DEBUG_STREAM,   "--- ");fprintf(DEBUG_STREAM,   msg, __VA_ARGS__);fprintf(DEBUG_STREAM,   "\n");
 #define DEBUG_IF(cond,msg,...)   if (cond) {DEBUG(msg, __VA_ARGS__);}
+#define DEBUG_CODE(_) _ ;
 #else
 #define DEBUG(msg,...)          ;
 #define DEBUG_IF(cond,msg,...)   ;
+#define DEBUG_CODE(_)            ;
 #endif
 
-
+#ifdef TRACE_ENABLED
+#define TRACE(msg,...)   fprintf(DEBUG_STREAM,   "--- ");fprintf(DEBUG_STREAM,   msg, __VA_ARGS__);fprintf(DEBUG_STREAM,   "\n");
+#else
+#define TRACE(msg,...)          ;
+#endif
 
 #define WARNING(msg,...) fprintf(WARNING_STREAM, "WRN ");fprintf(WARNING_STREAM, msg, __VA_ARGS__);fprintf(WARNING_STREAM, "\n");
 #define ERROR(msg,...)   fprintf(WARNING_STREAM, "ERR ");fprintf(ERROR_STREAM,   msg, __VA_ARGS__);fprintf(ERROR_STREAM,   "\n");
@@ -112,11 +112,10 @@ typedef char  bool;
 #define LOG_IF(cond,msg,...)     if(cond){LOG(msg, __VA_ARGS__);}
 
 #ifdef DEBUG_ENABLED
-#define ASSERT(v,msg,...) if(!v){DEBUG(msg,__VA_ARGS__);abort();}
+#define ASSERT(v,msg,...) if(!(v)){DEBUG(msg,__VA_ARGS__);abort();}
 #else
 #define ASSERT(v,msg,...) /* */
 #endif
-
 
 // todo: ERROR, WARNING, INFO, DEBUG
 // todo: COUNTER(name, delta)
@@ -130,6 +129,9 @@ typedef char  bool;
 // FROM: https://github.com/aeyakovenko/notes#counting-args-with-c-macros
 #define VA_ARGS_COUNT(...) VA_ARGS_COUNT_(-1,##__VA_ARGS__,24,23,22,21,20,19,18,17,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0)
 #define VA_ARGS_COUNT_(z,a,b,c,d,e,f,g,h,i,j,l,m,n,o,p,q,r,s,t,u,v,w,x,y,cnt,...) cnt
+
+#define MIN(a,b) (a < b ? a : b)
+#define MAX(a,b) (a > b ? a : b)
 
 #endif
 // EOF

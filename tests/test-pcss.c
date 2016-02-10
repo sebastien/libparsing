@@ -203,7 +203,7 @@ int main (void) {
 	if (!Iterator_open(iterator, path)) {
 		ERROR("Cannot open file: %s", path);
 	} else {
-		ParsingResult* r = Grammar_parseFromIterator(g, iterator);
+		ParsingResult* r = Grammar_parseIterator(g, iterator);
 		// Below is a simple test on how to iterate on the file
 		// int count = 0;
 		// while (FileInput_next(i)) {
@@ -211,7 +211,12 @@ int main (void) {
 		// 	count += 1;
 		// }
 		printf("Status %c, read %zd/%zd bytes\n", r->status, r->context->iterator->offset, r->context->iterator->available);
+		// NOTE: The following core dumps
+		// ParsingResult_free(r);
 	}
+	Iterator_free(iterator);
+	// NOTE: This core dumps too
+	//Grammar_free(g);
 	printf ("[OK]");
 	return 1;
 }

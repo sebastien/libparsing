@@ -3,7 +3,7 @@
 ## C & Python Parsing Elements Grammar Library
 
 ```
-Version :  0.5.0
+Version :  0.7.0
 URL     :  http://github.com/sebastien/parsing
 README  :  https://cdn.rawgit.com/sebastien/libparsing/master/README.html
 ```
@@ -146,12 +146,12 @@ Iterator* iterator = Iterator_Open("example.txt");
 typedef struct Iterator {
 	char           status;    // The status of the iterator, one of STATUS_{INIT|PROCESSING|INPUT_ENDED|ENDED}
 	char*          buffer;    // The buffer to the read data, note how it is a (void*) and not an `iterated_t`
-	iterated_t*    current;   // The for the current offset within the buffer
+	iterated_t*    current;   // The pointer current offset within the buffer
 	iterated_t     separator; // The character for line separator, `\n` by default.
 	size_t         offset;    // Offset in input (in bytes), might be different from `current - buffer` if some input was freed.
 	size_t         lines;     // Counter for lines that have been encountered
-	size_t         length;    // Buffer length (in bytes), might be bigger than the data acquired from the input
-	size_t         available; // Available data in buffer (in bytes), always `<= length`
+	size_t         capacity;  // Content capacity (in bytes), might be bigger than the data acquired from the input
+	size_t         available; // Available data in buffer (in bytes), always `<= capacity`
 	bool           freeBuffer;
 	void*          input;     // Pointer to the input source
 	bool          (*move) (struct Iterator*, int n); // Plug-in function to move to the previous/next positions
@@ -228,7 +228,8 @@ bool Iterator_open( Iterator* this, const char *path );
 
 #### <a name="Iterator_hasMore_method"><span class="classifier">method</span> `Iterator_hasMore`</a>
 
- Tells if the iterator has more available data
+ Tells if the iterator has more available data. This means that there is
+	 available data after the current offset.
 
 ```c
 bool Iterator_hasMore( Iterator* this );
@@ -237,9 +238,9 @@ bool Iterator_hasMore( Iterator* this );
 
 #### <a name="Iterator_remaining_method"><span class="classifier">method</span> `Iterator_remaining`</a>
 
- Returns the number of bytes available from the current iterator's position.
-	 This should be at least `ITERATOR_BUFFER_AHEAD` until end of input stream
-	 is reached.
+ Returns the number of bytes available from the current iterator's position
+	 up to the last available data. For dynamic streams, where the length is
+	 unknown, this should be lesser or equalt to `ITERATOR_BUFFER_AHEAD`.
 
 ```c
 size_t Iterator_remaining( Iterator* this );
@@ -293,7 +294,7 @@ void       FileInput_free(FileInput* this);
 #### <a name="FileInput_preload_method"><span class="classifier">method</span> `FileInput_preload`</a>
 
  Preloads data from the input source so that the buffer
-	 has ITERATOR_BUFFER_AHEAD characters ahead.
+	 has up to ITERATOR_BUFFER_AHEAD characters ahead.
 
 ```c
 size_t FileInput_preload( Iterator* this );
@@ -329,6 +330,10 @@ typedef struct Match          Match;
 typedef void                  Element;
 ```
 
+ typedef struct Element {
+ 	char           type;       // Type is used du differentiate ParsingElement from Reference
+ 	int            id;         // The ID, assigned by the grammar, as the relative distance to the axiom
+ } Element;
 
 #### <a name="Grammar_type"><span class="classifier">type</span> `Grammar`</a>
 
@@ -369,27 +374,43 @@ void Grammar_prepare ( Grammar* this );
 ```
 
 
-#### <a name="Grammar_parseFromIterator_method"><span class="classifier">method</span> `Grammar_parseFromIterator`</a>
+#### <a name="Grammar_symbolsCount_method"><span class="classifier">method</span> `Grammar_symbolsCount`</a>
 
 
 ```c
-ParsingResult* Grammar_parseFromIterator( Grammar* this, Iterator* iterator );
+int Grammar_symbolsCount ( Grammar* this );
 ```
 
 
-#### <a name="Grammar_parseFromPath_method"><span class="classifier">method</span> `Grammar_parseFromPath`</a>
+#### <a name="Grammar_parseIterator_method"><span class="classifier">method</span> `Grammar_parseIterator`</a>
 
 
 ```c
-ParsingResult* Grammar_parseFromPath( Grammar* this, const char* path );
+ParsingResult* Grammar_parseIterator( Grammar* this, Iterator* iterator );
 ```
 
 
-#### <a name="Grammar_parseFromString_method"><span class="classifier">method</span> `Grammar_parseFromString`</a>
+#### <a name="Grammar_parsePath_method"><span class="classifier">method</span> `Grammar_parsePath`</a>
 
 
 ```c
-ParsingResult* Grammar_parseFromString( Grammar* this, const char* text );
+ParsingResult* Grammar_parsePath( Grammar* this, const char* path );
+```
+
+
+#### <a name="Grammar_parseString_method"><span class="classifier">method</span> `Grammar_parseString`</a>
+
+
+```c
+ParsingResult* Grammar_parseString( Grammar* this, const char* text );
+```
+
+
+#### <a name="Grammar_freeElements_method"><span class="classifier">method</span> `Grammar_freeElements`</a>
+
+
+```c
+void Grammar_freeElements(Grammar* this);
 ```
 
 
@@ -448,7 +469,8 @@ typedef struct Match {
 	ParsingContext* context;
 	void*           data;      // The matched data (usually a subset of the input stream)
 	struct Match*   next;      // A pointer to the next  match (see `References`)
-	struct Match*   child;     // A pointer to the child match (see `References`)
+	struct Match*   children;  // A pointer to the child match (see `References`)
+	void*           result;    // A pointer to the result of the match
 } Match;
 ```
 
@@ -647,6 +669,9 @@ Match* Match_new(void);
 
 #### <a name="Match_free_destructor"><span class="classifier">destructor</span> `Match_free`</a>
 
+ Frees the given match. If the match is `FAILURE`, then it won't
+	 be feed. This means that most of the times you won't need to free
+	 a failed match, as it's likely to be the `FAILURE` singleton.
 
 ```c
 void Match_free(Match* this);
@@ -658,6 +683,22 @@ void Match_free(Match* this);
 
 ```c
 bool Match_isSuccess(Match* this);
+```
+
+
+#### <a name="Match_getOffset_method"><span class="classifier">method</span> `Match_getOffset`</a>
+
+
+```c
+int Match_getOffset(Match* this);
+```
+
+
+#### <a name="Match_getLength_method"><span class="classifier">method</span> `Match_getLength`</a>
+
+
+```c
+int Match_getLength(Match* this);
 ```
 
 
@@ -724,7 +765,15 @@ ParsingElement* ParsingElement_add(ParsingElement *this, Reference *child);
 ```
 
 
-#### <a name="ParsingElement_add_method"><span class="classifier">method</span> `ParsingElement_add`</a>
+#### <a name="ParsingElement_clear_method"><span class="classifier">method</span> `ParsingElement_clear`</a>
+
+
+```c
+ParsingElement* ParsingElement_clear(ParsingElement *this);
+```
+
+
+#### <a name="ParsingElement_clear_method"><span class="classifier">method</span> `ParsingElement_clear`</a>
 
  Returns the match for this parsing element for the given iterator's state.
 	 inline Match* ParsingElement_recognize( ParsingElement* this, ParsingContext* context );
@@ -775,12 +824,36 @@ ParsingElement* Word_new(const char* word);
 ```
 
 
+#### <a name="Word_free_destructor"><span class="classifier">destructor</span> `Word_free`</a>
+
+
+```c
+void Word_free(ParsingElement* this);
+```
+
+
 #### <a name="Word_recognize_method"><span class="classifier">method</span> `Word_recognize`</a>
 
  The specialized match function for token parsing elements.
 
 ```c
 Match*          Word_recognize(ParsingElement* this, ParsingContext* context);
+```
+
+
+#### <a name="Word_word_method"><span class="classifier">method</span> `Word_word`</a>
+
+
+```c
+const char* Word_word(ParsingElement* this);
+```
+
+
+#### <a name="WordMatch_group_method"><span class="classifier">method</span> `WordMatch_group`</a>
+
+
+```c
+const char* WordMatch_group(Match* match);
 ```
 
 
@@ -844,6 +917,14 @@ Match*          Token_recognize(ParsingElement* this, ParsingContext* context);
 ```
 
 
+#### <a name="Token_expr_method"><span class="classifier">method</span> `Token_expr`</a>
+
+
+```c
+const char* Token_expr(ParsingElement* this);
+```
+
+
 #### <a name="TokenMatch_free_method"><span class="classifier">method</span> `TokenMatch_free`</a>
 
  Frees the `TokenMatch` created in `Token_recognize`
@@ -858,6 +939,14 @@ void TokenMatch_free(Match* match);
 
 ```c
 const char* TokenMatch_group(Match* match, int index);
+```
+
+
+#### <a name="TokenMatch_count_method"><span class="classifier">method</span> `TokenMatch_count`</a>
+
+
+```c
+int TokenMatch_count(Match* match);
 ```
 
 
@@ -941,12 +1030,12 @@ Reference* Reference_Ensure(void* elementOrReference);
 ```
 
 
-#### <a name="Reference_New_operation"><span class="classifier">operation</span> `Reference_New`</a>
+#### <a name="Reference_FromElement_operation"><span class="classifier">operation</span> `Reference_FromElement`</a>
 
  Returns a new reference wrapping the given parsing element
 
 ```c
-Reference* Reference_New(ParsingElement *);
+Reference* Reference_FromElement(ParsingElement* element);
 ```
 
 
@@ -956,6 +1045,14 @@ Reference* Reference_New(ParsingElement *);
 
 ```c
 Reference* Reference_new(void);
+```
+
+
+#### <a name="Reference_free_destructor"><span class="classifier">destructor</span> `Reference_free`</a>
+
+
+```c
+void Reference_free(Reference* this);
 ```
 
 
@@ -973,6 +1070,22 @@ Reference* Reference_cardinality(Reference* this, char cardinality);
 
 ```c
 Reference* Reference_name(Reference* this, const char* name);
+```
+
+
+#### <a name="Reference_hasNext_method"><span class="classifier">method</span> `Reference_hasNext`</a>
+
+
+```c
+bool Reference_hasNext(Reference* this);
+```
+
+
+#### <a name="Reference_hasElement_method"><span class="classifier">method</span> `Reference_hasElement`</a>
+
+
+```c
+bool Reference_hasElement(Reference* this);
 ```
 
 
@@ -1126,11 +1239,15 @@ typedef struct ParsingOffset  ParsingOffset;
 
 ```c
 typedef struct ParsingStats {
-	size_t  bytesRead;
-	double  parseTime;
-	size_t  symbolsCount;
-	size_t* successBySymbol;
-	size_t* failureBySymbol;
+	size_t   bytesRead;
+	double   parseTime;
+	size_t   symbolsCount;
+	size_t*  successBySymbol;
+	size_t*  failureBySymbol;
+	size_t   failureOffset;   // A reference to the deepest failure
+	size_t   matchOffset;
+	size_t   matchLength;
+	Element* failureElement;  // A reference to the failure element
 } ParsingStats;
 ```
 
@@ -1189,6 +1306,14 @@ ParsingContext* ParsingContext_new( Grammar* g, Iterator* iterator );
 ```
 
 
+#### <a name="ParsingContext_text_method"><span class="classifier">method</span> `ParsingContext_text`</a>
+
+
+```c
+iterated_t* ParsingContext_text( ParsingContext* this );
+```
+
+
 #### <a name="ParsingContext_free_destructor"><span class="classifier">destructor</span> `ParsingContext_free`</a>
 
 
@@ -1219,9 +1344,58 @@ ParsingResult* ParsingResult_new(Match* match, ParsingContext* context);
 
 #### <a name="ParsingResult_free_method"><span class="classifier">method</span> `ParsingResult_free`</a>
 
+ Frees this parsing result instance as well as all the matches it referes to.
 
 ```c
 void ParsingResult_free(ParsingResult* this);
+```
+
+
+#### <a name="ParsingResult_isFailure_method"><span class="classifier">method</span> `ParsingResult_isFailure`</a>
+
+
+```c
+bool ParsingResult_isFailure(ParsingResult* this);
+```
+
+
+#### <a name="ParsingResult_isPartial_method"><span class="classifier">method</span> `ParsingResult_isPartial`</a>
+
+
+```c
+bool ParsingResult_isPartial(ParsingResult* this);
+```
+
+
+#### <a name="ParsingResult_isComplete_method"><span class="classifier">method</span> `ParsingResult_isComplete`</a>
+
+
+```c
+bool ParsingResult_isComplete(ParsingResult* this);
+```
+
+
+#### <a name="ParsingResult_text_method"><span class="classifier">method</span> `ParsingResult_text`</a>
+
+
+```c
+iterated_t* ParsingResult_text(ParsingResult* this);
+```
+
+
+#### <a name="ParsingResult_textOffset_method"><span class="classifier">method</span> `ParsingResult_textOffset`</a>
+
+
+```c
+int ParsingResult_textOffset(ParsingResult* this);
+```
+
+
+#### <a name="ParsingResult_remaining_method"><span class="classifier">method</span> `ParsingResult_remaining`</a>
+
+
+```c
+size_t ParsingResult_remaining(ParsingResult* this);
 ```
 
 
@@ -1297,6 +1471,60 @@ ParsingStep* ParsingStep_new( ParsingElement* element );
 
 ```c
 void ParsingStep_free( ParsingStep* this );
+```
+
+
+Processor
+---------
+
+```c
+typedef struct Processor Processor;
+```
+
+
+#### <a name="ProcessorCallback_callback"><span class="classifier">callback</span> `ProcessorCallback`</a>
+
+
+```c
+typedef void (*ProcessorCallback)(Processor* processor, Match* match);
+
+typedef struct Processor {
+	ProcessorCallback   fallback;
+	ProcessorCallback*  callbacks;
+	int                 callbacksCount;
+} Processor;
+```
+
+
+#### <a name="Processor_constructor"><span class="classifier">constructor</span> `Processor`</a>
+
+
+```c
+Processor* Processor_new( );
+```
+
+
+#### <a name="Processor_free_method"><span class="classifier">method</span> `Processor_free`</a>
+
+
+```c
+void Processor_free(Processor* this);
+```
+
+
+#### <a name="Processor_register_method"><span class="classifier">method</span> `Processor_register`</a>
+
+
+```c
+void Processor_register (Processor* this, int symbolID, ProcessorCallback callback) ;
+```
+
+
+#### <a name="Processor_process_method"><span class="classifier">method</span> `Processor_process`</a>
+
+
+```c
+int Processor_process (Processor* this, Match* match, int step);
 ```
 
 

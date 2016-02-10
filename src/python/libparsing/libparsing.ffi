@@ -30,13 +30,19 @@ bool Reference_Is(void * this);
 
 Reference* Reference_Ensure(void* elementOrReference);
 
-Reference* Reference_New(ParsingElement *);
+Reference* Reference_FromElement(ParsingElement* element);
 
 Reference* Reference_new(void);
+
+void Reference_free(Reference* this);
 
 Reference* Reference_cardinality(Reference* this, char cardinality);
 
 Reference* Reference_name(Reference* this, const char* name);
+
+bool Reference_hasNext(Reference* this);
+
+bool Reference_hasElement(Reference* this);
 
 int Reference__walk( Reference* this, WalkingCallback callback, int step, void* nothing );
 
@@ -50,7 +56,8 @@ typedef struct Match {
 	ParsingContext* context;
 	void*           data;      // The matched data (usually a subset of the input stream)
 	struct Match*   next;      // A pointer to the next  match (see `References`)
-	struct Match*   child;     // A pointer to the child match (see `References`)
+	struct Match*   children;  // A pointer to the child match (see `References`)
+	void*           result;    // A pointer to the result of the match
 } Match;
 
 Match* Match_Empty(Element* element, ParsingContext* context);
@@ -63,17 +70,21 @@ void Match_free(Match* this);
 
 bool Match_isSuccess(Match* this);
 
+int Match_getOffset(Match* this);
+
+int Match_getLength(Match* this);
+
 int Match__walk(Match* this, WalkingCallback callback, int step, void* context );
 
 typedef struct Iterator {
 	char           status;    // The status of the iterator, one of STATUS_{INIT|PROCESSING|INPUT_ENDED|ENDED}
 	char*          buffer;    // The buffer to the read data, note how it is a (void*) and not an `iterated_t`
-	iterated_t*    current;   // The for the current offset within the buffer
+	iterated_t*    current;   // The pointer current offset within the buffer
 	iterated_t     separator; // The character for line separator, `\n` by default.
 	size_t         offset;    // Offset in input (in bytes), might be different from `current - buffer` if some input was freed.
 	size_t         lines;     // Counter for lines that have been encountered
-	size_t         length;    // Buffer length (in bytes), might be bigger than the data acquired from the input
-	size_t         available; // Available data in buffer (in bytes), always `<= length`
+	size_t         capacity;  // Content capacity (in bytes), might be bigger than the data acquired from the input
+	size_t         available; // Available data in buffer (in bytes), always `<= capacity`
 	bool           freeBuffer;
 	void*          input;     // Pointer to the input source
 	bool          (*move) (struct Iterator*, int n); // Plug-in function to move to the previous/next positions
@@ -105,6 +116,8 @@ typedef struct ParsingContext {
 
 ParsingContext* ParsingContext_new( Grammar* g, Iterator* iterator );
 
+iterated_t* ParsingContext_text( ParsingContext* this );
+
 void ParsingContext_free( ParsingContext* this );
 
 typedef struct ParsingElement {
@@ -118,7 +131,6 @@ typedef struct ParsingElement {
 	void                  (*freeMatch) (Match*);
 } ParsingElement;
 
-
 bool         ParsingElement_Is(void *);
 
 ParsingElement* ParsingElement_new(Reference* children[]);
@@ -126,6 +138,8 @@ ParsingElement* ParsingElement_new(Reference* children[]);
 void ParsingElement_free(ParsingElement* this);
 
 ParsingElement* ParsingElement_add(ParsingElement *this, Reference *child);
+
+ParsingElement* ParsingElement_clear(ParsingElement *this);
 
 
 Match* ParsingElement_process( ParsingElement* this, Match* match );
@@ -152,12 +166,28 @@ ParsingResult* ParsingResult_new(Match* match, ParsingContext* context);
 
 void ParsingResult_free(ParsingResult* this);
 
+bool ParsingResult_isFailure(ParsingResult* this);
+
+bool ParsingResult_isPartial(ParsingResult* this);
+
+bool ParsingResult_isComplete(ParsingResult* this);
+
+iterated_t* ParsingResult_text(ParsingResult* this);
+
+int ParsingResult_textOffset(ParsingResult* this);
+
+size_t ParsingResult_remaining(ParsingResult* this);
+
 typedef struct ParsingStats {
-	size_t  bytesRead;
-	double  parseTime;
-	size_t  symbolsCount;
-	size_t* successBySymbol;
-	size_t* failureBySymbol;
+	size_t   bytesRead;
+	double   parseTime;
+	size_t   symbolsCount;
+	size_t*  successBySymbol;
+	size_t*  failureBySymbol;
+	size_t   failureOffset;   // A reference to the deepest failure
+	size_t   matchOffset;
+	size_t   matchLength;
+	Element* failureElement;  // A reference to the failure element
 } ParsingStats;
 
 ParsingStats* ParsingStats_new(void);
@@ -173,7 +203,13 @@ typedef struct WordConfig {
 	size_t      length;
 } WordConfig;
 
+void Word_free(ParsingElement* this);
+
 Match*          Word_recognize(ParsingElement* this, ParsingContext* context);
+
+const char* Word_word(ParsingElement* this);
+
+const char* WordMatch_group(Match* match);
 
 
 typedef struct TokenMatch {
@@ -188,9 +224,13 @@ void Token_free(ParsingElement*);
 
 Match*          Token_recognize(ParsingElement* this, ParsingContext* context);
 
+const char* Token_expr(ParsingElement* this);
+
 void TokenMatch_free(Match* match);
 
 const char* TokenMatch_group(Match* match, int index);
+
+int TokenMatch_count(Match* match);
 
 Match*          Group_recognize(ParsingElement* this, ParsingContext* context);
 
@@ -209,15 +249,18 @@ typedef struct Grammar {
 	bool             isVerbose;
 } Grammar;
 
-
 Grammar* Grammar_new(void);
 
 void Grammar_free(Grammar* this);
 
 void Grammar_prepare ( Grammar* this );
 
-ParsingResult* Grammar_parseFromIterator( Grammar* this, Iterator* iterator );
+int Grammar_symbolsCount ( Grammar* this );
 
-ParsingResult* Grammar_parseFromPath( Grammar* this, const char* path );
+ParsingResult* Grammar_parseIterator( Grammar* this, Iterator* iterator );
 
-ParsingResult* Grammar_parseFromString( Grammar* this, const char* text );
+ParsingResult* Grammar_parsePath( Grammar* this, const char* path );
+
+ParsingResult* Grammar_parseString( Grammar* this, const char* text );
+
+void Grammar_freeElements(Grammar* this);
