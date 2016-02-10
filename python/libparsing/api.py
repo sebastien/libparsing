@@ -6,11 +6,11 @@
 # License           : BSD License
 # -----------------------------------------------------------------------------
 # Creation date     : 2016-01-21
-# Last modification : 2016-02-09
+# Last modification : 2016-02-10
 # -----------------------------------------------------------------------------
 
 from __future__ import print_function
-import sys, traceback
+import sys, traceback, inspect
 from   libparsing.bindings import *
 try:
 	import reporter as logging
@@ -832,8 +832,10 @@ class Processor(object):
 			if name not in self.symbolByName:
 				logging.warn("Handler `{0}` does not match any of {1}".format(k, ", ".join(self.symbolByName.keys())))
 			else:
-				symbol      = self.symbolByName[name]
-				self.handlerByID[symbol.id] = getattr(self, k)
+				symbol   = self.symbolByName[name]
+				handler  = getattr(self, k)
+				callback = self._prepareHandler(handler)
+				self.handlerByID[symbol.id] = callback
 
 	def on( self, symbol, callback ):
 		"""Binds a handler for the given symbol."""
@@ -843,9 +845,9 @@ class Processor(object):
 		return self
 
 	def process( self, match ):
-		return self._defaultHandler(self, match)
+		return self._defaultHandler(match)
 
-	def _defaultHandler( self, processor, match ):
+	def _defaultHandler( self, match ):
 		if not isinstance(match, Match): match = self.LIBRARY.wrap(match)
 		if isinstance(match, ReferenceMatch):
 			result = [self.process(_) for _ in match]
@@ -856,12 +858,11 @@ class Processor(object):
 			assert isinstance(match, Match), "Match expected, got: {0}".format(match)
 			eid     = match.element.id
 			handler = self.handlerByID.get(eid)
-			handler = None
 			if handler:
 				# A handler was found, so we apply it to the match. The handler
 				# returns a value that should be assigned to the match
 				# print ("process[H]: applying handler", handler, "TO", match)
-				result = match.value = self._applyHandler( handler, match )
+				result = match.value = handler( match )
 				# print ("processed[H]: {0}#{1} : {2} --> {3}".format(match.__class__.__name__, match.name, repr(match.value), repr(result)))
 			elif isinstance(match, GroupMatch):
 				result = match.value = self.process(match[0])
@@ -871,27 +872,21 @@ class Processor(object):
 				result = match.value
 			return result
 
-	def _applyHandler( self, handler, match ):
-		"""Applies the given handler to the given match, returning the value
-		produces but the handler."""
-		# FIXME: This should be moved to the binding
-		# We only bind the arguments listed
-		fcode    = handler.func_code
-		argnames = fcode.co_varnames[0:fcode.co_argcount]
+	def _prepareHandler( self, handler ):
+		argnames = inspect.getargspec(handler).args
 		# We want argnames to be anything after (self, match, ...) or (match, ...)
 		if argnames[0] == "self":
 			argnames = argnames[2:]
 		else:
 			argnames = argnames[1:]
+		return lambda m:self._applyHandler(handler, m, argnames)
+
+	def _applyHandler( self, handler, match, argnames ):
+		"""Applies the given handler to the given match, returning the value
+		produces but the handler."""
 		# We skip self and match, which are required
-		kwargs  = dict((_,None) for _ in argnames if _ not in ("self", "match"))
-		for m in match.children:
-			k = m.name
-			assert isinstance(m, ReferenceMatch)
-			if k and k in argnames:
-				kwargs[k] = self.process(m)
+		kwargs = dict((_.name,self.process(_)) for _ in match.children if _.name in argnames)
 		try:
-			value  = match.value
 			result = handler(match, **kwargs)
 			#print ("_applyHandler: {0}.value={1} --> {2}".format(match, repr(value), repr(result)))
 			match.value = result
@@ -906,6 +901,7 @@ class Processor(object):
 			logging.error(res)
 			for _ in context: logging.warn(_)
 			raise res
+
 
 # -----------------------------------------------------------------------------
 #
