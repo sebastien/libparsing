@@ -73,6 +73,10 @@ test-%: build/test-%.o build/parsing.o
 	$(CC) $? $(LDFLAGS) -o $@
 	chmod +x $@
 
+python/libparsing/libparsing.ffi: src/parsing.h
+	rm -f $@
+	cd python && python libparsing/__init__.py
+
 python/lib$(PROJECT)/_lib$(PROJECT).so: lib$(PROJECT).so
 	cp $< $@
 
