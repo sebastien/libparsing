@@ -233,6 +233,11 @@ class Word(ParsingElement):
 	const char* Word_word(ParsingElement* this);  // @as _getWord
 	"""
 
+	def _new( self, word ):
+		self.__word = (word, self.LIBRARY.unwrap(word))
+		ParsingElement._new(self, self.__word[1])
+		assert self._getWord() == self.__word[1], "Word: could not assign word Python={0} → unwrapped={1} → libparsing={2}".format(repr(word), repr(self.__word[1]), repr(self._getWord()))
+
 	def __repr__( self ):
 		return "<Word#{1}:{0}=`{2}` at {3}>".format(self.name, self.id, self._getWord(), hex(id(self)))
 
@@ -244,6 +249,9 @@ class Token(ParsingElement):
 	void Token_print(ParsingElement* this); // @as _print
 	const char* Token_expr(ParsingElement* this);  // @as _getExpr
 	"""
+	def _new( self, expr ):
+		self.__expr = (expr, self.LIBRARY.unwrap(expr))
+		ParsingElement._new(self, self.__expr[1])
 
 	def __repr__( self ):
 		return "<Token#{1}:{0}=`{2}` at {3}>".format(self.name, self.id, self._getExpr(), hex(id(self)))

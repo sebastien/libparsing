@@ -747,8 +747,12 @@ ParsingElement* Word_new(const char* word) {
 	this->type           = TYPE_WORD;
 	this->recognize      = Word_recognize;
 	assert(word != NULL);
-	config->word         = word;
 	config->length       = strlen(word);
+	// NOTE: As of 0.7.5 we now keep a copy of the string, as it was
+	// causing problems with PyPy, hinting at potential allocation issues
+	// elsewhere.
+	assert(sizeof(char*) == sizeof(const char*));
+	config->word         = (const char*)strdup(word);
 	assert(config->length>0);
 	this->config         = config;
 	assert(this->config    != NULL);
@@ -766,6 +770,7 @@ void Word_free(ParsingElement* this) {
 	WordConfig* config = (WordConfig*)this->config;
 	if (config != NULL) {
 		// We don't have anything special to dealloc besides the config
+		__DEALLOC((void*)config->word);
 		__DEALLOC(config);
 	}
 	__DEALLOC(this);
@@ -810,7 +815,10 @@ ParsingElement* Token_new(const char* expr) {
 	this->type           = TYPE_TOKEN;
 	this->recognize      = Token_recognize;
 	this->freeMatch      = TokenMatch_free;
-	config->expr         = expr;
+	// NOTE: As of 0.7.5 we now keep a copy of the string, as it was
+	// causing problems with PyPy, hinting at potential allocation issues
+	// elsewhere.
+	config->expr         = (const char*)strdup(expr);
 #ifdef WITH_PCRE
 	const char* pcre_error;
 	int         pcre_error_offset = -1;
@@ -830,8 +838,8 @@ ParsingElement* Token_new(const char* expr) {
 	}
 #endif
 	this->config = config;
-	assert(config->expr == expr);
-	assert(Token_expr(this) == expr);
+	assert(strcmp(config->expr, expr) == 0);
+	assert(strcmp(Token_expr(this), expr) == 0);
 	return this;
 }
 
@@ -847,6 +855,7 @@ void Token_free(ParsingElement* this) {
 		if (config->regexp != NULL) {}
 		if (config->extra  != NULL) {pcre_free_study(config->extra);}
 #endif
+		__DEALLOC((void*)config->expr);
 		__DEALLOC(config);
 	}
 	__DEALLOC(this);

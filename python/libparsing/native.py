@@ -435,7 +435,7 @@ class CObject(object):
 			if cacheArgs:
 				self._cobjectCache[name] = (args, c_args)
 			if addThis:   c_args.insert(0, self._cobject)
-			# print ("F: ", proto[0], args, "→", u_args, ":", ctypesFunction.argtypes, "→", ctypesFunction.restype)
+			# print ("F: {0}({1}) → {2}".format( ".".join(_ for _ in proto[0] if _), ", ".join(repr(_) for _ in args), ", ".join(repr(_) for _ in args)))
 			try:
 				res  = ctypesFunction(*c_args)
 			except ctypes.ArgumentError as e:
@@ -443,7 +443,7 @@ class CObject(object):
 			# Non-constructors must wrap the result
 			res  = self.LIBRARY.wrap(res) if wrapResult else res
 			# TODO: We could check that the "this" returns the same object
-			# print ("F=>", res)
+			# print ("F=>{0}:{1}".format(repr(res), type(res)))
 			return res
 		return function
 
