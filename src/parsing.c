@@ -125,7 +125,7 @@ bool Iterator_moveTo ( Iterator* this, size_t offset ) {
 
 void Iterator_free( Iterator* this ) {
 	// FIXME: Should close input file
-	TRACE("Iterator_free: %p", this)
+	// TRACE("Iterator_free: %p", this)
 	if (this->freeBuffer) {
 		__DEALLOC(this->buffer);
 	}
@@ -212,7 +212,7 @@ FileInput* FileInput_new(const char* path ) {
 }
 
 void FileInput_free(FileInput* this) {
-	TRACE("FileInput_free: %p", this)
+	// TRACE("FileInput_free: %p", this)
 	if (this->file != NULL) { fclose(this->file);   }
 }
 
@@ -343,7 +343,7 @@ void Grammar_freeElements(Grammar* this) {
 			ParsingElement_free(e);
 		} else {
 			// Reference* r = (Reference*)element;
-			DEBUG("Grammar_freeElements(%p):[%d/%d]->Reference %p.%c(%d)[%c]#%s", this, i, count, element, r->type, r->id, r->cardinality, r->name)
+			//DEBUG("Grammar_freeElements(%p):[%d/%d]->Reference %p.%c(%d)[%c]#%s", this, i, count, element, r->type, r->id, r->cardinality, r->name)
 			// Reference_free(r);
 		}
 	}
@@ -355,7 +355,7 @@ void Grammar_freeElements(Grammar* this) {
 }
 
 void Grammar_free(Grammar* this) {
-	TRACE("Grammar_free: %p", this)
+	// TRACE("Grammar_free: %p", this)
 	__DEALLOC(this);
 }
 
@@ -490,7 +490,7 @@ ParsingElement* ParsingElement_new(Reference* children[]) {
 }
 
 void ParsingElement_free(ParsingElement* this) {
-	TRACE("ParsingElement_free: %p", this)
+	// TRACE("ParsingElement_free: %p", this)
 	Reference* child = this->children;
 	while (child != NULL) {
 		Reference* next = child->next;
@@ -539,7 +539,7 @@ ParsingElement* ParsingElement_name( ParsingElement* this, const char* name ) {
 }
 
 int ParsingElement__walk( ParsingElement* this, WalkingCallback callback, int step, void* context ) {
-	TRACE("ParsingElement__walk: %d %s [%d]", this->id, this->name, step);
+	TRACE("ParsingElement__walk: %4d %c %-20s [%4d]", this->id, this->type, this->name, step);
 	int i = step;
 	step  = callback((Element*)this, step, context);
 	Reference* child = this->children;
@@ -620,7 +620,7 @@ Reference* Reference_new(void) {
 }
 
 void Reference_free(Reference* this) {
-	TRACE("Reference_free: %p", this)
+	// TRACE("Reference_free: %p", this)
 	// NOTE: We do not free the referenced element nor the next reference.
 	// That would be the job of the grammar.
 	__DEALLOC(this)
@@ -647,7 +647,7 @@ Reference* Reference_name(Reference* this, const char* name) {
 }
 
 int Reference__walk( Reference* this, WalkingCallback callback, int step, void* context ) {
-	TRACE("Reference__walk: %d %s [%d]", this->id, this->name, step);
+	TRACE("Reference__walk     : %4d %c %-20s [%4d]", this->id, this->type, this->name, step);
 	step = callback((Element*)this, step, context);
 	if (step >= 0) {
 		step = ParsingElement__walk(this->element, callback, step + 1, context);
@@ -762,7 +762,7 @@ const char* Word_word(ParsingElement* this) {
 
 // TODO: Implement Word_free and regfree
 void Word_free(ParsingElement* this) {
-	TRACE("Word_free: %p", this)
+	// TRACE("Word_free: %p", this)
 	WordConfig* config = (WordConfig*)this->config;
 	if (config != NULL) {
 		// We don't have anything special to dealloc besides the config

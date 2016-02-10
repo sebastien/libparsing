@@ -115,6 +115,9 @@ class CompositeElement(ParsingElement):
 		self._cobjectCache["children"] = (res, None)
 		return self
 
+	def __getitem__( self, index ):
+		return self.children[index]
+
 	def __iter__( self ):
 		for _ in self.children:
 			yield _
@@ -212,6 +215,9 @@ class Reference(CObject):
 	def __repr__( self ):
 		return "<Reference#{1}:{0}={2}({3}) at {4}>".format(self.name, self.id, self.element, self.cardinality, hex(id(self)))
 
+	def __getitem__( self, index):
+		return self.element[index]
+
 # -----------------------------------------------------------------------------
 #
 # WORD
@@ -308,7 +314,7 @@ class Rule(CompositeElement):
 	"""
 
 	def __repr__( self ):
-		return "<Rule#{1}:{0}=[2] at {3}>".format(self.name, self.id, len(list(self)), hex(id(self)))
+		return "<Rule#{1}:{0}<2> at {3}>".format(self.name, self.id, len(list(self)), hex(id(self)))
 
 # -----------------------------------------------------------------------------
 #
@@ -356,6 +362,10 @@ class Match(CObject):
 	def children( self ):
 		return ()
 
+	@caccessor
+	def element( self ):
+		return self.LIBRARY.wrap(self._cobject.element)
+
 	@property
 	def name( self ):
 		"""The name of the reference."""
@@ -391,7 +401,7 @@ class Match(CObject):
 
 	def __repr__( self ):
 		element = self.element
-		return "<{0}:{1}#{2}({3}):{4}+{5}>".format(self.__class__.__name__, element.type, element.id, element.name or "_", self.offset, self.length)
+		return "<{0}:{1}#{2}:{3}+{4} @ {5}>".format(self.__class__.__name__, element.name or element.type, element.id, self.offset, self.length, hex(id(self)))
 
 # -----------------------------------------------------------------------------
 #
@@ -451,17 +461,21 @@ class CompositeMatch(Match):
 class ReferenceMatch(CompositeMatch):
 
 	@caccessor
-	def element( self ):
+	def reference( self ):
 		return self.LIBRARY.wrap(ctypes.cast(self._cobject.element, C.TYPES["Reference*"]))
+
+	@caccessor
+	def element( self ):
+		return self.reference.element
 
 	@property
 	def name( self ):
 		"""The name of the reference."""
-		return self.element.name
+		return self.reference.name
 
 	@property
 	def cardinality( self ):
-		return self.element.cardinality
+		return self.reference.cardinality
 
 	def _extractValue( self ):
 		if self.isOne() or self.isOptional():
@@ -481,7 +495,6 @@ class ReferenceMatch(CompositeMatch):
 	# def groups( self ):
 	# 	return [_.group() for _ in self]
 
-
 	def isOne( self ):
 		return self.cardinality == CARDINALITY_ONE
 
@@ -495,7 +508,7 @@ class ReferenceMatch(CompositeMatch):
 		return self.cardinality == CARDINALITY_MANY
 
 	def __repr__( self ):
-		return "<{0}:{1}#{2}:{3}{4}@{5}>".format(self.__class__.__name__, self.element.type, self.element.id, self.element.name, self.cardinality, hex(id(self)))
+		return "<{0}:{1}={2}#{3}[{4}] @ {5}>".format(self.__class__.__name__, self.reference.name, self.element.name, self.element.id, self.cardinality, hex(id(self)))
 
 # -----------------------------------------------------------------------------
 #
@@ -803,10 +816,10 @@ class Processor(CObject):
 
 	def _new( self, grammar ):
 		CObject._new(self)
-		# py_callback = self._defaultHandler
-		# c_callback  = C.TYPES["ProcessorCallback"](py_callback)
-		# self._cobjectCache["fallback"] = (py_callback, c_callback)
-		# self._cobject.fallback         = c_callback
+		py_callback = self._defaultHandler
+		c_callback  = C.TYPES["ProcessorCallback"](py_callback)
+		self._cobjectCache["fallback"] = (py_callback, c_callback)
+		self._cobject.fallback         = c_callback
 		self._bindSymbols(grammar)
 		self._bindHandlers()
 
@@ -852,8 +865,10 @@ class Processor(CObject):
 
 	def process( self, match ):
 		self._process(match, 0)
+		return match.value
 
-	def XXXprocess( self, match ):
+	def _defaultHandler( self, processor, match ):
+		if not isinstance(match, Match): match = self.LIBRARY.wrap(match)
 		if isinstance(match, ReferenceMatch):
 			result = [self.process(_) for _ in match]
 			if result and (match.isOne() or match.isOptional()): result = result[0]
@@ -877,29 +892,28 @@ class Processor(CObject):
 				result = match.value
 			return result
 
-	def _defaultHandler( self, handler, match ):
-		child = match.contents.children
-		while child:
-			self._process(child, 0)
-			child = child.contents.next
-		# NOTE: Slow below
-		# match       = self.LIBRARY.wrap(match)
-		# result      = []
-		# match.value = result
-		# for _ in match.children:
-		# 	result.append(self.process(_) if isinstance(_, Match) else _)
+	# def _defaultHandler( self, handler, match ):
+	# 	child = match.contents.children
+	# 	while child:
+	# 		self._process(child, 0)
+	# 		child = child.contents.next
+	# 	# NOTE: Slow below
+	# 	# match       = self.LIBRARY.wrap(match)
+	# 	# result      = []
+	# 	# match.value = result
+	# 	# for _ in match.children:
+	# 	# 	result.append(self.process(_) if isinstance(_, Match) else _)
+
+	# def _applyHandler( self, handler, match ):
+	# 	result      = []
+	# 	match.value = result
+	# 	for _ in match.children:
+	# 		result.append(self.process(_) if isinstance(_, Match) else _)
 
 	def _applyHandler( self, handler, match ):
-		result      = []
-		match.value = result
-		for _ in match.children:
-			result.append(self.process(_) if isinstance(_, Match) else _)
-
-	def XXX_applyHandler( self, handler, match ):
 		"""Applies the given handler to the given match, returning the value
 		produces but the handler."""
-		match.value = "OK"
-		return True
+		# FIXME: This should be moved to the binding
 		# We only bind the arguments listed
 		fcode    = handler.func_code
 		argnames = fcode.co_varnames[0:fcode.co_argcount]
@@ -919,15 +933,17 @@ class Processor(CObject):
 			value  = match.value
 			result = handler(match, **kwargs)
 			# print ("_applyHandler: {0}#{1} : {2} --> {3}".format(match.__class__.__name__, match.name, repr(value), repr(result)))
-			match.result = result
-			return result
+			match.value = result
 		except HandlerException as e:
 			raise e
 		except Exception as e:
-			args = ["match"] + list(kwargs.keys())
+			args                  = ["match"] + list(kwargs.keys())
 			exc_type, exc_obj, tb = sys.exc_info()
-			context = traceback.format_exc().splitlines()
-			raise HandlerException(e, kwargs, handler, context)
+			context               = traceback.format_exc().splitlines()
+			res                   = HandlerException(e, kwargs, handler, context)
+			logging.error(res)
+			for _ in context: logging.warn(_)
+			raise res
 
 # -----------------------------------------------------------------------------
 #

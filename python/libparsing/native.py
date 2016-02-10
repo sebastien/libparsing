@@ -344,7 +344,8 @@ class CObject(object):
 	@classmethod
 	def _CreateAccessor( cls, name, type ):
 		"""Returns an accessor for the given field from a `ctypes.Structure._fields_`
-		definition."""
+		definition. Note that once you set the value from Python, it will be stored
+		in cache, and will override the native object's value."""
 		c = C
 		def getter( self ):
 			# The getter queries the cobjectCache first.
@@ -354,7 +355,7 @@ class CObject(object):
 				c_value = getattr(self._cobject, name)
 				value   = self.LIBRARY.wrap(c_value)
 				# print "g: ", cls.__name__ + "." + name, type, "=", value
-				self._cobjectCache[name] = (value, c_value)
+				#self._cobjectCache[name] = (value, c_value)
 				return value
 		def setter( self, value ):
 			# This is required for Python3
@@ -506,7 +507,9 @@ class CObject(object):
 		if hasattr(self, "_cobjectPointer") and self._cobjectPointer and self._mustFree:
 			# FIXME: There are some issues with the __DEL__ when other stuff is not available
 			if hasattr(self, "free") and getattr(self, "free"):
-				self.free(self._cobjectPointer)
+				# We call the function directly, as the C class might be
+				# freed already.
+				self.PROTOTYPES["free"][2](self._cobjectPointer)
 
 # -----------------------------------------------------------------------------
 #
