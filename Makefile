@@ -57,7 +57,7 @@ cppcheck: $(SOURCES) $(HEADER)
 # PRODUCTS
 # =============================================================================
 
-libparsing: lib$(PROJECT).so lib$(PROJECT).so.$(VERSION) python/libparsing/libparsing.so
+libparsing: lib$(PROJECT).so lib$(PROJECT).so.$(VERSION)
 	
 lib$(PROJECT).so: build/parsing.o
 	$(LD) -shared -lpcre $< -o $@
@@ -85,9 +85,6 @@ src/python/$(PY_MODULE)/$(PY_MODULE).ffi: src/python/$(PY_MODULE)/__init__.py sr
 	cd src/python && python $(PY_MODULE)/__init__.py
 
 src/python/$(PY_MODULE)/$(PY_MODULE_SO): $(PRODUCT_SO)
-	cp $< $@
-
-python/libparsing/libparsing.so: lib$(PROJECT).so
 	cp $< $@
 
 # =============================================================================
