@@ -855,6 +855,7 @@ class Processor(CObject):
 				c_callback  = C.TYPES["ProcessorCallback"](py_callback)
 				self._callbacks[symbol.id] = (py_callback, c_callback)
 				self._register(symbol.id, c_callback)
+				self.handlerByID[symbol.id] = py_method
 
 	def on( self, symbol, callback ):
 		"""Binds a handler for the given symbol."""
@@ -864,8 +865,16 @@ class Processor(CObject):
 		return self
 
 	def process( self, match ):
-		self._process(match, 0)
-		return match.value
+		# self._process(match, 0)
+		if isinstance(match, ReferenceMatch):
+			return self._defaultHandler(self, match)
+		else:
+			handler = self.handlerByID.get(match.element.id)
+			if handler:
+				return self._applyHandler( handler, match)
+			else:
+				return self._defaultHandler(self, match)
+		#return match.value
 
 	def _defaultHandler( self, processor, match ):
 		if not isinstance(match, Match): match = self.LIBRARY.wrap(match)
@@ -932,8 +941,9 @@ class Processor(CObject):
 		try:
 			value  = match.value
 			result = handler(match, **kwargs)
-			# print ("_applyHandler: {0}#{1} : {2} --> {3}".format(match.__class__.__name__, match.name, repr(value), repr(result)))
+			#print ("_applyHandler: {0}.value={1} --> {2}".format(match, repr(value), repr(result)))
 			match.value = result
+			return result
 		except HandlerException as e:
 			raise e
 		except Exception as e:
