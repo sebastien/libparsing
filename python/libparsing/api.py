@@ -788,7 +788,7 @@ class HandlerException(Exception):
 	def __str__( self ):
 		return "{0}: {1} in {2} with {3}".format(self.__class__.__name__, self.exception, self.handler, self.args)
 
-class Processor(CObject):
+class Processor(object):
 	"""The main entry point when using `libparsing` form Python. Subclass
 	the processor and define parsing element handlers using the convention
 	`on<ParsingElement's name`. For instance, if your grammar has a `NAME`
@@ -799,27 +799,10 @@ class Processor(CObject):
 	if it is a composite symbol (rule, group, etc). The named elements
 	are the ones you declare using `_as`."""
 
-	WRAPPED   = TProcessor
-	FUNCTIONS = """
-	Processor* Processor_new( );
-	void Processor_free(Processor* this);
-	void Processor_register (Processor* this, int symbolID, ProcessorCallback callback) ; // @as _register
-	int  Processor_process (Processor* this, Match* match, int step);                     // @as _process
-	"""
-
-	def _init( self ):
-		CObject._init(self)
+	def __init__( self, grammar ):
 		self.symbolByName = {}
 		self.symbolByID   = {}
 		self.handlerByID  = {}
-		self._callbacks   = {}
-
-	def _new( self, grammar ):
-		CObject._new(self)
-		# py_callback = self._defaultHandler
-		# c_callback  = C.TYPES["ProcessorCallback"](py_callback)
-		# self._cobjectCache["fallback"] = (py_callback, c_callback)
-		# self._cobject.fallback         = c_callback
 		self._bindSymbols(grammar)
 		self._bindHandlers()
 
@@ -850,11 +833,7 @@ class Processor(CObject):
 				logging.warn("Handler `{0}` does not match any of {1}".format(k, ", ".join(self.symbolByName.keys())))
 			else:
 				symbol      = self.symbolByName[name]
-				py_method   = getattr(self, k)
-				py_callback = lambda processor, match, method=py_method: self._applyHandler(method, self.LIBRARY.wrap(match))
-				c_callback  = C.TYPES["ProcessorCallback"](py_callback)
-				# self._callbacks[symbol.id] = (py_callback, c_callback)
-				# self._register(symbol.id, c_callback)
+				self.handlerByID[symbol.id] = getattr(self, k)
 
 	def on( self, symbol, callback ):
 		"""Binds a handler for the given symbol."""
@@ -864,8 +843,7 @@ class Processor(CObject):
 		return self
 
 	def process( self, match ):
-		self._process(match, 0)
-		return match.value
+		return self._defaultHandler(self, match)
 
 	def _defaultHandler( self, processor, match ):
 		if not isinstance(match, Match): match = self.LIBRARY.wrap(match)
@@ -893,28 +871,9 @@ class Processor(CObject):
 				result = match.value
 			return result
 
-	# def _defaultHandler( self, handler, match ):
-	# 	child = match.contents.children
-	# 	while child:
-	# 		self._process(child, 0)
-	# 		child = child.contents.next
-	# 	# NOTE: Slow below
-	# 	# match       = self.LIBRARY.wrap(match)
-	# 	# result      = []
-	# 	# match.value = result
-	# 	# for _ in match.children:
-	# 	# 	result.append(self.process(_) if isinstance(_, Match) else _)
-
-	# def _applyHandler( self, handler, match ):
-	# 	result      = []
-	# 	match.value = result
-	# 	for _ in match.children:
-	# 		result.append(self.process(_) if isinstance(_, Match) else _)
-
 	def _applyHandler( self, handler, match ):
 		"""Applies the given handler to the given match, returning the value
 		produces but the handler."""
-		print ("APPLY HANDLER", match)
 		# FIXME: This should be moved to the binding
 		# We only bind the arguments listed
 		fcode    = handler.func_code
@@ -934,8 +893,9 @@ class Processor(CObject):
 		try:
 			value  = match.value
 			result = handler(match, **kwargs)
-			# print ("_applyHandler: {0}.value={1} --> {2}".format(match, repr(value), repr(result)))
+			#print ("_applyHandler: {0}.value={1} --> {2}".format(match, repr(value), repr(result)))
 			match.value = result
+			return result
 		except HandlerException as e:
 			raise e
 		except Exception as e:
@@ -1003,7 +963,6 @@ class Libparsing(CLibrary):
 			ParsingContext,
 			ParsingResult,
 			Grammar,
-			Processor,
 			Word,      WordMatch,
 			Token,     TokenMatch,
 			Rule,      RuleMatch,
