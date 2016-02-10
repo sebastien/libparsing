@@ -529,7 +529,7 @@ class WordMatch(Match):
 		"""Returns the word matched"""
 		if index != 0: raise IndexError
 		assert index == 0
-		return element.config.word
+		return self.LIBRARY.wrap(ctypes.cast(self.element.config, C.TYPES["WordConfig*"]).contents.word)
 
 	def __getitem__( self, index ):
 		return self.group(index)
@@ -680,14 +680,6 @@ class ParsingResult(CObject):
 		r = self.context.stats.matchLength
 		return (o, o + r)
 
-	# def textAround( self, line=None ):
-	# 	if line is None: line = self.line
-	# 	i = self.offset
-	# 	t = self.text
-	# 	while i > 1 and t[i] != "\n": i -= 1
-	# 	if i != 0: i += 1
-	# 	return t[i:(i+100)].split("\n")[0]
-
 	def textAround( self ):
 		# We should get the offset range covered by the iterator's buffer
 		o = self.offset - self.textOffset
@@ -698,7 +690,8 @@ class ParsingResult(CObject):
 		while e < len(t) and t[e] != "\n": e += 1
 		l = t[s:e]
 		i = " " * (o - s - 1) + "^"
-		return l + "\n" + i
+		return "ERROR AT {0} {1}".format(self.offset, self.textOffset)
+		return l.decode("utf8") + "\n" + i
 
 # -----------------------------------------------------------------------------
 #
@@ -841,14 +834,13 @@ class Processor(object):
 		"""Binds a handler for the given symbol."""
 		if not isinstance(symbol, ParsingElement):
 			symbol = self.symbolByName[symbol]
-		self.handlerByID[symbol.id] = callback
+		self.handlerByID[symbol.id] = self._prepareHandler(callback)
 		return self
 
 	def process( self, match ):
 		return self._defaultHandler(match)
 
 	def _defaultHandler( self, match ):
-		if not isinstance(match, Match): match = self.LIBRARY.wrap(match)
 		if isinstance(match, ReferenceMatch):
 			result = [self.process(_) for _ in match]
 			if result and (match.isOne() or match.isOptional()): result = result[0]
@@ -879,6 +871,9 @@ class Processor(object):
 			argnames = argnames[2:]
 		else:
 			argnames = argnames[1:]
+		# def callback(match, handler=handler, argnames=argnames):
+		# 	return self._applyHandler(handler, match, argnames)
+		# return callback
 		return lambda m:self._applyHandler(handler, m, argnames)
 
 	def _applyHandler( self, handler, match, argnames ):

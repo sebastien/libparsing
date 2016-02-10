@@ -9,7 +9,7 @@
 # Last modification : 2016-02-08
 # -----------------------------------------------------------------------------
 
-import ctypes, os, re, sys, weakref, types
+import ctypes, os, re, sys, weakref, types, inspect
 
 IS_PYTHON3 = sys.version_info[0] >= 3
 
@@ -17,7 +17,6 @@ __doc__ = """
 An abstraction of `ctypes` that allows for the development of object-oriented
 bindings to C code written in an object-oriented style (à la glib).
 """
-
 
 C_FUNCTION_TYPE = type(ctypes.CFUNCTYPE(None))
 C_POINTER_TYPE  = type(ctypes.POINTER(None))
@@ -73,12 +72,14 @@ class C:
 	@classmethod
 	def Unwrap( cls, value, cast=None ):
 		assert not isinstance(value, ctypes.Structure), "C.Unwrap: ctypes structures must be wrapped in CObjects {0}".format(value)
-		if type(cast) is C_FUNCTION_TYPE:
-			# A Python function must be wrapped in the callback
-			c_value = cast(value) if value else None
-		elif CObject and isinstance(value, CObject) or isinstance(value, object) and hasattr(value, "_cobjectPointer"):
+		if CObject and isinstance(value, CObject) or isinstance(value, object) and hasattr(value, "_cobjectPointer"):
 			# We pass the cobject structure by reference, CObject might be garbage collected at this time
 			return value._cobjectPointer
+		elif isinstance(value, str) and IS_PYTHON3:
+			c_value = cls.String(value)
+		elif type(cast) is C_FUNCTION_TYPE:
+			# A Python function must be wrapped in the callback
+			c_value = cast(value) if value else None
 		else:
 			# Otherwise, CTypes will do the argument checking anyway
 			c_value = value
@@ -527,7 +528,7 @@ def cproperty( method, readonly=False ):
 	in cache. From then on,  it's up to the CObject to ensure consistency
 	between the object's `_cobjectCache` and the underlying `_cobject`
 	properties."""
-	name = method.func_name
+	name = method.__name__
 	def getter( self ):
 		if name not in self._cobjectCache:
 			value = method(self)
