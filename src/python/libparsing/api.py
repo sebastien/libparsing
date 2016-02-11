@@ -647,6 +647,74 @@ class ParsingContext(CObject):
 
 # -----------------------------------------------------------------------------
 #
+# PARSING STATS
+#
+# -----------------------------------------------------------------------------
+
+class ParsingStats(CObject):
+
+	WRAPPED   = TParsingStats
+	FUNCTIONS = """
+	"""
+
+	def totalSuccess( self ):
+		return sum(self._cobject.successBySymbol[i] for i in range(self.symbolsCount))
+
+	def totalFailures( self ):
+		return sum(self._cobject.failureBySymbol[i] for i in range(self.symbolsCount))
+
+	def symbols( self ):
+		return [
+			(i, self._cobject.successBySymbol[i], self._cobject.failureBySymbol[i]) for i in range(self.symbolsCount)
+		]
+
+	def report( self, grammar=None, output=sys.stdout ):
+		br    = self.bytesRead
+		pt    = self.parseTime
+		ts    = self.totalSuccess()
+		tf    = self.totalFailures()
+		def write(s):
+			output.write(s)
+			output.write("\n")
+		write("Bytes read :  {0}".format(br))
+		write("Parse time :  {0}s".format(pt))
+		write("Throughput :  {0:0.3}Mb/s".format(br/1024.0/1024.0/pt))
+		write("-" * 80)
+		write("Sucesses   :  {0}".format(ts))
+		write("Failures   :  {0}".format(tf))
+		write("Throughput :  {0:0.3f}kop/s".format(((ts + tf) / pt) / 1000.0))
+		write("Op/byte    :  {0}".format((ts + tf) / br))
+		write("-" * 80)
+		write("   SYMBOL   NAME                               SUCCESSES       FAILURES     RATE")
+		sy = sorted(self.symbols(), lambda a,b:cmp(b[1] + b[2], a[1] + a[2]))
+		c  = 0
+		ct = 0
+		ts = 0
+		tf = 0
+		for sid, s, f in sy:
+			ct += 1
+			if s == 0 and f == 0: continue
+			e = grammar.symbol(sid) if grammar else None
+			n = ""
+			if e:
+				if isinstance(e, Reference):
+					n = "*" + e.element.name + "(" + e.cardinality + ")"
+					if e.name:
+						n += ":" + e.name
+				else:
+					n = e.name
+			write("{0:9d}   {1:29s} {2:14d} {3:14d} {4:7d}%".format(sid, n, s, f, 100 * s/(s+f)))
+			ts += s
+			tf += f
+			c += 1
+		write("-" * 80)
+		write("{0:9d}   {1:29s} {2:14d} {3:14d} {4:7d}%".format(len(sy), "SYMBOLS / MATCHES", ts, tf, 100 * ts/(ts+tf)))
+		write("-" * 80)
+		write("Symbols activated  :  {0}/{1} ~{2}%".format(c, ct, int(100.0 * c / ct)))
+		return self
+
+# -----------------------------------------------------------------------------
+#
 # PARSING RESULTS
 #
 # -----------------------------------------------------------------------------
@@ -663,6 +731,10 @@ class ParsingResult(CObject):
 	int    ParsingResult_textOffset(ParsingResult* this); // @as _textOffset
 	size_t ParsingResult_remaining(ParsingResult* this);
 	"""
+
+	@caccessor
+	def stats( self ):
+		return self.LIBRARY.wrap(self._cobject.context.contents.stats)
 
 	@property
 	def line( self ):
@@ -776,6 +848,12 @@ class Grammar(CObject):
 		self.axiom     = axiom
 		self.symbols   = CLibrary.Symbols()
 		self._symbols  = self.symbols.__dict__
+
+	def symbol( self, id ):
+		if type(id) is int:
+			return self.LIBRARY.wrap(self._cobject.elements[id])
+		else:
+			return getattr(self.symbols, id)
 
 # -----------------------------------------------------------------------------
 #
@@ -970,6 +1048,7 @@ class Libparsing(CLibrary):
 			Match,
 			ParsingContext,
 			ParsingResult,
+			ParsingStats,
 			Grammar,
 			Word,      WordMatch,
 			Token,     TokenMatch,

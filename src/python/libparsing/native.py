@@ -53,6 +53,12 @@ class C:
 
 	COBJECTS = weakref.WeakValueDictionary()
 
+
+	@classmethod
+	def Cast( cls, type, value ):
+		if isinstance(type, str): type = cls.TYPES[type]
+		return ctypes.cast(value, type)
+
 	@classmethod
 	def String( cls, value ):
 		"""Ensures that the given value is a CString"""
