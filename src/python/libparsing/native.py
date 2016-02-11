@@ -49,10 +49,10 @@ class C:
 		"double"          : ctypes.c_double,
 		"size_t"          : ctypes.c_size_t,
 		"size_t*"         : ctypes.POINTER(ctypes.c_size_t),
+		"PyObject*"       : ctypes.py_object,
 	}
 
 	COBJECTS = weakref.WeakValueDictionary()
-
 
 	@classmethod
 	def Cast( cls, type, value ):
@@ -95,7 +95,9 @@ class C:
 	def RegisterCObject( cls, cobject ):
 		"""Registers the given CObject to be bound to the given data structure."""
 		address = ctypes.addressof(cobject._cobject)
-		assert address not in cls.COBJECTS
+		# NOTE: This assertion does a slowdown, and is really just helpful
+		# for development.
+		#assert address not in cls.COBJECTS
 		cls.COBJECTS[address] = cobject
 		return cobject
 

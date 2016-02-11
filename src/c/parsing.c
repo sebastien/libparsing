@@ -438,6 +438,15 @@ int Match__walk(Match* this, WalkingCallback callback, int step, void* context )
 	return step;
 }
 
+
+int Match__walkCounter (Element* this, int step, void* context) {
+	return step;
+}
+
+int Match_countAll(Match* this) {
+	return Match__walk(this, Match__walkCounter, 0, NULL);
+}
+
 // ----------------------------------------------------------------------------
 //
 // PARSING ELEMENT

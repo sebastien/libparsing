@@ -26,6 +26,29 @@ NOTHING  = object()
 
 # -----------------------------------------------------------------------------
 #
+# DEFINES/LIBRARY
+#
+# -----------------------------------------------------------------------------
+
+CARDINALITY_OPTIONAL      = b'?'
+CARDINALITY_ONE           = b'1'
+CARDINALITY_MANY_OPTIONAL = b'*'
+CARDINALITY_MANY          = b'+'
+TYPE_WORD                 = b'W'
+TYPE_TOKEN                = b'T'
+TYPE_GROUP                = b'G'
+TYPE_RULE                 = b'R'
+TYPE_CONDITION            = b'c'
+TYPE_PROCEDURE            = b'p'
+TYPE_REFERENCE            = b'#'
+STATUS_INIT               = b'-'
+STATUS_PROCESSING         = b'~'
+STATUS_MATCHED            = b'Y'
+STATUS_FAILED             = b'X'
+STATUS_INPUT_ENDED        = b'.'
+STATUS_ENDED              = b'E'
+# -----------------------------------------------------------------------------
+#
 # PARSING ELEMENTS
 #
 # -----------------------------------------------------------------------------
@@ -277,9 +300,6 @@ class Condition(ParsingElement):
 		self._callback = (py_callback, c_callback)
 		return ParsingElement._new(self, c_callback)
 
-
-		return ParsingElement._new(self, None)
-
 	def __repr__( self ):
 		return "<Condition#{1}:{0}={2} at {3}>".format(self.name, self.id, None, hex(id(self)))
 
@@ -354,11 +374,12 @@ class Match(CObject):
 	int Match_getOffset(Match* this);
 	int Match_getLength(Match* this);
 	void Match_free(Match* this);
-	int Match__walk(Match* this, WalkingCallback callback, int step, void* context );
+	int Match__walk(Match* this, WalkingCallback callback, int step, PyObject* context );
+	int Match_countAll(Match* this);
 	"""
 
 	def _init( self ):
-		self._value = NOTHING
+		self._value   = NOTHING
 
 	def group( self, index=0 ):
 		raise NotImplementedError("{0}.group not() implemented".format(self.__class__.__name__))

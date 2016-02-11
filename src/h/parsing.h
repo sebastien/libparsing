@@ -441,6 +441,9 @@ int Match_getLength(Match* this);
 // @method
 int Match__walk(Match* this, WalkingCallback callback, int step, void* context );
 
+// @method
+int Match_countAll(Match* this);
+
 // @type ParsingElement
 typedef struct ParsingElement {
 	char           type;       // Type is used du differentiate ParsingElement from Reference

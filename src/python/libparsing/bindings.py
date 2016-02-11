@@ -18,30 +18,6 @@ Low-level bindings to the libparsing C API.
 
 # -----------------------------------------------------------------------------
 #
-# DEFINES/LIBRARY
-#
-# -----------------------------------------------------------------------------
-
-CARDINALITY_OPTIONAL      = b'?'
-CARDINALITY_ONE           = b'1'
-CARDINALITY_MANY_OPTIONAL = b'*'
-CARDINALITY_MANY          = b'+'
-TYPE_WORD                 = b'W'
-TYPE_TOKEN                = b'T'
-TYPE_GROUP                = b'G'
-TYPE_RULE                 = b'R'
-TYPE_CONDITION            = b'c'
-TYPE_PROCEDURE            = b'p'
-TYPE_REFERENCE            = b'#'
-STATUS_INIT               = b'-'
-STATUS_PROCESSING         = b'~'
-STATUS_MATCHED            = b'Y'
-STATUS_FAILED             = b'X'
-STATUS_INPUT_ENDED        = b'.'
-STATUS_ENDED              = b'E'
-
-# -----------------------------------------------------------------------------
-#
 # C STRUCTURES
 #
 # -----------------------------------------------------------------------------

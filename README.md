@@ -710,6 +710,14 @@ int Match__walk(Match* this, WalkingCallback callback, int step, void* context )
 ```
 
 
+#### <a name="Match_countAll_method"><span class="classifier">method</span> `Match_countAll`</a>
+
+
+```c
+int Match_countAll(Match* this);
+```
+
+
 #### <a name="ParsingElement_type"><span class="classifier">type</span> `ParsingElement`</a>
 
 
