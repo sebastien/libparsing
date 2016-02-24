@@ -837,7 +837,8 @@ ParsingElement* Token_new(const char* expr) {
 		__DEALLOC(this);
 		return NULL;
 	}
-	config->extra = pcre_study(config->regexp, 0, &pcre_error);
+	// SEE: http://pcre.org/original/doc/html/pcrejit.html
+	config->extra = pcre_study(config->regexp, PCRE_STUDY_JIT_COMPILE, &pcre_error);
 	if (pcre_error != NULL) {
 		ERROR("Token: cannot optimize regular expression `%s` at %d: %s", expr, pcre_error_offset, pcre_error);
 		__DEALLOC(config);
