@@ -16,11 +16,11 @@ grep = lambda f,e:(l for l in file(f).readlines() if l.startswith(e)).next()
 # SEE: https://docs.python.org/2/distutils/apiref.html#distutils.core.Extension
 libparsing = Extension("libparsing",
 	define_macros       = [("PYTHON", "1")],
-	include_dirs        = ["/usr/local/include", "src"],
+	include_dirs        = ["/usr/local/include", "src", "src/h"],
 	extra_compile_args =  ["-std=c11 -DWITH_PCRE"],
 	libraries           = ["pcre"],
 	library_dirs        = ["/usr/local/lib"],
-	sources             = ["src/parsing.c"]
+	sources             = ["src/c/parsing.c"]
 )
 
 LONG_DESCRIPTION = "\n".join(_[2:].strip() for _ in file("src/parsing.h").read().decode("utf-8").split("[START:INTRO]",1)[1].split("[END:INTRO]")[0].split("\n"))
@@ -63,7 +63,7 @@ setup(
 		"libparsing":["*.ffi"]
 	},
 	data_files = [
-		("libparsing", ("python/cdoclib.py", "src/parsing.c", "src/parsing.h", "src/oo.h"))
+		("libparsing", ("src/c/parsing.c", "src/h/parsing.h", "src/h/oo.h"))
 	],
 	ext_modules = [libparsing],
 )
