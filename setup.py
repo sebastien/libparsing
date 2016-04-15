@@ -57,7 +57,7 @@ setup(
 		# 'Programming Language :: Python :: 3.3',
 		# 'Programming Language :: Python :: 3.4',
 	],
-	package_dir = {"":"python"},
+	package_dir = {"":"src/py"},
 	packages    = ["libparsing"],
 	package_data={
 		"libparsing":["*.ffi"]
