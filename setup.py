@@ -23,7 +23,7 @@ libparsing = Extension("libparsing",
 	sources             = ["src/c/parsing.c"]
 )
 
-LONG_DESCRIPTION = "\n".join(_[2:].strip() for _ in file("src/parsing.h").read().decode("utf-8").split("[START:INTRO]",1)[1].split("[END:INTRO]")[0].split("\n"))
+LONG_DESCRIPTION = "\n".join(_[2:].strip() for _ in file("src/h/parsing.h").read().decode("utf-8").split("[START:INTRO]",1)[1].split("[END:INTRO]")[0].split("\n"))
 
 # If pandoc is installed, we translate the documentation to RST
 if os.popen("which pandoc").read():
@@ -34,7 +34,7 @@ if os.popen("which pandoc").read():
 
 setup(
 	name             = "libparsing",
-	version          = (l.split('"')[1] for l in file("src/parsing.h").readlines() if l.startswith("#define __PARSING_VERSION__")).next(),
+	version          = (l.split('"')[1] for l in file("src/h/parsing.h").readlines() if l.startswith("#define __PARSING_VERSION__")).next(),
 	url              = "https://github.com/sebastien/libparsing",
 	# download_url     = "",
 	author           = 'Sébastien Pierre',
