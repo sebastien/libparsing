@@ -13,11 +13,12 @@ import os, tempfile
 
 grep = lambda f,e:(l for l in file(f).readlines() if l.startswith(e)).next()
 
+# FIXME: This is not built properly
 # SEE: https://docs.python.org/2/distutils/apiref.html#distutils.core.Extension
 libparsing = Extension("libparsing",
 	define_macros       = [("PYTHON", "1")],
 	include_dirs        = ["/usr/local/include", "src", "src/h"],
-	extra_compile_args =  ["-std=c11 -DWITH_PCRE"],
+	extra_compile_args =  ["-std=c11", "-DWITH_PCRE"],
 	libraries           = ["pcre"],
 	library_dirs        = ["/usr/local/lib"],
 	sources             = ["src/c/parsing.c"]
@@ -57,7 +58,7 @@ setup(
 		# 'Programming Language :: Python :: 3.3',
 		# 'Programming Language :: Python :: 3.4',
 	],
-	package_dir = {"":"src/py"},
+	package_dir = {"":"src/python"},
 	packages    = ["libparsing"],
 	package_data={
 		"libparsing":["*.ffi"]

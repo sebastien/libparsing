@@ -912,6 +912,7 @@ class Processor(object):
 		self.symbolByName = {}
 		self.symbolByID   = {}
 		self.handlerByID  = {}
+		self.grammar      = grammar
 		self._bindSymbols(grammar)
 		self._bindHandlers()
 
