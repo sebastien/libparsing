@@ -12,6 +12,8 @@
 from __future__ import print_function
 import sys, traceback, inspect
 from   libparsing.bindings import *
+from   copy import copy
+
 try:
 	import reporter as logging
 except ImportError as e:

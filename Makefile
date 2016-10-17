@@ -13,10 +13,10 @@ PRODUCT_SO:=lib$(PROJECT).so
 TEST_PRODUCTS = $(TESTS:tests/%.c=%)
 CC       = gcc
 LIBS    := libpcre
-CFLAGS  += -Isrc/h -std=c11 -O3 -Wall -fPIC -DWITH_PCRE 
-#CFLAGS  += -Isrc/h -std=c11 -Wall -fPIC -DWITH_PCRE -g -pg #-DDEBUG_ENABLED -DTRACE_ENABLED
+#CFLAGS  += -Isrc/h -std=c11 -O3 -Wall -fPIC -DWITH_PCRE 
+CFLAGS  += -Isrc/h -std=c11 -Wall -fPIC -DWITH_PCRE -g -pg #-DDEBUG_ENABLED -DTRACE_ENABLED
 LDFLAGS :=  $(shell pkg-config --cflags --libs $(LIBS))
-PRODUCTS = lib$(PROJECT) lib$(PROJECT).so.$(VERSION) README.html src/python/$(PY_MODULE)/$(PY_MODULE_SO)
+PRODUCTS = lib$(PROJECT) lib$(PROJECT).so.$(VERSION) src/python/$(PY_MODULE)/$(PY_MODULE_SO)
 
 # =============================================================================
 # MAIN RULES
@@ -65,8 +65,8 @@ lib$(PROJECT).so: build/parsing.o
 lib$(PROJECT).so.$(VERSION): build/parsing.o
 	$(LD) -shared -lpcre $< -o $@
 
-README.html: tools/cdoclib.py src/h/parsing.h
-	@python tools/cdoclib.py src/h/parsing.h > $@
+#README.html: tools/cdoclib.py src/h/parsing.h
+#	@python tools/cdoclib.py src/h/parsing.h > $@
 
 experiment/%: build/%.o build/parsing.o
 	$(CC) $? $(LDFLAGS) -o $@

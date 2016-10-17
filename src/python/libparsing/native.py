@@ -10,6 +10,7 @@
 # -----------------------------------------------------------------------------
 
 import ctypes, os, re, sys, weakref, types, inspect
+from   copy import copy
 
 IS_PYTHON3 = sys.version_info[0] >= 3
 
