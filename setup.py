@@ -11,31 +11,31 @@ except ImportError:
 	from distutils.core import setup, Extension
 import os, tempfile
 
-grep = lambda f,e:(l for l in file(f).readlines() if l.startswith(e)).next()
+grep = lambda f,e:(l for l in open(f).readlines() if l.startswith(e)).next()
 
 # FIXME: This is not built properly
 # SEE: https://docs.python.org/2/distutils/apiref.html#distutils.core.Extension
 libparsing = Extension("libparsing",
 	define_macros       = [("PYTHON", "1")],
 	include_dirs        = ["/usr/local/include", "src", "src/h"],
-	extra_compile_args =  ["-std=c11", "-DWITH_PCRE"],
+	extra_compile_args =  ["-DWITH_PCRE"],
 	libraries           = ["pcre"],
 	library_dirs        = ["/usr/local/lib"],
 	sources             = ["src/c/parsing.c"]
 )
 
-LONG_DESCRIPTION = "\n".join(_[2:].strip() for _ in file("src/h/parsing.h").read().decode("utf-8").split("[START:INTRO]",1)[1].split("[END:INTRO]")[0].split("\n"))
+LONG_DESCRIPTION = "\n".join(_[2:].strip() for _ in open("src/h/parsing.h").read().split("[START:INTRO]",1)[1].split("[END:INTRO]")[0].split("\n"))
 
 # If pandoc is installed, we translate the documentation to RST
 if os.popen("which pandoc").read():
 	p = tempfile.mktemp()
-	with file(p,"w") as f: f.write(LONG_DESCRIPTION)
+	with open(p,"w") as f: f.write(LONG_DESCRIPTION)
 	LONG_DESCRIPTION = os.popen("pandoc -f markdown -t rst %s" % (p)).read()
 	os.unlink(p)
 
 setup(
 	name             = "libparsing",
-	version          = (l.split('"')[1] for l in file("src/h/parsing.h").readlines() if l.startswith("#define __PARSING_VERSION__")).next(),
+	version          = [l.split('"')[1] for l in open("src/h/parsing.h").readlines() if l.startswith("#define __PARSING_VERSION__")][0],
 	url              = "https://github.com/sebastien/libparsing",
 	# download_url     = "",
 	author           = 'Sébastien Pierre',
@@ -59,11 +59,9 @@ setup(
 		# 'Programming Language :: Python :: 3.4',
 	],
 	package_dir = {"":"src/python"},
+	#package_data = {"libparsing":"build/*/libparsing.so"},
 	packages    = ["libparsing"],
-	package_data={
-		"libparsing":["*.ffi"]
-	},
-	data_files = [
+	data_files  = [
 		("libparsing", ("src/c/parsing.c", "src/h/parsing.h", "src/h/oo.h"))
 	],
 	ext_modules = [libparsing],

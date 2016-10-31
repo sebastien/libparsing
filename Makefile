@@ -32,7 +32,7 @@ build:
 	mkdir build
 
 dist: libparsing update-python-version src/python/lib$(PROJECT)/_lib$(PROJECT).so
-	python setup.py check clean sdist bdist 
+	python setup.py check clean sdist bdist_wheel
 
 info:
 	@echo libparsing: $(VERSION)
@@ -42,7 +42,7 @@ release: $(PRODUCT) update-python-version src/python/lib$(PROJECT)/_lib$(PROJECT
 	git commit -a -m "Release $(VERSION)" ; true
 	git tag $(VERSION) ; true
 	git push --all ; true
-	python setup.py sdist bdist register upload
+	python setup.py sdist bdist_wheel register upload
 
 tests: $(TEST_PRODUCTS)
 
