@@ -1,3 +1,5 @@
+#!/usr/bin/env python2.7
+import os, sys ; sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + "/src/python")
 from libparsing import *
 import unittest
 

@@ -830,9 +830,9 @@ ParsingElement* Token_new(const char* expr) {
 #ifdef WITH_PCRE
 	const char* pcre_error;
 	int         pcre_error_offset = -1;
-	config->regexp = pcre_compile(expr, PCRE_UTF8, &pcre_error, &pcre_error_offset, NULL);
+	config->regexp = pcre_compile(config->expr, PCRE_UTF8, &pcre_error, &pcre_error_offset, NULL);
 	if (pcre_error != NULL) {
-		ERROR("Token: cannot compile regular expression `%s` at %d: %s", expr, pcre_error_offset, pcre_error);
+		ERROR("Token: cannot compile regular expression `%s` at %d: %s", config->expr, pcre_error_offset, pcre_error);
 		__DEALLOC(config);
 		__DEALLOC(this);
 		return NULL;
@@ -840,7 +840,7 @@ ParsingElement* Token_new(const char* expr) {
 	// SEE: http://pcre.org/original/doc/html/pcrejit.html
 	config->extra = pcre_study(config->regexp, PCRE_STUDY_JIT_COMPILE, &pcre_error);
 	if (pcre_error != NULL) {
-		ERROR("Token: cannot optimize regular expression `%s` at %d: %s", expr, pcre_error_offset, pcre_error);
+		ERROR("Token: cannot optimize regular expression `%s` at %d: %s", config->expr, pcre_error_offset, pcre_error);
 		__DEALLOC(config);
 		__DEALLOC(this);
 		return NULL;
