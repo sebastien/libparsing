@@ -375,6 +375,8 @@ class Match(CObject):
 	bool Match_isSuccess(Match* this);
 	int Match_getOffset(Match* this);
 	int Match_getLength(Match* this);
+	char Match_getElementType(Match* this);
+	const char* Match_getElementName(Match* this);
 	void Match_free(Match* this);
 	int Match__walk(Match* this, WalkingCallback callback, int step, PyObject* context );
 	int Match_countAll(Match* this);
@@ -1017,6 +1019,37 @@ class Processor(object):
 			raise res
 
 
+	# NOTE: This is the seed for a faster implementation, where we bypass
+	# the wrapper.
+	# def _defaultHandler( self, match ):
+	# 	TokenMatch_group = LIB.symbols.TokenMatch_group
+	# 	WordMatch_group  = LIB.symbols.WordMatch_group
+	# 	def walk( match, step, matches ):
+	# 		matches    = ctypes.cast(matches, ctypes.py_object).value
+	# 		match      = ctypes.cast(match, C.TYPES["Match*"])
+	# 		element    = ctypes.cast(match.contents.element, C.TYPES["ParsingElement*"])
+	# 		match_type = LIB.symbols.Match_getElementType(match)
+	# 		match_name = LIB.symbols.Match_getElementName(match)
+	# 		if   match_type == TYPE_REFERENCE:
+	# 			value = None
+	# 		elif match_type == TYPE_RULE:
+	# 			value = None
+	# 		elif match_type == TYPE_GROUP:
+	# 			value = None
+	# 		elif match_type == TYPE_TOKEN:
+	# 			value = TokenMatch_group(match,0)
+	# 		elif match_type == TYPE_WORD:
+	# 			value = WordMatch_group(match)
+	# 		return step
+	# 	callback  = C.TYPES["WalkingCallback"](walk)
+	# 	context   = {"result":None}
+	# 	c_context = ctypes.py_object(context)
+	# 	LIB.symbols.Match__walk(match._cobjectPointer, callback, 0, c_context)
+	# 	return context["result"]
+
+
+
+
 # -----------------------------------------------------------------------------
 #
 # TREE WRITER
@@ -1054,6 +1087,26 @@ class Libparsing(CLibrary):
 	"""Provides dedicated wrapping/unwrapping/caching functions for libparsing."""
 
 	IsInitialized = False
+
+	MATCH_TABLE = {
+		TYPE_REFERENCE  : ReferenceMatch.Wrap,
+		TYPE_WORD       : WordMatch.Wrap,
+		TYPE_TOKEN      : TokenMatch.Wrap,
+		TYPE_RULE       : RuleMatch.Wrap,
+		TYPE_GROUP      : GroupMatch.Wrap,
+		TYPE_CONDITION  : ConditionMatch.Wrap,
+		TYPE_PROCEDURE  : ProcedureMatch.Wrap,
+	}
+
+	ELEMENT_TABLE = {
+		TYPE_REFERENCE  : Reference.Wrap,
+		TYPE_WORD       : Word.Wrap,
+		TYPE_TOKEN      : Token.Wrap,
+		TYPE_RULE       : Rule.Wrap,
+		TYPE_GROUP      : Group.Wrap,
+		TYPE_CONDITION  : Condition.Wrap,
+		TYPE_PROCEDURE  : Procedure.Wrap,
+	}
 
 	@classmethod
 	def Init( cls ):
@@ -1103,24 +1156,28 @@ class Libparsing(CLibrary):
 				# Values are most likely to be matches, and we create
 				# specific instances based on the element type
 				element_type = value.contents.element.contents.type
-				if element_type == TYPE_REFERENCE:   py_value = ReferenceMatch.Wrap(value)
-				elif element_type == TYPE_WORD:      py_value = WordMatch.Wrap(value)
-				elif element_type == TYPE_TOKEN:     py_value = TokenMatch.Wrap(value)
-				elif element_type == TYPE_RULE:      py_value = RuleMatch.Wrap(value)
-				elif element_type == TYPE_GROUP:     py_value = GroupMatch.Wrap(value)
-				elif element_type == TYPE_CONDITION: py_value = ConditionMatch.Wrap(value)
-				elif element_type == TYPE_PROCEDURE: py_value = ProcedureMatch.Wrap(value)
-				else: raise ValueError("Match type not supported yet: {0}".format(element_type))
+				py_value     = self.MATCH_TABLE[element_type](value)
+				# NOTE: Kept here for reference
+				# if element_type == TYPE_REFERENCE:   py_value = ReferenceMatch.Wrap(value)
+				# elif element_type == TYPE_WORD:      py_value = WordMatch.Wrap(value)
+				# elif element_type == TYPE_TOKEN:     py_value = TokenMatch.Wrap(value)
+				# elif element_type == TYPE_RULE:      py_value = RuleMatch.Wrap(value)
+				# elif element_type == TYPE_GROUP:     py_value = GroupMatch.Wrap(value)
+				# elif element_type == TYPE_CONDITION: py_value = ConditionMatch.Wrap(value)
+				# elif element_type == TYPE_PROCEDURE: py_value = ProcedureMatch.Wrap(value)
+				# else: raise ValueError("Match type not supported yet: {0}".format(element_type))
 			elif resolved_type is TParsingElement:
 				element_type = value.contents.type
-				if element_type == TYPE_REFERENCE:   py_value = Reference.Wrap(value)
-				elif element_type == TYPE_WORD:      py_value = Word.Wrap(value)
-				elif element_type == TYPE_TOKEN:     py_value = Token.Wrap(value)
-				elif element_type == TYPE_RULE:      py_value = Rule.Wrap(value)
-				elif element_type == TYPE_GROUP:     py_value = Group.Wrap(value)
-				elif element_type == TYPE_CONDITION: py_value = Condition.Wrap(value)
-				elif element_type == TYPE_PROCEDURE: py_value = Procedure.Wrap(value)
-				else: raise ValueError("ParsingElement type not supported yet: {0} from {1}".format(element_type, wrapped))
+				py_value = self.ELEMENT_TABLE[element_type](value)
+				# NOTE: Kept here for reference
+				# if element_type == TYPE_REFERENCE:   py_value = Reference.Wrap(value)
+				# elif element_type == TYPE_WORD:      py_value = Word.Wrap(value)
+				# elif element_type == TYPE_TOKEN:     py_value = Token.Wrap(value)
+				# elif element_type == TYPE_RULE:      py_value = Rule.Wrap(value)
+				# elif element_type == TYPE_GROUP:     py_value = Group.Wrap(value)
+				# elif element_type == TYPE_CONDITION: py_value = Condition.Wrap(value)
+				# elif element_type == TYPE_PROCEDURE: py_value = Procedure.Wrap(value)
+				# else: raise ValueError("ParsingElement type not supported yet: {0} from {1}".format(element_type, wrapped))
 			elif resolved_type is TReference:
 				py_value    = Reference.Wrap(value)
 			elif resolved_type in self.ctypeToCObject:

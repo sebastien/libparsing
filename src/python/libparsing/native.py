@@ -53,6 +53,7 @@ class C:
 		"PyObject*"       : ctypes.py_object,
 	}
 
+	# NOTE: Performance can be gained by keeping C objects for longer
 	COBJECTS = weakref.WeakValueDictionary()
 
 	@classmethod

@@ -391,6 +391,25 @@ Match* Match_new(void) {
 }
 
 
+int Match_getElementID(Match *this) {
+	return this != NULL && this->element != NULL ? ((ParsingElement*)this->element)->id : -1;
+}
+
+char Match_getElementType(Match *this) {
+	return this != NULL && this->element != NULL ? ((ParsingElement*)this->element)->type : ' ';
+}
+
+const char* Match_getElementName(Match *this) {
+	if (this != NULL && this->element != NULL) {return NULL;}
+	if (((ParsingElement*)this->element)->type == TYPE_REFERENCE) {
+		ParsingElement* element = ((Reference*)this->element)->element;
+		return element != NULL ? element->name : NULL;
+	} else {
+		ParsingElement* element = (this->element);
+		return element->name;
+	}
+}
+
 int Match_getOffset(Match *this) {
 	return (int)this->offset;
 }
@@ -556,7 +575,9 @@ int ParsingElement__walk( ParsingElement* this, WalkingCallback callback, int st
 		// call Reference__walk directly.
 		assert(Reference_Is(child));
 		int j = Reference__walk(child, callback, ++i, context);
+		// We need to break the loop whenever this returns < 0
 		if (j > 0) { step = i = j; }
+		else {break;}
 		child = child->next;
 	}
 	return (step > 0) ? step : i;
@@ -574,6 +595,7 @@ int Element_walk( Element* this, WalkingCallback callback, void* context ) {
 
 int Element__walk( Element* this, WalkingCallback callback, int step, void* context ) {
 	assert (callback != NULL);
+	TRACE("Element__walk     = %4d", step);
 	if (this!=NULL) {
 		if (Reference_Is(this)) {
 			step = Reference__walk((Reference*)this, callback, step, context);
@@ -658,6 +680,7 @@ int Reference__walk( Reference* this, WalkingCallback callback, int step, void* 
 	TRACE("Reference__walk     : %4d %c %-20s [%4d]", this->id, this->type, this->name, step);
 	step = callback((Element*)this, step, context);
 	if (step >= 0) {
+		assert(!Reference_Is(this->element));
 		step = ParsingElement__walk(this->element, callback, step + 1, context);
 	}
 	return step;
@@ -1383,8 +1406,8 @@ void ParsingResult_free(ParsingResult* this) {
 int Grammar__resetElementIDs(Element* e, int step, void* nothing) {
 	if (Reference_Is(e)) {
 		Reference* r = (Reference*)e;
-		TRACE("Grammar__resetElementIDs: reset reference %d %s [%d]", r->id, r->name, step)
 		if (r->id != ID_BINDING) {
+			TRACE("Grammar__resetElementIDs: reset reference %d %s [%d]", r->id, r->name, step)
 			r->id = ID_BINDING;
 			return step;
 		} else {
@@ -1392,8 +1415,8 @@ int Grammar__resetElementIDs(Element* e, int step, void* nothing) {
 		}
 	} else {
 		ParsingElement * r = (ParsingElement*)e;
-		TRACE("Grammar__resetElementIDs: reset parsing element %d %s [%d]", r->id, r->name, step)
 		if (r->id != ID_BINDING) {
+			TRACE("Grammar__resetElementIDs: reset parsing element %d %s [%d]", r->id, r->name, step)
 			r->id = ID_BINDING;
 			return step;
 		} else {

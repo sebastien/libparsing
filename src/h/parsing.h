@@ -439,6 +439,9 @@ int Match_getOffset(Match* this);
 int Match_getLength(Match* this);
 
 // @method
+// Calls `callback` with `(Match, step, context)` as arguments, doing
+// the same for all descendants (depth-first traversal), stopping the
+// traversal when `callbacks` return 0 or less.
 int Match__walk(Match* this, WalkingCallback callback, int step, void* context );
 
 // @method
