@@ -296,10 +296,10 @@ class Condition(ParsingElement):
 		ParsingElement._init(self)
 		self._callback = None
 
-	def _new( self, callback ):
-		py_callback = lambda element, context: None
+	def _new( self, callback=None ):
+		py_callback = lambda element, context: (callback(self.LIBRARY.wrap(element),self.LIBRARY.wrap(context)) and True) if callback else True
 		c_callback  = C.TYPES["ConditionCallback"](py_callback)
-		self._callback = (py_callback, c_callback)
+		self._callback = (py_callback, c_callback, callback)
 		return ParsingElement._new(self, c_callback)
 
 	def __repr__( self ):
@@ -322,9 +322,9 @@ class Procedure(ParsingElement):
 		self._callback = None
 
 	def _new( self, callback ):
-		py_callback = lambda element, context: None
+		py_callback = lambda element,context: (callback(self.LIBRARY.wrap(element),self.LIBRARY.wrap(context)) and None) if callback else None
 		c_callback  = C.TYPES["ProcedureCallback"](py_callback)
-		self._callback = (py_callback, c_callback)
+		self._callback = (py_callback, c_callback, callback)
 		return ParsingElement._new(self, c_callback)
 
 	def __repr__( self ):
@@ -395,6 +395,10 @@ class Match(CObject):
 	def children( self ):
 		return ()
 
+	@property
+	def count( self ):
+		return len(self.children)
+
 	@caccessor
 	def element( self ):
 		return self.LIBRARY.wrap(self._cobject.element)
@@ -420,6 +424,7 @@ class Match(CObject):
 		self._value = value
 		return self
 
+	# FIXME: Not sure that offset/length are working
 	def range( self ):
 		"""Returns the range (start, end) of the match."""
 		return (self.offset, self.offset + self.length)
@@ -668,6 +673,8 @@ class ParsingContext(CObject):
 	WRAPPED   = TParsingContext
 	FUNCTIONS = """
 	char*  ParsingContext_text(ParsingContext* this);
+	void*  ParsingContext_get(ParsingContext* this, const char* name);
+	void   ParsingContext_set(ParsingContext* this, const char* name, void* value);
 	"""
 
 # -----------------------------------------------------------------------------
@@ -790,8 +797,8 @@ class ParsingResult(CObject):
 		return True if self._isPartial() != 0 else False
 
 	def lastMatchRange( self ):
-		o = self.context.stats.matchOffset
-		r = self.context.stats.matchLength
+		o = self.context.stats.matchOffset or 0
+		r = self.context.stats.matchLength or 0
 		return (o, o + r)
 
 	def textAround( self ):

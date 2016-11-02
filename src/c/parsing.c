@@ -801,7 +801,7 @@ void Word_free(ParsingElement* this) {
 	WordConfig* config = (WordConfig*)this->config;
 	if (config != NULL) {
 		// We don't have anything special to dealloc besides the config
-		__DEALLOC((void*)config->word);
+		free((void*)config->word);
 		__DEALLOC(config);
 	}
 	__DEALLOC(this);
@@ -1074,6 +1074,8 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 	int         step      = 0;
 	const char* step_name = NULL;
 	size_t      offset    = context->iterator->offset;
+	// We create a new parsing variable context
+	ParsingContext_push(context);
 	// We don't need to care wether the parsing context has more
 	// data, the Reference_recognize will take care of it.
 	while (child != NULL) {
@@ -1138,6 +1140,7 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 		result->length = last->offset - result->offset + last->length;
 		LOG_IF( context->grammar->isVerbose && strcmp(this->name, "_") != 0, "[✓] Rule %s#%d[%d] matched %zd-%zd(%zdb)", this->name, this->id, step, offset, context->iterator->offset, result->length)
 	}
+	ParsingContext_pop(context);
 	return MATCH_STATS(result);
 }
 
@@ -1158,7 +1161,7 @@ ParsingElement* Procedure_new(ProcedureCallback c) {
 Match*  Procedure_recognize(ParsingElement* this, ParsingContext* context) {
 	if (this->config != NULL) {
 		// FIXME: Executing handlers is still quite problematic
-		//((ProcedureCallback)(this->config))(this, context);
+		((ProcedureCallback)(this->config))(this, context);
 	}
 	LOG_IF( context->grammar->isVerbose && strcmp(this->name, "_") != 0, "[✓] Procedure %s#%d executed at %zd", this->name, this->id, context->iterator->offset)
 	return MATCH_STATS(Match_Success(0, this, context));
@@ -1181,8 +1184,8 @@ ParsingElement* Condition_new(ConditionCallback c) {
 Match*  Condition_recognize(ParsingElement* this, ParsingContext* context) {
 	if (this->config != NULL) {
 		// FIXME: Executing handlers is still quite problematic
-		//Match* result = ((ConditionCallback)this->config)(this, context);
-		Match* result = (Match*)1;
+		Match* result = ((ConditionCallback)this->config)(this, context);
+		// Match* result = (Match*)1;
 		// We support special cases where the condition can return a boolean
 		if      (result == (Match*)0) { result = FAILURE; }
 		else if (result == (Match*)1) { result = Match_Success(0, this, context);}
@@ -1246,6 +1249,115 @@ void ParsingOffset_free( ParsingOffset* this ) {
 
 // ----------------------------------------------------------------------------
 //
+// PARSING VARIABLE
+//
+// ----------------------------------------------------------------------------
+
+ParsingVariable* ParsingVariable_new(const char* key, void* value) {
+	__ALLOC(ParsingVariable, this);
+	this->key      = (const char*)strdup(key);
+	this->value    = value;
+	this->previous = NULL;
+	this->parent   = this;
+	return this;
+}
+
+void ParsingVariable_free(ParsingVariable* this) {
+	if (this!=NULL) {
+		free((void*)this->key);
+		__DEALLOC(this);
+	}
+}
+
+void ParsingVariable_freeAll(ParsingVariable* this) {
+	ParsingVariable* current = this;
+	ParsingVariable* to_free = NULL;
+	while (current!=NULL) {
+		to_free = current;
+		current = current->previous;
+		ParsingVariable_free(to_free);
+	}
+}
+
+int ParsingVariable_getDepth(ParsingVariable* this) {
+	int count = 0;
+	ParsingVariable* current = this;
+	while (current != NULL && current->parent != current) {
+		current = current->parent;
+		count += 1;
+	}
+	return count;
+}
+
+const char* ParsingVariable_getName(ParsingVariable* this) {
+	return (const char*)this->key;
+}
+
+void* ParsingVariable_getValue(ParsingVariable* this) {
+	return this->value;
+}
+
+bool ParsingVariable_is(ParsingVariable* this, const char* key) {
+	return (key == this->key || strcmp(this->key, key)) == 0 ? TRUE : FALSE;
+}
+
+ParsingVariable* ParsingVariable_get(ParsingVariable* this, const char* key, bool local) {
+	ParsingVariable* current=this;
+	while (current!=NULL) {
+		if (ParsingVariable_is(current, key)) {
+			return current;
+		}
+		if (current->previous) {
+			// When local is TRUE, we stop the search when the parent changes
+			current = (local && current->previous->parent != current->parent) ? NULL : current->previous;
+		} else {
+			current = NULL;
+		}
+	}
+	return current;
+}
+
+ParsingVariable* ParsingVariable_set(ParsingVariable* this, const char* key, void* value) {
+	ParsingVariable* found = ParsingVariable_get(this, key, FALSE);
+	if (found == NULL) {
+		found = ParsingVariable_new( key, value );
+		found->parent   = this->parent;
+		found->previous = this;
+		return found;
+	} else {
+		ParsingVariable_set(found, key, value);
+		return found;
+	}
+}
+
+ParsingVariable* ParsingVariable_push(ParsingVariable* this) {
+	long depth           = ParsingVariable_getDepth(this) + 1;
+	ParsingVariable* res = ParsingVariable_new("depth", (void*)depth);
+	res->parent          = this;
+	res->previous        = this;
+	return res;
+}
+
+ParsingVariable* ParsingVariable_pop(ParsingVariable* this) {
+	if (this->parent == this) {
+		return this;
+	} else {
+		ParsingVariable* parent   = this->parent;
+		ParsingVariable* current  = this;
+		ParsingVariable* to_free  = NULL;
+		while (current != parent) {
+			to_free  = current;
+			current  = current->previous;
+			// We can free the variable now
+			// This assumes that value references are managed by the caller
+			ParsingVariable_free(to_free);
+		}
+		return current;
+	}
+}
+
+// ----------------------------------------------------------------------------
+//
 // PARSING CONTEXT
 //
 // ----------------------------------------------------------------------------
@@ -1254,12 +1366,13 @@ ParsingContext* ParsingContext_new( Grammar* g, Iterator* iterator ) {
 	__ALLOC(ParsingContext, this);
 	assert(g);
 	assert(iterator);
-	this->grammar  = g;
-	this->iterator = iterator;
-	this->stats    = ParsingStats_new();
+	this->grammar   = g;
+	this->iterator  = iterator;
+	this->stats     = ParsingStats_new();
 	ParsingStats_setSymbolsCount(this->stats, g->axiomCount + g->skipCount);
-	this->offsets  = NULL;
-	this->current  = NULL;
+	this->offsets   = NULL;
+	this->current   = NULL;
+	this->variables = ParsingVariable_new("depth", 0);
 	return this;
 }
 
@@ -1269,10 +1382,27 @@ iterated_t* ParsingContext_text( ParsingContext* this ) {
 
 void ParsingContext_free( ParsingContext* this ) {
 	if (this!=NULL) {
+		ParsingVariable_freeAll(this->variables);
 		Iterator_free(this->iterator);
 		ParsingStats_free(this->stats);
 		__DEALLOC(this);
 	}
+}
+
+void ParsingContext_push     ( ParsingContext* this ) {
+	this->variables = ParsingVariable_push(this->variables);
+}
+
+void ParsingContext_pop      ( ParsingContext* this ) {
+	//this->variables = ParsingVariable_pop(this->variables);
+}
+
+void* ParsingContext_get(ParsingContext* this, const char* name) {
+	return ParsingVariable_get(this->variables, name, FALSE);
+}
+
+void ParsingContext_set(ParsingContext*  this, const char* name, void* value) {
+	this->variables = ParsingVariable_set(this->variables, name, value);
 }
 
 // ----------------------------------------------------------------------------

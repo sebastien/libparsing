@@ -1,3 +1,4 @@
+#!/usr/bin/tcc -run
 #include "../src/parsing.h"
 
 int main (void) {

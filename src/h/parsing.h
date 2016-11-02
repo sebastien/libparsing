@@ -5,8 +5,12 @@
 // License           : BSD License
 // ----------------------------------------------------------------------------
 // Creation date     : 12-Dec-2014
-// Last modification : 31-Oct-2016
+// Last modification : 31-Nov-2016
 // ----------------------------------------------------------------------------
+
+ /* Enable certain library functions (strdup) on linux.  See feature_test_macros(7) */
+#define _XOPEN_SOURCE 500
+
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -19,11 +23,14 @@
 #ifdef WITH_PCRE
 #include <pcre.h>
 #endif
+#ifdef WITH_PYTHON
+#include <Python.h>
+#endif
 #include "oo.h"
 
 #ifndef __PARSING_H__
 #define __PARSING_H__
-#define __PARSING_VERSION__ "0.7.6"
+#define __PARSING_VERSION__ "0.8.0"
 
 /**
  * #  libparsing
@@ -268,12 +275,13 @@ bool FileInput_move   ( Iterator* this, int n );
  * The `axiom` and `skip` properties are both references to _parsing elements_.
 */
 
-typedef struct ParsingContext ParsingContext;
-typedef struct ParsingElement ParsingElement;
-typedef struct ParsingResult  ParsingResult;
-typedef struct Reference      Reference;
-typedef struct Match          Match;
-typedef void                  Element;
+typedef struct ParsingVariable ParsingVariable;
+typedef struct ParsingContext  ParsingContext;
+typedef struct ParsingElement  ParsingElement;
+typedef struct ParsingResult   ParsingResult;
+typedef struct Reference       Reference;
+typedef struct Match           Match;
+typedef void                   Element;
 
 // typedef struct Element {
 // 	char           type;       // Type is used du differentiate ParsingElement from Reference
@@ -756,13 +764,68 @@ void ParsingStats_setSymbolsCount(ParsingStats* this, size_t t);
 // @method
 Match* ParsingStats_registerMatch(ParsingStats* this, Element* e, Match* m);
 
+/**
+ * 1. Parsing variables
+ * --------------------
+ *
+ * Parsing variables for a type of hierarchical list that can store
+ * named values within a parsing element subtrees. It basically allows
+ * for the storing of contextual values during parse time. The parsing
+ * variables are not handled directly, but are instead accessed through
+ * the `ParsingContext` object.
+*/
+
+// @type
+typedef struct ParsingVariable {
+	const char* key;
+	void* value;
+	struct ParsingVariable* previous;
+	struct ParsingVariable* parent;
+} ParsingVariable;
+
+// @constructor
+ParsingVariable* ParsingVariable_new(const char* key, void* value);
+
+// @destructor
+void ParsingVariable_free(ParsingVariable* this);
+
+// @destructor
+void ParsingVariable_freeAll(ParsingVariable* this);
+
+
+// @method
+bool ParsingVariable_is(ParsingVariable* this, const char* key);
+
+// @method
+ParsingVariable* ParsingVariable_set(ParsingVariable* this, const char* name, void* value);
+
+// @method
+ParsingVariable* ParsingVariable_get(ParsingVariable* this, const char* key, bool local);
+
+// @method
+int ParsingVariable_getDepth(ParsingVariable* this);
+
+// @method
+const char* ParsingVariable_getName(ParsingVariable* this);
+
+// @method
+void* ParsingVariable_getValue(ParsingVariable* this);
+
+/**
+ * 2. Parsing context
+ * --------------------
+ *
+ *
+*/
+
 // @type
 typedef struct ParsingContext {
-	struct Grammar*              grammar;      // The grammar used to parse
-	struct Iterator*             iterator;     // Iterator on the input data
-	struct ParsingOffset* offsets;      // The parsing offsets, starting at 0
-	struct ParsingOffset* current;      // The current parsing offset
-	struct ParsingStats*  stats;
+	struct Grammar*         grammar;      // The grammar used to parse
+	struct Iterator*        iterator;     // Iterator on the input data
+	struct ParsingOffset*   offsets;      // The parsing offsets, starting at 0
+	struct ParsingOffset*   current;      // The current parsing offset
+	struct ParsingStats*    stats;
+	struct ParsingVariable* variables;
 } ParsingContext;
 
 // @constructor
@@ -773,6 +836,22 @@ iterated_t* ParsingContext_text( ParsingContext* this );
 
 // @destructor
 void ParsingContext_free( ParsingContext* this );
+
+// @method
+// Pushes a new context for the variabless
+void ParsingContext_push ( ParsingContext* this );
+
+// @method
+// Pops the current context for the variables, rewinding to the parent
+// one, if any.
+void ParsingContext_pop ( ParsingContext* this );
+
+// @method
+// Retrieves the value bound to the given `name` in the variables.
+void*  ParsingContext_get(ParsingContext*  this, const char* name);
+
+// @method
+void  ParsingContext_set(ParsingContext*  this, const char* name, void* value);
 
 // @type
 typedef struct ParsingResult {

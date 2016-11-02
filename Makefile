@@ -2,6 +2,7 @@
 PROJECT  = parsing
 VERSION  = $(shell grep VERSION src/h/parsing.h | cut -d'"' -f2)
 MAJOR    = $(shell echo $(VERSION) | cut -d. -f1)
+FEATURES = WITH_PCRE #WITH_PYTHON
 SOURCES  = $(wildcard src/c/*.c)
 HEADERS  = $(wildcard src/h/*.h)
 TESTS    = $(wildcard tests/test-*.c)
@@ -12,9 +13,10 @@ PY_MODULE_SO:=_libparsing.so
 PRODUCT_SO:=lib$(PROJECT).so
 TEST_PRODUCTS = $(TESTS:tests/%.c=%)
 CC       = gcc
-LIBS    := libpcre
-#CFLAGS  += -Isrc/h -std=c11 -O3 -Wall -fPIC -DWITH_PCRE 
-CFLAGS  += -Isrc/h -Wall -fPIC -DWITH_PCRE -g -pg -DDEBUG_ENABLED -DTRACE_ENABLED
+# TODO: Support FEATURES
+PYTHON_VERSION=2.7
+LIBS    := libpcre # libpython$(PYTHON_VERSION)
+CFLAGS  += -Isrc/h -Wall -fPIC $(FEATURES:%=-D%) -g #-pg # -DDEBUG_ENABLED -DTRACE_ENABLED
 LDFLAGS :=  $(shell pkg-config --cflags --libs $(LIBS))
 PRODUCTS = lib$(PROJECT) lib$(PROJECT).so.$(VERSION) src/python/$(PY_MODULE)/$(PY_MODULE_SO)
 
