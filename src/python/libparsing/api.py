@@ -676,14 +676,18 @@ class ParsingContext(CObject):
 	WRAPPED   = TParsingContext
 	FUNCTIONS = """
 	ParsingContext* ParsingContext_new( Grammar* g, Iterator* iterator );
-	char*  ParsingContext_text(ParsingContext* this);
 	void*  ParsingContext_get(ParsingContext* this, const char* name);
 	void   ParsingContext_set(ParsingContext* this, const char* name, void* value);
 	void   ParsingContext_push( ParsingContext* this );
 	void   ParsingContext_pop( ParsingContext* this );
 	void   ParsingContext_on(ParsingContext* this, ConditionCallback callback);
 	int    ParsingContext_getVariableCount(ParsingContext* this);
+	size_t ParsingContext_getOffset(ParsingContext* this);
 	"""
+
+	@property
+	def offset( self ):
+		return self.getOffset()
 
 # -----------------------------------------------------------------------------
 #

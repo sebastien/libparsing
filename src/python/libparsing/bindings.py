@@ -124,6 +124,7 @@ class TParsingContext(ctypes.Structure):
 	struct ParsingOffset* current;      // The current parsing offset
 	struct ParsingStats*  stats;
 	void*                 variables;
+	struct Match*         lastMatch;
 	ContextCallback       callback;
 	"""
 

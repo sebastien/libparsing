@@ -5,13 +5,13 @@
 // License           : BSD License
 // ----------------------------------------------------------------------------
 // Creation date     : 12-Dec-2014
-// Last modification : 26-Jan-2016
+// Last modification : 03-Nov-2016
 // ----------------------------------------------------------------------------
 
 #include "parsing.h"
 #include "oo.h"
 
-#define MATCH_STATS(m) ParsingStats_registerMatch(context->stats, this, m)
+#define MATCH_STATS(m) ParsingContext_registerMatch(context, this, m)
 #define ANONYMOUS      "unnamed"
 
 // SEE: https://en.wikipedia.org/wiki/C_data_types
@@ -1258,7 +1258,7 @@ ParsingVariable* ParsingVariable_new(const char* key, void* value) {
 	this->key      = (const char*)strdup(key);
 	this->value    = value;
 	this->previous = NULL;
-	this->parent   = this;
+	this->parent   = NULL;
 	return this;
 }
 
@@ -1267,7 +1267,6 @@ void ParsingVariable_free(ParsingVariable* this) {
 		if (this->key != NULL) {
 			free((void*)this->key);
 		}
-		__DEALLOC(this);
 	}
 }
 
@@ -1275,10 +1274,9 @@ void ParsingVariable_freeAll(ParsingVariable* this) {
 	ParsingVariable* current = this;
 	ParsingVariable* to_free = NULL;
 	while (current!=NULL) {
+		to_free = current;
 		current = current->previous;
-		if (current != to_free) {
-			ParsingVariable_free(to_free);
-		}
+		ParsingVariable_free(to_free);
 	}
 }
 
@@ -1345,21 +1343,18 @@ ParsingVariable* ParsingVariable_push(ParsingVariable* this) {
 }
 
 ParsingVariable* ParsingVariable_pop(ParsingVariable* this) {
-	if (this->parent == this) {
-		return this;
-	} else {
-		ParsingVariable* parent   = this->parent;
-		ParsingVariable* current  = this;
-		ParsingVariable* to_free  = NULL;
-		while (current != NULL && current != parent) {
-			to_free  = current;
-			current  = current->previous;
-			// We can free the variable now
-			// This assumes that value references are managed by the caller
-			ParsingVariable_free(to_free);
-		}
-		return current;
+	if (this == NULL) {return NULL;}
+	ParsingVariable* parent   = this->parent;
+	ParsingVariable* current  = this;
+	ParsingVariable* to_free  = NULL;
+	// We want to pop any variable until the current cell is the parent
+	while (current != NULL && current != parent) {
+		to_free = current;
+		assert(current != current->previous);
+		current = current->previous;
+		ParsingVariable_free(to_free);
 	}
+	return parent;
 }
 
 int  ParsingVariable_count(ParsingVariable* this) {
@@ -1430,6 +1425,16 @@ void ParsingContext_on(ParsingContext* this, ContextCallback callback) {
 
 int  ParsingContext_getVariableCount(ParsingContext* this) {
 	return ParsingVariable_count(this->variables);
+}
+
+size_t ParsingContext_getOffset(ParsingContext* this) {
+	return this->iterator->offset;
+}
+
+Match* ParsingContext_registerMatch(ParsingContext* this, Element* e, Match* m) {
+	ParsingStats_registerMatch(this->stats, e, m);
+	this->lastMatch = m;
+	return m;
 }
 
 // ----------------------------------------------------------------------------

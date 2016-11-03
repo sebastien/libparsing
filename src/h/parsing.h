@@ -832,6 +832,7 @@ typedef struct ParsingContext {
 	struct ParsingOffset*   current;      // The current parsing offset
 	struct ParsingStats*    stats;
 	struct ParsingVariable* variables;
+	struct Match*           lastMatch;
 	ContextCallback         callback;
 } ParsingContext;
 
@@ -841,6 +842,9 @@ ParsingContext* ParsingContext_new( Grammar* g, Iterator* iterator );
 
 // @method
 iterated_t* ParsingContext_text( ParsingContext* this );
+
+// @method
+size_t ParsingContext_getOffset( ParsingContext* this );
 
 // @destructor
 void ParsingContext_free( ParsingContext* this );
@@ -867,6 +871,9 @@ void ParsingContext_on(ParsingContext* this, ContextCallback callback);
 
 // @method
 int  ParsingContext_getVariableCount(ParsingContext* this);
+
+// @method
+Match* ParsingContext_registerMatch(ParsingContext* this, Element* e, Match* m);
 
 // @type
 typedef struct ParsingResult {

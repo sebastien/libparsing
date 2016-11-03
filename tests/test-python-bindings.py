@@ -298,12 +298,12 @@ class TestCollection(unittest.TestCase):
 		self.assertEqual(c.get("depth"), None)
 		# It's safe to pop again
 		c.pop()
-		self.assertEqual(c.getVariableCount(), 1)
+		self.assertEqual(c.getVariableCount(), 0)
 		self.assertEqual(c.get("hello"), None)
 		self.assertEqual(c.get("depth"), None)
 		# and again
 		c.pop()
-		self.assertEqual(c.getVariableCount(), 1)
+		self.assertEqual(c.getVariableCount(), 0)
 		self.assertEqual(c.get("hello"), None)
 		self.assertEqual(c.get("depth"), None)
 
