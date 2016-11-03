@@ -32,7 +32,7 @@ block:
 
 
 def check_indent(element, context):
-	print "CONDITION:CHECK", element, "CONTEXT", context
+	print "CONDITION:CHECK", element, "depth", context.get("depth"), ":indent=", context.get("indent")
 	# o = context.offset
 	# i = context.get("indent")
 	# m = context.getText(o - i, o)
@@ -40,15 +40,14 @@ def check_indent(element, context):
 	return False
 
 def indent(element, context):
-	print "PROCEDURE:INDENT", element, "CONTEXT", context
-	print context.set("pouet", "hello")
-	print ("GET", context.get("pouet"))
-	#context.set((context.get("indent") or 0) + 1)
+	print "Indent", element, "depth", context.get("depth"), ":indent=", context.get("indent")
+	context.set("indent", 1 + (context.get("indent") or 0))
+	print " === ", context.get("indent")
 	return False
 
 def dedent(element, context):
 	print "PROCEDURE:DEDENT", element, "CONTEXT", context
-	print context.get("depth")
+	print context.get("indent")
 	#context.set(context.get("indent") - 1)
 	return True
 

@@ -800,16 +800,16 @@ bool ParsingVariable_is(ParsingVariable* this, const char* key);
 ParsingVariable* ParsingVariable_set(ParsingVariable* this, const char* name, void* value);
 
 // @method
-ParsingVariable* ParsingVariable_get(ParsingVariable* this, const char* key, bool local);
+void* ParsingVariable_get(ParsingVariable* this, const char* name);
+
+// @method
+ParsingVariable* ParsingVariable_find(ParsingVariable* this, const char* key, bool local);
 
 // @method
 int ParsingVariable_getDepth(ParsingVariable* this);
 
 // @method
 const char* ParsingVariable_getName(ParsingVariable* this);
-
-// @method
-void* ParsingVariable_getValue(ParsingVariable* this);
 
 /**
  * 2. Parsing context

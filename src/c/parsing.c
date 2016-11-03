@@ -1264,7 +1264,9 @@ ParsingVariable* ParsingVariable_new(const char* key, void* value) {
 
 void ParsingVariable_free(ParsingVariable* this) {
 	if (this!=NULL) {
-		free((void*)this->key);
+		if (this->key != NULL) {
+			free((void*)this->key);
+		}
 		__DEALLOC(this);
 	}
 }
@@ -1273,9 +1275,10 @@ void ParsingVariable_freeAll(ParsingVariable* this) {
 	ParsingVariable* current = this;
 	ParsingVariable* to_free = NULL;
 	while (current!=NULL) {
-		to_free = current;
 		current = current->previous;
-		ParsingVariable_free(to_free);
+		if (current != to_free) {
+			ParsingVariable_free(to_free);
+		}
 	}
 }
 
@@ -1293,8 +1296,9 @@ const char* ParsingVariable_getName(ParsingVariable* this) {
 	return (const char*)this->key;
 }
 
-void* ParsingVariable_getValue(ParsingVariable* this) {
-	return this->value;
+void* ParsingVariable_get(ParsingVariable* this, const char* name) {
+	ParsingVariable* found = ParsingVariable_find(this, name, TRUE);
+	return found != NULL ? found->value : NULL;
 }
 
 bool ParsingVariable_is(ParsingVariable* this, const char* key) {
@@ -1302,7 +1306,7 @@ bool ParsingVariable_is(ParsingVariable* this, const char* key) {
 	return (key == this->key || strcmp(this->key, key)) == 0 ? TRUE : FALSE;
 }
 
-ParsingVariable* ParsingVariable_get(ParsingVariable* this, const char* key, bool local) {
+ParsingVariable* ParsingVariable_find(ParsingVariable* this, const char* key, bool local) {
 	ParsingVariable* current=this;
 	while (current!=NULL) {
 		if (ParsingVariable_is(current, key)) {
@@ -1319,7 +1323,7 @@ ParsingVariable* ParsingVariable_get(ParsingVariable* this, const char* key, boo
 }
 
 ParsingVariable* ParsingVariable_set(ParsingVariable* this, const char* key, void* value) {
-	ParsingVariable* found = ParsingVariable_get(this, key, FALSE);
+	ParsingVariable* found = ParsingVariable_find(this, key, FALSE);
 	if (found == NULL) {
 		found = ParsingVariable_new( key, value );
 		found->parent   = this->parent;
@@ -1347,7 +1351,7 @@ ParsingVariable* ParsingVariable_pop(ParsingVariable* this) {
 		ParsingVariable* parent   = this->parent;
 		ParsingVariable* current  = this;
 		ParsingVariable* to_free  = NULL;
-		while (current != parent) {
+		while (current != NULL && current != parent) {
 			to_free  = current;
 			current  = current->previous;
 			// We can free the variable now
@@ -1403,7 +1407,7 @@ void ParsingContext_pop      ( ParsingContext* this ) {
 }
 
 void* ParsingContext_get(ParsingContext* this, const char* name) {
-	return ParsingVariable_get(this->variables, name, FALSE);
+	return ParsingVariable_get(this->variables, name);
 }
 
 void ParsingContext_set(ParsingContext*  this, const char* name, void* value) {
