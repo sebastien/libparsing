@@ -811,6 +811,9 @@ int ParsingVariable_getDepth(ParsingVariable* this);
 // @method
 const char* ParsingVariable_getName(ParsingVariable* this);
 
+// @method
+int  ParsingVariable_count(ParsingVariable* this);
+
 /**
  * 2. Parsing context
  * --------------------
@@ -861,6 +864,9 @@ void  ParsingContext_set(ParsingContext*  this, const char* name, void* value);
 
 // @method
 void ParsingContext_on(ParsingContext* this, ContextCallback callback);
+
+// @method
+int  ParsingContext_getVariableCount(ParsingContext* this);
 
 // @type
 typedef struct ParsingResult {

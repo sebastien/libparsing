@@ -1297,7 +1297,7 @@ const char* ParsingVariable_getName(ParsingVariable* this) {
 }
 
 void* ParsingVariable_get(ParsingVariable* this, const char* name) {
-	ParsingVariable* found = ParsingVariable_find(this, name, TRUE);
+	ParsingVariable* found = ParsingVariable_find(this, name, FALSE);
 	return found != NULL ? found->value : NULL;
 }
 
@@ -1323,7 +1323,7 @@ ParsingVariable* ParsingVariable_find(ParsingVariable* this, const char* key, bo
 }
 
 ParsingVariable* ParsingVariable_set(ParsingVariable* this, const char* key, void* value) {
-	ParsingVariable* found = ParsingVariable_find(this, key, FALSE);
+	ParsingVariable* found = ParsingVariable_find(this, key, TRUE);
 	if (found == NULL) {
 		found = ParsingVariable_new( key, value );
 		found->parent   = this->parent;
@@ -1362,6 +1362,16 @@ ParsingVariable* ParsingVariable_pop(ParsingVariable* this) {
 	}
 }
 
+int  ParsingVariable_count(ParsingVariable* this) {
+	ParsingVariable* current = this;
+	int count = 0;
+	while (current!=NULL) {
+		count++;
+		current = current->previous;
+	}
+	return count;
+}
+
 // ----------------------------------------------------------------------------
 //
 // PARSING CONTEXT
@@ -1370,12 +1380,12 @@ ParsingVariable* ParsingVariable_pop(ParsingVariable* this) {
 
 ParsingContext* ParsingContext_new( Grammar* g, Iterator* iterator ) {
 	__ALLOC(ParsingContext, this);
-	assert(g);
-	assert(iterator);
 	this->grammar   = g;
 	this->iterator  = iterator;
 	this->stats     = ParsingStats_new();
-	ParsingStats_setSymbolsCount(this->stats, g->axiomCount + g->skipCount);
+	if (g != NULL) {
+		ParsingStats_setSymbolsCount(this->stats, g->axiomCount + g->skipCount);
+	}
 	this->offsets   = NULL;
 	this->current   = NULL;
 	this->variables = ParsingVariable_new("depth", 0);
@@ -1414,9 +1424,12 @@ void ParsingContext_set(ParsingContext*  this, const char* name, void* value) {
 	this->variables = ParsingVariable_set(this->variables, name, value);
 }
 
-
 void ParsingContext_on(ParsingContext* this, ContextCallback callback) {
 	this->callback = callback;
+}
+
+int  ParsingContext_getVariableCount(ParsingContext* this) {
+	return ParsingVariable_count(this->variables);
 }
 
 // ----------------------------------------------------------------------------

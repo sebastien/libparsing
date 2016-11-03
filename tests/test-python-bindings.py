@@ -76,10 +76,10 @@ class TestCollection(unittest.TestCase):
 		m           = r.match
 		assert m
 		self.assertEqual(m.status, b"M")
-		self.assertEqual(m.offset,  m.getOffset())
-		self.assertEqual(m.length,  m.getLength())
-		self.assertEqual(m.offset,  0)
-		self.assertEqual(m.length,   len(text))
+		self.assertEqual(m.offset or 0,  m.getOffset())
+		self.assertEqual(m.length or 0,  m.getLength())
+		self.assertEqual(m.offset or 0,  0)
+		self.assertEqual(m.length or 0,  len(text))
 		self.assertIsNone(m.next)
 		self.assertFalse(m.children and True or False)
 
@@ -141,9 +141,9 @@ class TestCollection(unittest.TestCase):
 		assert not r.isComplete()
 		# We ensure that the over offset matches
 		assert isinstance(r.match, RuleMatch)
-		assert r.match.offset  == 0
-		assert r.match.length  == 2
-		assert r.match.range() == (0, 2)
+		self.assertEqual(r.match.offset or 0, 0)
+		self.assertEqual(r.match.length or 0, 2)
+		self.assertEqual(r.match.range() , (0, 2))
 		assert len(r.match.children) == 2
 		self.assertEqual([_.group() for _ in r.match], [[b"a"], [b"b"]])
 		self.assertEqual([_.value   for _ in r.match], [b"a", b"b"])
@@ -158,6 +158,7 @@ class TestCollection(unittest.TestCase):
 		mb = r.match[1]
 		self.assertEqual(mb.group(), [b"b"])
 		self.assertEqual(mb.value,   b"b")
+		print ("XXX MB", mb.value, mb.length, mb.offset)
 		self.assertEqual(mb.range(), (1,2))
 		# NOTE: The following creates core dump... ahem
 		#for i,m in enumerate(r.match.children()):
@@ -261,6 +262,51 @@ class TestCollection(unittest.TestCase):
 
 		res = p.process(r.match)
 		self.assertEqual(res, (b"+", ("N", 1), ("N", 10)))
+
+	def testParsingContext( self ):
+		c = ParsingContext(None, None)
+		# Default state
+		self.assertEqual(c.getVariableCount(), 1)
+		self.assertEqual(c.get("depth"), None)
+		self.assertEqual(c.get("hello"), None)
+		# Setting a variable
+		# We want to make sure that setting a variable twice does not
+		# create more variables
+		c.set("hello", 1)
+		self.assertEqual(c.getVariableCount(), 2)
+		self.assertEqual(c.get("hello"), 1)
+		c.set("hello", 2)
+		self.assertEqual(c.getVariableCount(), 2)
+		self.assertEqual(c.get("hello"), 2)
+		c.set("hello", 1)
+		self.assertEqual(c.getVariableCount(), 2)
+		self.assertEqual(c.get("hello"), 1)
+		# Pushing the scope
+		c.push()
+		self.assertEqual(c.getVariableCount(), 3)
+		self.assertEqual(c.get("depth"), 2)
+		self.assertEqual(c.get("hello"), 1)
+		# We're redefining a variable defined in a parent scope,
+		# this means that we add a new variable
+		c.set("hello", 2)
+		self.assertEqual(c.get("hello"), 2)
+		self.assertEqual(c.getVariableCount(), 4)
+		# Popping the scope
+		c.pop()
+		self.assertEqual(c.getVariableCount(), 2)
+		self.assertEqual(c.get("hello"), 1)
+		self.assertEqual(c.get("depth"), None)
+		# It's safe to pop again
+		c.pop()
+		self.assertEqual(c.getVariableCount(), 1)
+		self.assertEqual(c.get("hello"), None)
+		self.assertEqual(c.get("depth"), None)
+		# and again
+		c.pop()
+		self.assertEqual(c.getVariableCount(), 1)
+		self.assertEqual(c.get("hello"), None)
+		self.assertEqual(c.get("depth"), None)
+
 
 if __name__ == "__main__":
 	unittest.main()

@@ -424,10 +424,13 @@ class Match(CObject):
 		self._value = value
 		return self
 
+
 	# FIXME: Not sure that offset/length are working
 	def range( self ):
 		"""Returns the range (start, end) of the match."""
-		return (self.offset, self.offset + self.length)
+		o = self.offset or 0
+		l = self.length or 0
+		return (o, o+l)
 
 	def isReference( self ):
 		"""A utility shorthand to know if a match is a reference."""
@@ -672,10 +675,14 @@ class ParsingContext(CObject):
 
 	WRAPPED   = TParsingContext
 	FUNCTIONS = """
+	ParsingContext* ParsingContext_new( Grammar* g, Iterator* iterator );
 	char*  ParsingContext_text(ParsingContext* this);
 	void*  ParsingContext_get(ParsingContext* this, const char* name);
 	void   ParsingContext_set(ParsingContext* this, const char* name, void* value);
+	void   ParsingContext_push( ParsingContext* this );
+	void   ParsingContext_pop( ParsingContext* this );
 	void   ParsingContext_on(ParsingContext* this, ConditionCallback callback);
+	int    ParsingContext_getVariableCount(ParsingContext* this);
 	"""
 
 # -----------------------------------------------------------------------------
