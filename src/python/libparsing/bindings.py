@@ -186,9 +186,9 @@ C.TYPES.update({
 	"ParsingOffset*"     : ctypes.c_void_p,
 	"IteratorCallback"   : ctypes.CFUNCTYPE(ctypes.c_bool, ctypes.POINTER(TIterator), ctypes.c_int),
 	"WalkingCallback"    : ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p),
+	"ProcedureCallback"  : ctypes.CFUNCTYPE(None,            ctypes.POINTER(TParsingElement), ctypes.POINTER(TParsingContext)),
 	"ConditionCallback"  : ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.POINTER(TParsingElement), ctypes.POINTER(TParsingContext)),
 	"ContextCallback"    : ctypes.CFUNCTYPE(None, ctypes.POINTER(TParsingContext), ctypes.c_char),
-	"ProcedureCallback"  : ctypes.CFUNCTYPE(None, ctypes.POINTER(TParsingElement), ctypes.POINTER(TParsingContext)),
 	"ProcessorCallback"  : ctypes.CFUNCTYPE(None, ctypes.POINTER(TProcessor), ctypes.POINTER(TMatch)),
 })
 C.TYPES["ProcessorCallback*"] = ctypes.POINTER(C.TYPES["ProcessorCallback"])

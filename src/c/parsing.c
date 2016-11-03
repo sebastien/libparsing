@@ -484,10 +484,10 @@ void Match__toJSON(Match* match, int fd) {
 			case TYPE_TOKEN:
 				count = TokenMatch_count(match);
 				printf("[");
-				// for (i=0 ; i < count ; i++) {
-				// 	printf("\"%s\"", TokenMatch_group(match, i));
-				// 	if (i + 1 < count) {printf(",");}
-				// }
+				for (i=0 ; i < count ; i++) {
+					printf("\"%s\"", TokenMatch_group(match, i));
+					if (i + 1 < count) {printf(",");}
+				}
 				printf("]");
 				break;
 			case TYPE_GROUP:

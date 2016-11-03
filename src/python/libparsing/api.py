@@ -939,13 +939,27 @@ class Processor(object):
 	if it is a composite symbol (rule, group, etc). The named elements
 	are the ones you declare using `_as`."""
 
-	def __init__( self, grammar ):
+	def __init__( self, grammar=None ):
+		self.setGrammar(grammar)
+
+	def setGrammar( self, grammar ):
+		self.result       = None
 		self.symbolByName = {}
 		self.symbolByID   = {}
 		self.handlerByID  = {}
 		self.grammar      = grammar
-		self._bindSymbols(grammar)
-		self._bindHandlers()
+		if grammar:
+			self._bindSymbols(grammar)
+			self._bindHandlers()
+
+	def createGrammar( self ):
+		return None
+
+	def ensureGrammar( self ):
+		if not self.grammar:
+			self.setGrammar(self.createGrammar())
+			assert self.grammar, "Processor has not grammar bound: {0}".format(self)
+		return self.grammar
 
 	def _bindSymbols( self, grammar ):
 		"""Registers the symbols from the grammar into this processor. This
@@ -984,6 +998,13 @@ class Processor(object):
 			symbol = self.symbolByName[symbol]
 		self.handlerByID[symbol.id] = self._prepareHandler(callback)
 		return self
+
+	def parse( self, text ):
+		self.result = r = self.ensureGrammar().parseString(text)
+		if r.isSuccess():
+			return self.process(r.match)
+		else:
+			return None
 
 	def process( self, match ):
 		return self._defaultHandler(match)
