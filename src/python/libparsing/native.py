@@ -6,7 +6,7 @@
 # License           : BSD License
 # -----------------------------------------------------------------------------
 # Creation date     : 2016-01-21
-# Last modification : 2016-02-08
+# Last modification : 2016-11-02
 # -----------------------------------------------------------------------------
 
 import ctypes, os, re, sys, weakref, types, inspect
@@ -469,6 +469,9 @@ class CObject(object):
 	def __init__( self, *args, **kwargs ):
 		"""Creates a new CObject or wraps this CObject if `wrappedCObject`
 		is given as keyword argument."""
+		# NOTE: We need to reference the C object here as otherwise it
+		# might get garbage collected before it's actually used.
+		self.C               = C
 		self._cobject        = None
 		self._cobjectPointer = None
 		self._cobjectCache   = {}

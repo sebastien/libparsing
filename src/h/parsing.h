@@ -818,6 +818,9 @@ void* ParsingVariable_getValue(ParsingVariable* this);
  *
 */
 
+// @callback
+typedef void (*ContextCallback)(ParsingContext* context, char op );
+
 // @type
 typedef struct ParsingContext {
 	struct Grammar*         grammar;      // The grammar used to parse
@@ -826,7 +829,9 @@ typedef struct ParsingContext {
 	struct ParsingOffset*   current;      // The current parsing offset
 	struct ParsingStats*    stats;
 	struct ParsingVariable* variables;
+	ContextCallback         callback;
 } ParsingContext;
+
 
 // @constructor
 ParsingContext* ParsingContext_new( Grammar* g, Iterator* iterator );
@@ -852,6 +857,10 @@ void*  ParsingContext_get(ParsingContext*  this, const char* name);
 
 // @method
 void  ParsingContext_set(ParsingContext*  this, const char* name, void* value);
+
+
+// @method
+void ParsingContext_on(ParsingContext* this, ContextCallback callback);
 
 // @type
 typedef struct ParsingResult {

@@ -675,6 +675,7 @@ class ParsingContext(CObject):
 	char*  ParsingContext_text(ParsingContext* this);
 	void*  ParsingContext_get(ParsingContext* this, const char* name);
 	void   ParsingContext_set(ParsingContext* this, const char* name, void* value);
+	void   ParsingContext_on(ParsingContext* this, ConditionCallback callback);
 	"""
 
 # -----------------------------------------------------------------------------

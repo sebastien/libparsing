@@ -123,6 +123,8 @@ class TParsingContext(ctypes.Structure):
 	struct ParsingOffset* offsets;      // The parsing offsets, starting at 0
 	struct ParsingOffset* current;      // The current parsing offset
 	struct ParsingStats*  stats;
+	void*                 variables;
+	ContextCallback       callback;
 	"""
 
 class TParsingResult(ctypes.Structure):
@@ -145,16 +147,6 @@ class TParsingStats(ctypes.Structure):
 	size_t   matchOffset;
 	size_t   matchLength;
 	Element* failureElement;  // A reference to the failure element
-	"""
-
-class TParsingContext(ctypes.Structure):
-
-	STRUCTURE = """
-	struct Grammar*              grammar;      // The grammar used to parse
-	struct Iterator*             iterator;     // Iterator on the input data
-	struct ParsingOffset* offsets;      // The parsing offsets, starting at 0
-	struct ParsingOffset* current;      // The current parsing offset
-	struct ParsingStats*  stats;
 	"""
 
 class TGrammar(ctypes.Structure):
@@ -194,6 +186,7 @@ C.TYPES.update({
 	"IteratorCallback"   : ctypes.CFUNCTYPE(ctypes.c_bool, ctypes.POINTER(TIterator), ctypes.c_int),
 	"WalkingCallback"    : ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p),
 	"ConditionCallback"  : ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.POINTER(TParsingElement), ctypes.POINTER(TParsingContext)),
+	"ContextCallback"    : ctypes.CFUNCTYPE(None, ctypes.POINTER(TParsingContext), ctypes.c_char),
 	"ProcedureCallback"  : ctypes.CFUNCTYPE(None, ctypes.POINTER(TParsingElement), ctypes.POINTER(TParsingContext)),
 	"ProcessorCallback"  : ctypes.CFUNCTYPE(None, ctypes.POINTER(TProcessor), ctypes.POINTER(TMatch)),
 })

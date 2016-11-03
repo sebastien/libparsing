@@ -1298,6 +1298,7 @@ void* ParsingVariable_getValue(ParsingVariable* this) {
 }
 
 bool ParsingVariable_is(ParsingVariable* this, const char* key) {
+	if (this == NULL || key == NULL) {return FALSE;}
 	return (key == this->key || strcmp(this->key, key)) == 0 ? TRUE : FALSE;
 }
 
@@ -1325,7 +1326,8 @@ ParsingVariable* ParsingVariable_set(ParsingVariable* this, const char* key, voi
 		found->previous = this;
 		return found;
 	} else {
-		ParsingVariable_set(found, key, value);
+		found->value = value;
+		// Should we free the variable?
 		return found;
 	}
 }
@@ -1373,6 +1375,7 @@ ParsingContext* ParsingContext_new( Grammar* g, Iterator* iterator ) {
 	this->offsets   = NULL;
 	this->current   = NULL;
 	this->variables = ParsingVariable_new("depth", 0);
+	this->callback  = NULL;
 	return this;
 }
 
@@ -1391,10 +1394,12 @@ void ParsingContext_free( ParsingContext* this ) {
 
 void ParsingContext_push     ( ParsingContext* this ) {
 	this->variables = ParsingVariable_push(this->variables);
+	if (this->callback != NULL) {this->callback(this, '+');}
 }
 
 void ParsingContext_pop      ( ParsingContext* this ) {
-	//this->variables = ParsingVariable_pop(this->variables);
+	if (this->callback != NULL) {this->callback(this, '-');}
+	this->variables = ParsingVariable_pop(this->variables);
 }
 
 void* ParsingContext_get(ParsingContext* this, const char* name) {
@@ -1403,6 +1408,11 @@ void* ParsingContext_get(ParsingContext* this, const char* name) {
 
 void ParsingContext_set(ParsingContext*  this, const char* name, void* value) {
 	this->variables = ParsingVariable_set(this->variables, name, value);
+}
+
+
+void ParsingContext_on(ParsingContext* this, ContextCallback callback) {
+	this->callback = callback;
 }
 
 // ----------------------------------------------------------------------------
