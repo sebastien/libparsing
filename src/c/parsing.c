@@ -466,6 +466,46 @@ int Match_countAll(Match* this) {
 	return Match__walk(this, Match__walkCounter, 0, NULL);
 }
 
+
+// FIXME: Fix that
+void Match__toJSON(Match* match, int fd) {
+	printf("JSON!\n");return;
+	if (match == NULL || match->element == NULL) {return;}
+	ParsingElement* element = (ParsingElement*)match->element;
+	if (element->type != TYPE_REFERENCE) {
+		//printf("{\"type\":\"%c\",\"name\":%s,\"start\":%l ,\"length\":%l ,\"value\":", element->type, element->name, match->offset, match->length);
+		printf("{\"value\":");
+		int i     = 0;
+		int count = 0;
+		switch(element->type) {
+			case TYPE_WORD:
+				//printf("\"%s\"", Word_word(element));
+				break;
+			case TYPE_TOKEN:
+				count = TokenMatch_count(match);
+				printf("[");
+				// for (i=0 ; i < count ; i++) {
+				// 	printf("\"%s\"", TokenMatch_group(match, i));
+				// 	if (i + 1 < count) {printf(",");}
+				// }
+				printf("]");
+				break;
+			case TYPE_GROUP:
+				break;
+			case TYPE_RULE:
+				printf("[");
+				printf("]");
+				break;
+		}
+		printf("}");
+	}
+}
+
+// @method
+void Match_toJSON(Match* this, int fd) {
+	//Match__toJSON(this, 1);
+}
+
 // ----------------------------------------------------------------------------
 //
 // PERSING ELEMENT

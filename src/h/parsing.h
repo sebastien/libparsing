@@ -283,6 +283,7 @@ typedef struct Reference       Reference;
 typedef struct Match           Match;
 typedef void                   Element;
 
+// FIXME: Not sure why this is disabled
 // typedef struct Element {
 // 	char           type;       // Type is used du differentiate ParsingElement from Reference
 // 	int            id;         // The ID, assigned by the grammar, as the relative distance to the axiom
@@ -378,9 +379,9 @@ typedef struct Match {
 // @define
 #define STATUS_SUCCESS     'S'
 // @define
-#define STATUS_PARTIAL     's'
+#define STATUS_PARTIAL     'p'
 // @define
-#define STATUS_FAILED      'X'
+#define STATUS_FAILED      'F'
 // @define
 #define STATUS_INPUT_ENDED '.'
 // @define
@@ -454,6 +455,9 @@ int Match__walk(Match* this, WalkingCallback callback, int step, void* context )
 
 // @method
 int Match_countAll(Match* this);
+
+// @method
+void Match_toJSON(Match* this, int fd);
 
 // @type ParsingElement
 typedef struct ParsingElement {

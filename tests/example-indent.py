@@ -77,18 +77,23 @@ block:
 	property=value
 """
 
-EXAMPLE2 = """
+EXAMPLE3 = """
 block:
 	property=value
 	block:
 		property=value
 """
 
+FAILURE1 = """
+block:
+property=value
+"""
 
 if __name__ == "__main__":
 	g = grammar()
-	r = g.parseString(EXAMPLE2)
-	print (r)
+	r = g.parseString(EXAMPLE1)
+	print r, r.match
+	#r.match.toJSON(1)
 
 
 # EOF - vim: ts=4 sw=4 noet
