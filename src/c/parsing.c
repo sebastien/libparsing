@@ -1307,6 +1307,7 @@ void ParsingVariable_free(ParsingVariable* this) {
 		if (this->key != NULL) {
 			free((void*)this->key);
 		}
+		__DEALLOC(this);
 	}
 }
 
