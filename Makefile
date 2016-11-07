@@ -67,8 +67,8 @@ lib$(PROJECT).so: build/parsing.o
 lib$(PROJECT).so.$(VERSION): build/parsing.o
 	$(LD) -shared -lpcre $< -o $@
 
-#README.html: tools/cdoclib.py src/h/parsing.h
-#	@python tools/cdoclib.py src/h/parsing.h > $@
+README.html: bin/cdoclib.py src/h/parsing.h
+	@python bin/cdoclib.py src/h/parsing.h > $@
 
 experiment/%: build/%.o build/parsing.o
 	$(CC) $? $(LDFLAGS) -o $@
