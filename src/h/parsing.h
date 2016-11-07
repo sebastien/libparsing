@@ -861,6 +861,9 @@ typedef struct ParsingContext {
 	struct ParsingVariable* variables;
 	struct Match*           lastMatch;
 	ContextCallback         callback;
+	int                     depth;
+	const char*             indent;
+
 } ParsingContext;
 
 

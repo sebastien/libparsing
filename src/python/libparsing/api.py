@@ -826,7 +826,7 @@ class ParsingResult(CObject):
 		at   = t[e:].split("\n", after + 1)[:after+1]
 		c    = bt[-1] + t[s:e] + at[0]
 		bc   = len(bt[-1]) * " "
-		cc   = "⭶" + (max(0,e-s)) * "➿"
+		cc   = "⤒" + (max(0,e-s)) * "⤒"
 		ac   = max(0,len(at[-1]) - 1) * " "
 		return (
 			"\n│ ".join(bt[:-1]) + \
@@ -844,7 +844,7 @@ class ParsingResult(CObject):
 			lines = self.text[:s].split("\n")
 			line  = len(lines) - 1
 			char  = len(lines[-1])
-			return "Parsing failed at line {0}, char {1} range:{2}→{3}:{4}".format(
+			return "Parsing failed at line {0}:{1}, range {2}→{3}:{4}".format(
 				line, char, s, e,
 				"\n".join([_ for _ in t.split("\n")])
 			)

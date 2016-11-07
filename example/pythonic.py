@@ -85,7 +85,7 @@ do this
 if __name__ == "__main__":
 	g = grammar(True)
 	r = g.parseString(EXAMPLE1)
-	print r
+	print (r)
 
 
 # EOF - vim: ts=4 sw=4 noet
