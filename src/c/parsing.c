@@ -119,8 +119,34 @@ size_t Iterator_remaining( Iterator* this ) {
 	return (size_t)remaining;
 }
 
+size_t Iterator_bufferOffset( Iterator* this ) {
+	long freed = this->current - ((iterated_t*)this->buffer);
+	return this->offset - freed;
+}
+
+size_t Iterator_remainingAt( Iterator* this, size_t offset) {
+	return Iterator_remaining(this) - Iterator_bufferOffset(this) - offset;
+}
+
 bool Iterator_moveTo ( Iterator* this, size_t offset ) {
 	return this->move(this, offset - this->offset );
+}
+
+// FIXME: This implementation is broken
+iterated_t* Iterator_text ( Iterator* this, size_t offset ) {
+	//iterated_t* Iterator_bufferAt( Iterator* this, size_t offset) {
+	long freed = this->current - ((iterated_t*)this->buffer);
+	offset    -= freed;
+	return this->buffer + offset;
+}
+
+char Iterator_char ( Iterator* this, size_t offset ) {
+	iterated_t* text = Iterator_text(this, offset);
+	if (text != NULL) {
+		return ((char*)text)[0];
+	} else {
+		return '\0';
+	}
 }
 
 void Iterator_free( Iterator* this ) {
@@ -369,7 +395,6 @@ Match* Match_Success(size_t length, Element* element, ParsingContext* context) {
 	assert( element != NULL );
 	this->status  = STATUS_MATCHED;
 	this->element = element;
-	this->context = context;
 	this->offset  = context->iterator->offset;
 	this->length  = length;
 	return this;
@@ -382,10 +407,10 @@ Match* Match_new(void) {
 	this->element   = NULL;
 	this->length    = 0;
 	this->offset    = 0;
-	this->context   = NULL;
 	this->data      = NULL;
 	this->children  = NULL;
 	this->next      = NULL;
+	this->parent    = NULL;
 	this->result    = NULL;
 	return this;
 }
@@ -801,7 +826,7 @@ Match* Reference_recognize(Reference* this, ParsingContext* context) {
 		LOG_IF(context->grammar->isVerbose, "    [✓] Reference %s#%d@%s matched %d/%c times over %d-%d", this->element->name, this->element->id, this->name, count, this->cardinality, offset, offset+length)
 		return MATCH_STATS(m);
 	} else {
-		LOG_IF(context->grammar->isVerbose, "    [!] Reference %s#%d@%s failed %d/%c times at %d", this->element->name, this->element->id, this->name, count, this->cardinality, offset);
+		LOG_IF(context->grammar->isVerbose, "    [!] Reference %s#%d@%s failed %d/%c times at %d-%d", this->element->name, this->element->id, this->name, count, this->cardinality, offset, (int)context->stats->matchOffset);
 		return MATCH_STATS(FAILURE);
 	}
 }
@@ -1008,7 +1033,6 @@ Match* Token_recognize(ParsingElement* this, ParsingContext* context) {
 const char* TokenMatch_group(Match* match, int index) {
 	assert (match                != NULL);
 	assert (match->data          != NULL);
-	assert (match->context       != NULL);
 	assert (((ParsingElement*)(match->element))->type == TYPE_TOKEN);
 	TokenMatch* m = (TokenMatch*)match->data;
 	assert (index >= 0);
@@ -1019,7 +1043,6 @@ const char* TokenMatch_group(Match* match, int index) {
 int TokenMatch_count(Match* match) {
 	assert (match                != NULL);
 	assert (match->data          != NULL);
-	assert (match->context       != NULL);
 	assert (((ParsingElement*)(match->element))->type == TYPE_TOKEN);
 	TokenMatch* m = (TokenMatch*)match->data;
 	return m->count;
@@ -1035,7 +1058,6 @@ void TokenMatch_free(Match* match) {
 	TRACE("TokenMatch_free: %p", match)
 	assert (match                != NULL);
 	assert (match->data          != NULL);
-	assert (match->context       != NULL);
 	assert (((ParsingElement*)(match->element))->type == TYPE_TOKEN);
 	TokenMatch* m = (TokenMatch*)match->data;
 #ifdef WITH_PCRE
@@ -1429,8 +1451,12 @@ ParsingContext* ParsingContext_new( Grammar* g, Iterator* iterator ) {
 	return this;
 }
 
-iterated_t* ParsingContext_text( ParsingContext* this ) {
-	return this->iterator->buffer;
+iterated_t* ParsingContext_text( ParsingContext* this, size_t offset ) {
+	return Iterator_text(this->iterator, offset);
+}
+
+char ParsingContext_char( ParsingContext* this, size_t offset ) {
+	return Iterator_char(this->iterator, offset);
 }
 
 void ParsingContext_free( ParsingContext* this ) {
@@ -1549,14 +1575,18 @@ ParsingResult* ParsingResult_new(Match* match, ParsingContext* context) {
 	this->context = context;
 	if (match != FAILURE) {
 		if (Iterator_hasMore(context->iterator) && Iterator_remaining(context->iterator) > 0) {
-			LOG_IF(context->grammar->isVerbose, "Partial success, parsed %zd bytes, %zd remaining", context->iterator->offset, Iterator_remaining(context->iterator));
+			LOG_IF(context->grammar->isVerbose, "Partial success, parsed %zd bytes, %zd remaining", context->iterator->offset, Iterator_remainingAt(context->iterator, context->iterator->offset));
 			this->status = STATUS_PARTIAL;
 		} else {
 			LOG_IF(context->grammar->isVerbose, "Succeeded, iterator at %zd, parsed %zd bytes, %zd remaining", context->iterator->offset, context->stats->bytesRead, Iterator_remaining(context->iterator));
 			this->status = STATUS_SUCCESS;
 		}
 	} else {
-		LOG_IF(context->grammar->isVerbose, "Failed, parsed %zd bytes, %zd remaining", context->iterator->offset, Iterator_remaining(context->iterator))
+		LOG_IF(context->grammar->isVerbose, "Failed, parsed %zd bytes, %zd/%zd remaining",
+				context->stats->matchOffset,
+				Iterator_remainingAt(context->iterator, context->stats->matchOffset),
+				Iterator_remaining(context->iterator)
+		);
 		this->status = STATUS_FAILED;
 	}
 	return this;

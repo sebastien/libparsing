@@ -30,7 +30,7 @@
 
 #ifndef __PARSING_H__
 #define __PARSING_H__
-#define __PARSING_VERSION__ "0.8.0"
+#define __PARSING_VERSION__ "0.8.2"
 
 /**
  * #  libparsing
@@ -178,7 +178,7 @@ typedef ITERATION_UNIT iterated_t;
 // @type Iterator
 typedef struct Iterator {
 	char           status;    // The status of the iterator, one of STATUS_{INIT|PROCESSING|INPUT_ENDED|ENDED}
-	char*          buffer;    // The buffer to the read data, note how it is a (void*) and not an `iterated_t`
+	char*          buffer;    // The buffer to the read data, note how it is a (char*) and not an `iterated_t`
 	iterated_t*    current;   // The pointer current offset within the buffer
 	iterated_t     separator; // The character for line separator, `\n` by default.
 	size_t         offset;    // Offset in input (in bytes), might be different from `current - buffer` if some input was freed.
@@ -187,7 +187,7 @@ typedef struct Iterator {
 	size_t         available; // Available data in buffer (in bytes), always `<= capacity`
 	bool           freeBuffer;
 	// FIXME: The head should be freed when the offsets have been parsed, no need to keep in memory stuff we won't need.
-	void*          input;     // Pointer to the input source
+	void*          input;     // Pointer to the input source (opaque structure)
 	bool          (*move) (struct Iterator*, int n); // Plug-in function to move to the previous/next positions
 } Iterator;
 
@@ -231,15 +231,36 @@ bool Iterator_hasMore( Iterator* this );
 // @method
 // Returns the number of bytes available from the current iterator's position
 // up to the last available data. For dynamic streams, where the length is
-// unknown, this should be lesser or equalt to `ITERATOR_BUFFER_AHEAD`.
+// unknown, this should be lesser or equal to `ITERATOR_BUFFER_AHEAD`.
 size_t Iterator_remaining( Iterator* this );
+
+// @method
+// A variant of `Iterator_remaining` that takes the offset from
+// which to calculate the remaining elements.
+size_t Iterator_remainingAt( Iterator* this, size_t offset );
 
 // @method
 // Moves the iterator to the given offset
 bool Iterator_moveTo ( Iterator* this, size_t offset );
 
 // @method
+// Returns the text fragment starting at `offset` in this
+// iterator. This might return NULL if the input is not available anymore.
+iterated_t* Iterator_text ( Iterator* this, size_t offset );
+
+// @method
+// Returns the offset of the buffer, which might be different
+// from the offset within the input stream (in case some of the input
+// has been discarded).
+size_t Iterator_bufferOffset( Iterator* this );
+
+// @method
+char Iterator_char ( Iterator* this, size_t offset );
+
+// @method
 bool String_move ( Iterator* this, int offset );
+
+
 
 // @define
 // The number of `iterated_t` that should be loaded after the iterator's
@@ -362,10 +383,10 @@ typedef struct Match {
 	size_t          offset;     // The offset of `iterated_t` matched
 	size_t          length;     // The number of `iterated_t` matched
 	Element*        element;
-	ParsingContext* context;
 	void*           data;      // The matched data (usually a subset of the input stream)
 	struct Match*   next;      // A pointer to the next  match (see `References`)
 	struct Match*   children;  // A pointer to the child match (see `References`)
+	struct Match*   parent;    // A pointer to the parent match
 	void*           result;    // A pointer to the result of the match
 } Match;
 
@@ -845,7 +866,10 @@ typedef struct ParsingContext {
 ParsingContext* ParsingContext_new( Grammar* g, Iterator* iterator );
 
 // @method
-iterated_t* ParsingContext_text( ParsingContext* this );
+iterated_t* ParsingContext_text( ParsingContext* this, size_t offset );
+
+// @method
+char ParsingContext_char( ParsingContext* this, size_t offset );
 
 // @method
 size_t ParsingContext_getOffset( ParsingContext* this );
