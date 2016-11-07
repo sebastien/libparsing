@@ -516,6 +516,16 @@ ParsingElement* ParsingElement_add(ParsingElement *this, Reference *child);
 ParsingElement* ParsingElement_clear(ParsingElement *this);
 
 // @method
+// Applies the grammar's skip property as many times as it matches, returning
+// the resulting change in the parsing offset.
+size_t ParsingElement_skip(ParsingElement *this, ParsingContext* context);
+
+// @method
+// Applies the grammar's skip property *once* , returning
+// the resulting change in the parsing offset.
+size_t ParsingElement_skipOnce(ParsingElement *this, ParsingContext* context);
+
+// @method
 // Returns the match for this parsing element for the given iterator's state.
 // inline Match* ParsingElement_recognize( ParsingElement* this, ParsingContext* context );
 

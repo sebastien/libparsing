@@ -625,6 +625,30 @@ Match* ParsingElement_process( ParsingElement* this, Match* match ) {
 	return match;
 }
 
+size_t ParsingElement_skip( ParsingElement* this, ParsingContext* context) {
+	size_t result  = 0;
+	size_t skipped = 0;
+	do {
+		skipped = ParsingElement_skipOnce(this, context);
+		result += skipped;
+	} while (skipped > 0);
+	return skipped;
+}
+
+size_t ParsingElement_skipOnce( ParsingElement* this, ParsingContext* context) {
+	if (this == NULL || context == NULL) {return 0;}
+	OUT_IF(context->grammar->isVerbose, " %s  ►┐", context->indent)
+	ParsingElement* skip = context->grammar->skip;
+	size_t offset        = context->iterator->offset;
+	// We don't care about the result, just the offset change.
+	Match_free(skip->recognize(skip, context));
+	size_t skipped = context->iterator->offset - offset;
+	if (skipped > 0) {
+		OUT_IF(context->grammar->isVerbose, " %s   ╘⟹skipped %zd", context->indent, skipped)
+	}
+	return skipped;
+}
+
 ParsingElement* ParsingElement_name( ParsingElement* this, const char* name ) {
 	if (this == NULL) {return this;}
 	this->name = name;
@@ -764,9 +788,15 @@ Match* Reference_recognize(Reference* this, ParsingContext* context) {
 	while (Iterator_hasMore(context->iterator) || this->element->type == TYPE_PROCEDURE) {
 		ASSERT(this->element->recognize, "Reference_recognize: Element '%s' has no recognize callback", this->element->name);
 		// We ask the element to recognize the current iterator's position
+		if (this->cardinality != CARDINALITY_ONE && this->cardinality != CARDINALITY_OPTIONAL) {
+			OUT_IF(context->grammar->isVerbose, "   %s ├┈" BOLDYELLOW "[%d](%c)" RESET,
+				context->indent, count, this->cardinality
+			);
+		}
+
 		Match* match = this->element->recognize(this->element, context);
 		if (Match_isSuccess(match)) {
-			DEBUG("        Reference %s#%d@%s matched at %zd-%zd", this->element->name, this->element->id, this->name, context->iterator->offset - match->length, context->iterator->offset);
+
 			if (count == 0) {
 				// If it's the first match and we're in a ONE/OPTIONAL reference, we break
 				// the loop.
@@ -779,12 +809,14 @@ Match* Reference_recognize(Reference* this, ParsingContext* context) {
 					break;
 				}
 			} else {
+
 				// If we're already had a match we append the tail and update
 				// the tail to be the current match
 				tail->next = match;
 				tail       = match;
 			}
 			count++;
+
 		} else {
 			DEBUG_IF(count > 0, "        Reference %s#%d@%s no more match at %zd", this->element->name, this->element->id, this->name, context->iterator->offset);
 			break;
@@ -881,14 +913,12 @@ Match* Word_recognize(ParsingElement* this, ParsingContext* context) {
 		// NOTE: You can see here that the word actually consumes input
 		// and moves the iterator.
 		Match* success = MATCH_STATS(Match_Success(config->length, this, context));
-		size_t offset = context->iterator->offset;
 		ASSERT(config->length > 0, "Word: %s configuration length == 0", config->word)
 		context->iterator->move(context->iterator, config->length);
-		// OUT_IF(context->grammar->isVerbose, "Moving iterator from %zd to %zd", offset, context->iterator->offset);
-		OUT_IF(context->grammar->isVerbose, "[✓] %sWord %s#%d:`" CYAN "%s" RESET "` matched %zd-%zd", context->indent, this->name, this->id, ((WordConfig*)this->config)->word, context->iterator->offset - config->length, context->iterator->offset);
+		OUT_IF(context->grammar->isVerbose, "[✓] %s└ Word %s#%d:`" CYAN "%s" RESET "` matched %zd-%zd", context->indent, this->name, this->id, ((WordConfig*)this->config)->word, context->iterator->offset - config->length, context->iterator->offset);
 		return success;
 	} else {
-		OUT_IF(context->grammar->isVerbose, " !  %sWord %s#%d:" CYAN "`%s`" RESET " failed at %zd", context->indent, this->name, this->id, ((WordConfig*)this->config)->word, context->iterator->offset);
+		OUT_IF(context->grammar->isVerbose, " !  %s└ Word %s#%d:" CYAN "`%s`" RESET " failed at %zd", context->indent, this->name, this->id, ((WordConfig*)this->config)->word, context->iterator->offset);
 		return MATCH_STATS(FAILURE);
 	}
 }
@@ -994,7 +1024,7 @@ Match* Token_recognize(ParsingElement* this, ParsingContext* context) {
 			case PCRE_ERROR_NOMEMORY     : ERROR("Token:%s Ran out of memory", config->expr);                       break;
 			default                      : ERROR("Token:%s Unknown error", config->expr);                           break;
 		};
-		OUT_IF(context->grammar->isVerbose, " !  %sToken " BOLDRED "%s" RESET "#%d:`" CYAN "%s" RESET "` failed at %zd", context->indent, this->name, this->id, config->expr, context->iterator->offset);
+		OUT_IF(context->grammar->isVerbose, "    %s└✘Token " BOLDRED "%s" RESET "#%d:`" CYAN "%s" RESET "` failed at %zd", context->indent, this->name, this->id, config->expr, context->iterator->offset);
 	} else {
 		if(r == 0) {
 			ERROR("Token: %s many substrings matched\n", config->expr);
@@ -1007,7 +1037,7 @@ Match* Token_recognize(ParsingElement* this, ParsingContext* context) {
 		}
 		// FIXME: Make sure it is the length and not the end offset
 		result           = Match_Success(vector[1], this, context);
-		OUT_IF(context->grammar->isVerbose, "[✓] %sToken " BOLDGREEN "%s" RESET "#%d:" CYAN "`%s`" RESET " matched %zd-%zd", context->indent, this->name, this->id, config->expr, context->iterator->offset, context->iterator->offset + result->length);
+		OUT_IF(context->grammar->isVerbose, "[✓] %s└ Token " BOLDGREEN "%s" RESET "#%d:" CYAN "`%s`" RESET " matched " BOLDGREEN "%zd-%zd" RESET, context->indent, this->name, this->id, config->expr, context->iterator->offset, context->iterator->offset + result->length);
 
 		// We create the token match
 		__ALLOC(TokenMatch, data);
@@ -1086,40 +1116,56 @@ ParsingElement* Group_new(Reference* children[]) {
 }
 
 Match* Group_recognize(ParsingElement* this, ParsingContext* context){
-	OUT_IF(context->grammar->isVerbose && strcmp(this->name, "_") != 0,"??? %sGroup:" BOLDYELLOW "%s" RESET " at %zd", context->indent, this->name, context->iterator->offset);
-	Reference* child = this->children;
-	Match*     match = NULL;
-	size_t     offset = context->iterator->offset;
-	int        step   = 0;
+	OUT_IF(context->grammar->isVerbose,"??? %s┌── Group:" BOLDYELLOW "%s" RESET " at %zd", context->indent, this->name, context->iterator->offset);
+	Reference* child     = this->children;
+	Match*     result    = NULL;
+	size_t offset        = context->iterator->offset;
+	int        step      = 0;
+	bool       can_parse = TRUE;
 	ParsingContext_push(context);
-	while (child != NULL ) {
-		if (child->next != NULL) {
-			OUT_IF(context->grammar->isVerbose && strcmp(this->name, "_") != 0, " ‥%s├─" BOLDYELLOW "%d" RESET, context->indent, step);
-		} else {
-			OUT_IF(context->grammar->isVerbose && strcmp(this->name, "_") != 0, " ‥%s└─" BOLDYELLOW "%d" RESET, context->indent, step);
+	while (can_parse) {
+		// We try to match any/all the childrens that we can
+		size_t o = context->iterator->offset;
+		while (child != NULL ) {
+			OUT_IF(context->grammar->isVerbose, " ‥%s ┄┐ " BLUE "%d" RESET, context->indent, step);
+			Match* match = Reference_recognize(child, context);
+			if (Match_isSuccess(match)) {
+				// The first succeeding child wins
+				Match* m    = Match_Success(match->length, this, context);
+				m->offset   = offset;
+				m->children = match;
+				match  = m;
+				result = m;
+				break;
+			} else {
+				// Otherwise we skip to the next child
+				Match_free(match);
+				child  = child->next;
+				step  += 1;
+			}
 		}
-		match = Reference_recognize(child, context);
-		if (Match_isSuccess(match)) {
-			// The first succeeding child wins
-			Match* result    = Match_Success(match->length, this, context);
-			result->offset   = offset;
-			result->children = match;
-			OUT_IF( context->grammar->isVerbose && strcmp(this->name, "_") != 0, "[✓] %sGroup " BOLDGREEN "%s" RESET "#%d[%d] matched %zd-%zd[%zd]", context->indent, this->name, this->id, step, offset, context->iterator->offset, result->length)
-			return MATCH_STATS(result);
+		if (o == context->iterator->offset) {
+			// Now we try to skip
+			can_parse = ParsingElement_skipOnce(this, context) > 0;
+			child = this->children;
 		} else {
-			// Otherwise we skip to the next child
-			child  = child->next;
-			step  += 1;
+			can_parse = TRUE;
+			child = this->children;
 		}
 	}
 	ParsingContext_pop(context);
-	// If no child has succeeded, the whole group fails
-	OUT_IF( context->grammar->isVerbose && strcmp(this->name, "_") != 0, " !  %sGroup " BOLDRED "%s" RESET "#%d failed at %zd-%zd, backtracking to %zd", context->indent, this->name, this->id, offset, context->iterator->offset, offset)
-	if (context->iterator->offset != offset ) {
-		Iterator_moveTo(context->iterator, offset);
-		assert( context->iterator->offset == offset );
+	if (Match_isSuccess(result)) {
+		OUT_IF( context->grammar->isVerbose, "[✓] %s╘═⇒ Group " BOLDGREEN "%s" RESET "#%d[%d] matched" BOLDGREEN "%zd-%zd" RESET "[%zd]", context->indent, this->name, this->id, step, result->offset, context->iterator->offset, result->length)
+		return MATCH_STATS(result);
+	} else {
+		// If no child has succeeded, the whole group fails
+		OUT_IF( context->grammar->isVerbose , " !  %s╘═⇒ Group " BOLDRED "%s" RESET "#%d[%d] failed at %zd-%zd", context->indent, this->name, this->id, step, context->iterator->offset, offset)
+		if (context->iterator->offset != offset ) {
+			Iterator_moveTo(context->iterator, offset);
+			assert( context->iterator->offset == offset );
+		}
+		return MATCH_STATS(FAILURE);
 	}
-	return MATCH_STATS(FAILURE);
 }
 
 // ----------------------------------------------------------------------------
@@ -1137,7 +1183,7 @@ ParsingElement* Rule_new(Reference* children[]) {
 }
 
 Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
-	OUT_IF(context->grammar->isVerbose && strcmp(this->name, "_") != 0, "??? %sRule:" BOLDYELLOW "%s" RESET " at %zd", context->indent, this->name, context->iterator->offset);
+	OUT_IF(context->grammar->isVerbose, "??? %s┌── Rule:" BOLDYELLOW "%s" RESET " at %zd", context->indent, this->name, context->iterator->offset);
 	Reference* child  = this->children;
 	// An empty rule will fail. Not sure if this is the right thing to do, but
 	// if we don't set the result, it will return NULL and break assertions
@@ -1154,25 +1200,14 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 		// We iterate over the children of the rule. We expect each child to
 		// match, and we might skip inbetween the children to find a match.
 		if (child->next != NULL) {
-			OUT_IF(context->grammar->isVerbose && strcmp(this->name, "_") != 0, " ‥%s├─" BOLDYELLOW "%d" RESET, context->indent, step);
+			OUT_IF(context->grammar->isVerbose, " ‥%s├─" BOLDYELLOW "%d" RESET, context->indent, step);
 		} else {
-			OUT_IF(context->grammar->isVerbose && strcmp(this->name, "_") != 0, " ‥%s└─" BOLDYELLOW "%d" RESET, context->indent, step);
+			OUT_IF(context->grammar->isVerbose, " ‥%s└─" BOLDYELLOW "%d" RESET, context->indent, step);
 		}
 		Match* match = Reference_recognize(child, context);
 		DEBUG("Rule:%s[%d]=%s %s at %zd-%zd", this->name, step, child->element->name, (Match_isSuccess(match) ? "matched" : "failed"), (Match_isSuccess(match) ?  context->iterator->offset - match->length : context->iterator->offset), context->iterator->offset);
 		if (!Match_isSuccess(match)) {
-			ParsingElement* skip = context->grammar->skip;
-			if (skip == NULL ) {
-				// We break if we had FAILURE and there is no skip defined.
-				break;
-			}
-			// DEBUG("Rule:Skipping with element %p", skip)
-			// DEBUG("Rule:Skipping with element %c#%d", skip->type, skip->id)
-			Match* skip_match    = skip->recognize(skip, context);
-			int    skip_count    = 0;
-			DEBUG_CODE(size_t skip_offset   = context->iterator->offset)
-			while (Match_isSuccess(skip_match)){skip_match = skip->recognize(skip, context); skip_count++; }
-			if (skip_count > 0) {
+			if (ParsingElement_skipOnce(this, context) > 0) {
 				// If the rule failed, we try to skip characters. We free any
 				// failure match, as we won't need it anymore.
 				Match_free(match);
@@ -1203,8 +1238,9 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 		// We increment the step counter, used for debugging as well.
 		step++;
 	}
+	ParsingContext_pop(context);
 	if (!Match_isSuccess(result)) {
-		OUT_IF( context->grammar->isVerbose && offset != context->iterator->offset && strcmp(this->name, "_") != 0, " !  %sRule " BOLDRED "%s" RESET "#%d failed on step %d=%s at %zd-%zd", context->indent, this->name, this->id, step, step_name == NULL ? "-" : step_name, offset, context->iterator->offset)
+		OUT_IF( context->grammar->isVerbose && offset != context->iterator->offset, " !  %s╘ Rule " BOLDRED "%s" RESET "#%d failed on step %d=%s at %zd-%zd", context->indent, this->name, this->id, step, step_name == NULL ? "-" : step_name, offset, context->iterator->offset)
 		// If we had a failure, then we backtrack the iterator
 		if (offset != context->iterator->offset) {
 			DEBUG( "... backtracking to %zd", offset)
@@ -1215,9 +1251,8 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 		// In case of a success, we update the length based on the last
 		// match.
 		result->length = last->offset - result->offset + last->length;
-		OUT_IF( context->grammar->isVerbose && strcmp(this->name, "_") != 0, "[✓] %sRule " BOLDGREEN "%s" RESET "#%d[%d] matched %zd-%zd(%zdb)", context->indent, this->name, this->id, step, offset, context->iterator->offset, result->length)
+		OUT_IF( context->grammar->isVerbose , "[✓] %s╘═⇒ Rule " BOLDGREEN "%s" RESET "#%d[%d] matched " BOLDGREEN "%zd-%zd" RESET "[%zdb]", context->indent, this->name, this->id, step, offset, context->iterator->offset, result->length)
 	}
-	ParsingContext_pop(context);
 	return MATCH_STATS(result);
 }
 
@@ -1266,11 +1301,11 @@ Match*  Condition_recognize(ParsingElement* this, ParsingContext* context) {
 		// We support special cases where the condition can return a boolean
 		if      (result == (Match*)0) { result = FAILURE; }
 		else if (result == (Match*)1) { result = Match_Success(0, this, context);}
-		OUT_IF(context->grammar->isVerbose &&  Match_isSuccess(result), "[✓] %sCondition " BOLDGREEN "%s" RESET "#%d matched %zd-%zd", context->indent, this->name, this->id, context->iterator->offset - result->length, context->iterator->offset)
-		OUT_IF(context->grammar->isVerbose && !Match_isSuccess(result), " !  %sCondition " BOLDRED "%s" RESET "#%d failed at %zd",  context->indent, this->name, this->id, context->iterator->offset)
+		OUT_IF(context->grammar->isVerbose &&  Match_isSuccess(result), "[✓] %s└ Condition " BOLDGREEN "%s" RESET "#%d matched %zd-%zd", context->indent, this->name, this->id, context->iterator->offset - result->length, context->iterator->offset)
+		OUT_IF(context->grammar->isVerbose && !Match_isSuccess(result), " !  %s└ Condition " BOLDRED "%s" RESET "#%d failed at %zd",  context->indent, this->name, this->id, context->iterator->offset)
 		return  MATCH_STATS(result);
 	} else {
-		OUT_IF(context->grammar->isVerbose, "[✓] %sCondition %s#%d matched by default at %zd", context->indent, this->name, this->id, context->iterator->offset)
+		OUT_IF(context->grammar->isVerbose, "[✓] %s└ Condition %s#%d matched by default at %zd", context->indent, this->name, this->id, context->iterator->offset)
 		Match* result = Match_Success(0, this, context);
 		assert(Match_isSuccess(result));
 		return  MATCH_STATS(result);
