@@ -112,9 +112,8 @@ property=value
 """
 
 if __name__ == "__main__":
-	g = grammar(True)
+	g = grammar(False)
 	r = g.parseString(EXAMPLE3)
-	print ("XXX INPUT", len(EXAMPLE3))
 	print r.describe()
 	#r.match.toJSON(1)
 

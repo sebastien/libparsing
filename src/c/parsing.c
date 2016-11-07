@@ -131,8 +131,9 @@ bool Iterator_moveTo ( Iterator* this, size_t offset ) {
 }
 
 iterated_t* Iterator_text ( Iterator* this, size_t offset ) {
-	size_t local_offset = offset - Iterator_bufferOffset(this);
-	return this->buffer + local_offset;
+	// This assumes that current-buffer ==  this->offset
+	assert(this->current - this->buffer == this->offset);
+	return this->buffer + offset;
 }
 
 char Iterator_char ( Iterator* this, size_t offset ) {
@@ -1578,9 +1579,8 @@ ParsingResult* ParsingResult_new(Match* match, ParsingContext* context) {
 			);
 			this->status = STATUS_PARTIAL;
 		} else {
-			LOG_IF(context->grammar->isVerbose, "Succeeded, iterator at %zd, parsed %zd byte.",
-				iterator->offset,
-				context->stats->bytesRead
+			LOG_IF(context->grammar->isVerbose, "Success, parsed %zd, 0 remaining",
+				iterator->offset
 			);
 			this->status = STATUS_SUCCESS;
 		}

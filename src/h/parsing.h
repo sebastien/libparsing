@@ -175,6 +175,8 @@ typedef ITERATION_UNIT iterated_t;
  *
 */
 
+// FIXME: Rework the notion of freeing the input, it does not work.
+
 // @type Iterator
 typedef struct Iterator {
 	char           status;    // The status of the iterator, one of STATUS_{INIT|PROCESSING|INPUT_ENDED|ENDED}
