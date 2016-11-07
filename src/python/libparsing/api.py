@@ -684,13 +684,16 @@ class ParsingContext(CObject):
 	void   ParsingContext_on(ParsingContext* this, ConditionCallback callback);
 	int    ParsingContext_getVariableCount(ParsingContext* this);
 	size_t ParsingContext_getOffset(ParsingContext* this);
-	char*  ParsingContext_text(ParsingContext* this, size_t offset);
 	char   ParsingContext_char(ParsingContext* this, size_t offset);
 	"""
 
 	@property
 	def offset( self ):
 		return self.getOffset()
+
+	@property
+	def text( self ):
+		return self.iterator.buffer
 
 # -----------------------------------------------------------------------------
 #

@@ -111,7 +111,7 @@ bool Iterator_hasMore( Iterator* this ) {
 }
 
 size_t Iterator_remaining( Iterator* this ) {
-	int buffer_offset = ((char*)this->current - this->buffer);
+	int buffer_offset = this->current - this->buffer;
 	// FIXME: Does not work if iterated_t is not the same as char
 	int remaining = this->available - buffer_offset;
 	assert(remaining >= 0);
@@ -132,12 +132,9 @@ bool Iterator_moveTo ( Iterator* this, size_t offset ) {
 	return this->move(this, offset - this->offset );
 }
 
-// FIXME: This implementation is broken
 iterated_t* Iterator_text ( Iterator* this, size_t offset ) {
-	//iterated_t* Iterator_bufferAt( Iterator* this, size_t offset) {
-	long freed = this->current - ((iterated_t*)this->buffer);
-	offset    -= freed;
-	return this->buffer + offset;
+	size_t local_offset = offset - Iterator_bufferOffset(this);
+	return this->buffer + local_offset;
 }
 
 char Iterator_char ( Iterator* this, size_t offset ) {
@@ -1573,9 +1570,20 @@ ParsingResult* ParsingResult_new(Match* match, ParsingContext* context) {
 	assert(context->iterator != NULL);
 	this->match   = match;
 	this->context = context;
+	Iterator* iterator = context->iterator;
 	if (match != FAILURE) {
-		if (Iterator_hasMore(context->iterator) && Iterator_remaining(context->iterator) > 0) {
-			LOG_IF(context->grammar->isVerbose, "Partial success, parsed %zd bytes, %zd remaining", context->iterator->offset, Iterator_remainingAt(context->iterator, context->iterator->offset));
+		if (Iterator_hasMore(context->iterator)) {
+			printf("XXX ITERATOR HAS MORE\n");
+		}
+		printf("XXX Parsing: offset=%lu buffer offset=%lu, remaining=%lu, remaining at%lu / available=%lu\n",
+			iterator->offset,
+			Iterator_bufferOffset(iterator),
+			Iterator_remaining(iterator),
+			Iterator_remainingAt(iterator, iterator->offset),
+			iterator->available
+		);
+		if (Iterator_hasMore(context->iterator) && Iterator_remainingAt(context->iterator, context->iterator->offset) > 0) {
+			LOG_IF(context->grammar->isVerbose, "Partial success, parsed %zd bytes, %zd remaining", context->iterator->offset, Iterator_remaining(context->iterator));
 			this->status = STATUS_PARTIAL;
 		} else {
 			LOG_IF(context->grammar->isVerbose, "Succeeded, iterator at %zd, parsed %zd bytes, %zd remaining", context->iterator->offset, context->stats->bytesRead, Iterator_remaining(context->iterator));
