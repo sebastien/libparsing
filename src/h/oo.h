@@ -87,6 +87,7 @@ typedef char  bool;
 #define WARNING_STREAM stderr
 #define ERROR_STREAM   stderr
 #define LOG_STREAM     stderr
+#define OUT_STREAM     stdout
 
 #define RESET   "\033[0m"
 #define BLACK   "\033[30m"      /* Black */
@@ -127,7 +128,9 @@ typedef char  bool;
 #define WARNING(msg,...) fprintf(WARNING_STREAM, "WRN ");fprintf(WARNING_STREAM, msg, __VA_ARGS__);fprintf(WARNING_STREAM, "\n");
 #define ERROR(msg,...)   fprintf(WARNING_STREAM, "ERR ");fprintf(ERROR_STREAM,   msg, __VA_ARGS__);fprintf(ERROR_STREAM,   "\n");
 #define LOG(msg,...)     fprintf(LOG_STREAM,     "--- ");fprintf(LOG_STREAM,     msg, __VA_ARGS__);fprintf(LOG_STREAM,     "\n");
+#define OUT(msg,...)     fprintf(OUT_STREAM,     msg, __VA_ARGS__);fprintf(OUT_STREAM,     "\n");
 #define LOG_IF(cond,msg,...)     if(cond){LOG(msg, __VA_ARGS__);}
+#define OUT_IF(cond,msg,...)     if(cond){OUT(msg, __VA_ARGS__);}
 
 #ifdef DEBUG_ENABLED
 #define ASSERT(v,msg,...) if(!(v)){DEBUG(msg,__VA_ARGS__);abort();}

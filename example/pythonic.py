@@ -29,7 +29,7 @@ def grammar(verbose=False):
 	g.token    ("NAME",        "\w+")
 	g.token    ("NUMBER",      "\d+")
 	g.token    ("INDENT",      "\t*")
-	g.token    ("WHITESPACE",  "\s+")
+	g.token    ("WHITESPACE",  "[ ]+")
 	g.token    ("TABS",        "\s*")
 	g.word     ("COLON",       ":")
 	g.word     ("SEMICOLON",   ";")
@@ -80,6 +80,7 @@ def grammar(verbose=False):
 
 EXAMPLE1 = """
 do this
+
 """
 
 if __name__ == "__main__":
