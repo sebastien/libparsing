@@ -69,7 +69,7 @@ Iterator* Iterator_FromString(const char* text) {
 }
 
 Iterator* Iterator_new( void ) {
-	__ALLOC(Iterator, this);
+	__NEW(Iterator, this);
 	this->status        = STATUS_INIT;
 	this->separator     = EOL;
 	this->buffer        = NULL;
@@ -97,7 +97,7 @@ bool Iterator_open( Iterator* this, const char *path ) {
 		assert(this->buffer == NULL);
 		// FIXME: Capacity should be in units, no?
 		this->capacity = sizeof(iterated_t) * ITERATOR_BUFFER_AHEAD * 2;
-		this->buffer   = calloc(this->capacity + 1, 1);
+		this->buffer   = __ARRAY(iterated_t, this->capacity + 1);
 		assert(this->buffer != NULL);
 		this->current = (iterated_t*)this->buffer;
 		// We make sure we have a trailing \0 sign to stop any string parsing
@@ -144,9 +144,9 @@ void Iterator_free( Iterator* this ) {
 	// FIXME: Should close input file
 	// TRACE("Iterator_free: %p", this)
 	if (this->freeBuffer) {
-		__DEALLOC(this->buffer);
+		__FREE(this->buffer);
 	}
-	__DEALLOC(this);
+	__FREE(this);
 
 }
 
@@ -214,14 +214,14 @@ bool String_move ( Iterator* this, int n ) {
 // ----------------------------------------------------------------------------
 
 FileInput* FileInput_new(const char* path ) {
-	__ALLOC(FileInput, this);
+	__NEW(FileInput, this);
 	assert(this != NULL);
 	// We open the file
 	this->path = path;
 	this->file = fopen(path, "r");
 	if (this->file==NULL) {
 		ERROR("Cannot open file: %s", path);
-		__DEALLOC(this);
+		__FREE(this);
 		return NULL;
 	} else {
 		return this;
@@ -260,7 +260,7 @@ size_t FileInput_preload( Iterator* this ) {
 		DEBUG("<<< FileInput: growing buffer to %zd", this->capacity + 1)
 		// FIXME: Not sure that realloc is a good idea, as any previous pointer
 		// to the buffer would change...
-		this->buffer= realloc((void*)this->buffer, this->capacity + 1);
+		__RESIZE(this->buffer, this->capacity + 1);
 		assert(this->buffer != NULL);
 		// We need to update the current pointer as the buffer has changed
 		this->current = this->buffer + delta;
@@ -335,7 +335,7 @@ bool FileInput_move   ( Iterator* this, int n ) {
 // ----------------------------------------------------------------------------
 
 Grammar* Grammar_new(void) {
-	__ALLOC(Grammar, this);
+	__NEW(Grammar, this);
 	this->axiom      = NULL;
 	this->skip       = NULL;
 	this->axiomCount = 0;
@@ -371,8 +371,7 @@ void Grammar_freeElements(Grammar* this) {
 }
 
 void Grammar_free(Grammar* this) {
-	// TRACE("Grammar_free: %p", this)
-	__DEALLOC(this);
+	__FREE(this);
 }
 
 // ----------------------------------------------------------------------------
@@ -392,7 +391,7 @@ Match* Match_Success(size_t length, Element* element, ParsingContext* context) {
 }
 
 Match* Match_new(void) {
-	__ALLOC(Match,this);
+	__NEW(Match,this);
 	// DEBUG("Allocating match: %p", this);
 	this->status    = STATUS_INIT;
 	this->element   = NULL;
@@ -404,6 +403,30 @@ Match* Match_new(void) {
 	this->parent    = NULL;
 	this->result    = NULL;
 	return this;
+}
+
+// TODO: We might want to recycle the objects for better performance and
+// fewer allocs.
+void Match_free(Match* this) {
+	if (this!=NULL && this!=FAILURE) {
+		// We free the children
+		assert(this->children != this);
+		Match_free(this->children);
+		// We free the next one
+		assert(this->next != this);
+		Match_free(this->next);
+		// If the match is from a parsing element
+		if (ParsingElement_Is(this->element)) {
+			ParsingElement* element = ((ParsingElement*)this->element);
+			// and the parsing element declared a free match function, we
+			// apply it.
+			if (element->freeMatch) {
+				element->freeMatch(this);
+			}
+		}
+		// We deallocate this one
+		__FREE(this);
+	}
 }
 
 
@@ -439,30 +462,6 @@ int Match_getLength(Match *this) {
 int Match_getEndOffset(Match *this) {
 	if (this == NULL) {return -1;}
 	return (int)(this->length + this->offset);
-}
-
-// TODO: We might want to recycle the objects for better performance and
-// fewer allocs.
-void Match_free(Match* this) {
-	if (this!=NULL && this!=FAILURE) {
-		// We free the children
-		assert(this->children != this);
-		Match_free(this->children);
-		// We free the next one
-		assert(this->next != this);
-		Match_free(this->next);
-		// If the match is from a parsing element
-		if (ParsingElement_Is(this->element)) {
-			ParsingElement* element = ((ParsingElement*)this->element);
-			// and the parsing element declared a free match function, we
-			// apply it.
-			if (element->freeMatch) {
-				element->freeMatch(this);
-			}
-		}
-		// We deallocate this one
-		__DEALLOC(this);
-	}
 }
 
 bool Match_isSuccess(Match* this) {
@@ -552,7 +551,7 @@ bool ParsingElement_Is(void *this) {
 }
 
 ParsingElement* ParsingElement_new(Reference* children[]) {
-	__ALLOC(ParsingElement, this);
+	__NEW(ParsingElement, this);
 	this->type      = TYPE_ELEMENT;
 	this->id        = ID_UNBOUND;
 	this->name      = "_";
@@ -582,7 +581,7 @@ void ParsingElement_free(ParsingElement* this) {
 		Reference_free(child);
 		child = next;
 	}
-	__DEALLOC(this);
+	__FREE(this);
 }
 
 ParsingElement* ParsingElement_add(ParsingElement* this, Reference* child) {
@@ -717,7 +716,7 @@ Reference* Reference_FromElement(ParsingElement* element){
 }
 
 Reference* Reference_new(void) {
-	__ALLOC(Reference, this);
+	__NEW(Reference, this);
 	this->type        = TYPE_REFERENCE;
 	this->id          = ID_UNBOUND;
 	this->cardinality = CARDINALITY_ONE;
@@ -734,7 +733,7 @@ void Reference_free(Reference* this) {
 	// TRACE("Reference_free: %p", this)
 	// NOTE: We do not free the referenced element nor the next reference.
 	// That would be the job of the grammar.
-	__DEALLOC(this)
+	__FREE(this)
 }
 
 bool Reference_hasElement(Reference* this) {
@@ -897,7 +896,7 @@ Match* Reference_recognize(Reference* this, ParsingContext* context) {
 // ----------------------------------------------------------------------------
 
 ParsingElement* Word_new(const char* word) {
-	__ALLOC(WordConfig, config);
+	__NEW(WordConfig, config);
 	ParsingElement* this = ParsingElement_new(NULL);
 	this->type           = TYPE_WORD;
 	this->recognize      = Word_recognize;
@@ -915,10 +914,6 @@ ParsingElement* Word_new(const char* word) {
 	return this;
 }
 
-const char* Word_word(ParsingElement* this) {
-	return ((WordConfig*)this->config)->word;
-}
-
 // TODO: Implement Word_free and regfree
 void Word_free(ParsingElement* this) {
 	// TRACE("Word_free: %p", this)
@@ -926,9 +921,14 @@ void Word_free(ParsingElement* this) {
 	if (config != NULL) {
 		// We don't have anything special to dealloc besides the config
 		free((void*)config->word);
-		__DEALLOC(config);
+		__FREE(config);
 	}
-	__DEALLOC(this);
+	__FREE(this);
+}
+
+
+const char* Word_word(ParsingElement* this) {
+	return ((WordConfig*)this->config)->word;
 }
 
 Match* Word_recognize(ParsingElement* this, ParsingContext* context) {
@@ -963,7 +963,7 @@ void Word_print(ParsingElement* this) {
 // ----------------------------------------------------------------------------
 
 ParsingElement* Token_new(const char* expr) {
-	__ALLOC(TokenConfig, config);
+	__NEW(TokenConfig, config);
 	ParsingElement* this = ParsingElement_new(NULL);
 	this->type           = TYPE_TOKEN;
 	this->recognize      = Token_recognize;
@@ -978,16 +978,16 @@ ParsingElement* Token_new(const char* expr) {
 	config->regexp = pcre_compile(config->expr, PCRE_UTF8, &pcre_error, &pcre_error_offset, NULL);
 	if (pcre_error != NULL) {
 		ERROR("Token: cannot compile regular expression `%s` at %d: %s", config->expr, pcre_error_offset, pcre_error);
-		__DEALLOC(config);
-		__DEALLOC(this);
+		__FREE(config);
+		__FREE(this);
 		return NULL;
 	}
 	// SEE: http://pcre.org/original/doc/html/pcrejit.html
 	config->extra = pcre_study(config->regexp, PCRE_STUDY_JIT_COMPILE, &pcre_error);
 	if (pcre_error != NULL) {
 		ERROR("Token: cannot optimize regular expression `%s` at %d: %s", config->expr, pcre_error_offset, pcre_error);
-		__DEALLOC(config);
-		__DEALLOC(this);
+		__FREE(config);
+		__FREE(this);
 		return NULL;
 	}
 #endif
@@ -997,9 +997,6 @@ ParsingElement* Token_new(const char* expr) {
 	return this;
 }
 
-const char* Token_expr(ParsingElement* this) {
-	return ((TokenConfig*)this->config)->expr;
-}
 
 void Token_free(ParsingElement* this) {
 	TokenConfig* config = (TokenConfig*)this->config;
@@ -1009,10 +1006,14 @@ void Token_free(ParsingElement* this) {
 		if (config->regexp != NULL) {}
 		if (config->extra  != NULL) {pcre_free_study(config->extra);}
 #endif
-		__DEALLOC((void*)config->expr);
-		__DEALLOC(config);
+		__FREE((void*)config->expr);
+		__FREE(config);
 	}
-	__DEALLOC(this);
+	__FREE(this);
+}
+
+const char* Token_expr(ParsingElement* this) {
+	return ((TokenConfig*)this->config)->expr;
 }
 
 Match* Token_recognize(ParsingElement* this, ParsingContext* context) {
@@ -1064,7 +1065,7 @@ Match* Token_recognize(ParsingElement* this, ParsingContext* context) {
 		OUT_IF(context->grammar->isVerbose, "[✓] %s└ Token " BOLDGREEN "%s" RESET "#%d:" CYAN "`%s`" RESET " matched " BOLDGREEN "%zd:%zd-%zd" RESET, context->indent, this->name, this->id, config->expr, context->iterator->lines, context->iterator->offset, context->iterator->offset + result->length);
 
 		// We create the token match
-		__ALLOC(TokenMatch, data);
+		__NEW(TokenMatch, data);
 		data->count    = r;
 		data->groups   = (const char**)malloc(sizeof(const char*) * r);
 		// NOTE: We do this here, but it's probably better to do it later
@@ -1370,7 +1371,7 @@ Match*  Condition_recognize(ParsingElement* this, ParsingContext* context) {
 // ----------------------------------------------------------------------------
 
 ParsingStep* ParsingStep_new( ParsingElement* element ) {
-	__ALLOC(ParsingStep, this);
+	__NEW(ParsingStep, this);
 	assert(element != NULL);
 	this->element   = element;
 	this->step      = 0;
@@ -1382,7 +1383,7 @@ ParsingStep* ParsingStep_new( ParsingElement* element ) {
 }
 
 void ParsingStep_free( ParsingStep* this ) {
-	__DEALLOC(this);
+	__FREE(this);
 }
 
 // ----------------------------------------------------------------------------
@@ -1392,7 +1393,7 @@ void ParsingStep_free( ParsingStep* this ) {
 // ----------------------------------------------------------------------------
 
 ParsingOffset* ParsingOffset_new( size_t offset ) {
-	__ALLOC(ParsingOffset, this);
+	__NEW(ParsingOffset, this);
 	this->offset = offset;
 	this->last   = (ParsingStep*)NULL;
 	this->next   = (ParsingOffset*)NULL;
@@ -1407,7 +1408,7 @@ void ParsingOffset_free( ParsingOffset* this ) {
 		ParsingStep_free(step);
 		step       = previous;
 	}
-	__DEALLOC(this);
+	__FREE(this);
 }
 
 // ----------------------------------------------------------------------------
@@ -1417,8 +1418,8 @@ void ParsingOffset_free( ParsingOffset* this ) {
 // ----------------------------------------------------------------------------
 
 ParsingVariable* ParsingVariable_new(const char* key, void* value) {
-	__ALLOC(ParsingVariable, this);
-	this->key      = (const char*)strdup(key);
+	__NEW(ParsingVariable, this);
+	this->key      = strdup(key);
 	this->value    = value;
 	this->previous = NULL;
 	this->parent   = NULL;
@@ -1427,10 +1428,8 @@ ParsingVariable* ParsingVariable_new(const char* key, void* value) {
 
 void ParsingVariable_free(ParsingVariable* this) {
 	if (this!=NULL) {
-		if (this->key != NULL) {
-			free((void*)this->key);
-		}
-		__DEALLOC(this);
+		__FREE(this->key);
+		__FREE(this);
 	}
 }
 
@@ -1538,7 +1537,7 @@ int  ParsingVariable_count(ParsingVariable* this) {
 // ----------------------------------------------------------------------------
 
 ParsingContext* ParsingContext_new( Grammar* g, Iterator* iterator ) {
-	__ALLOC(ParsingContext, this);
+	__NEW(ParsingContext, this);
 	this->grammar   = g;
 	this->iterator  = iterator;
 	this->stats     = ParsingStats_new();
@@ -1554,6 +1553,15 @@ ParsingContext* ParsingContext_new( Grammar* g, Iterator* iterator ) {
 	return this;
 }
 
+void ParsingContext_free( ParsingContext* this ) {
+	if (this!=NULL) {
+		ParsingVariable_freeAll(this->variables);
+		Iterator_free(this->iterator);
+		ParsingStats_free(this->stats);
+		__FREE(this);
+	}
+}
+
 iterated_t* ParsingContext_text( ParsingContext* this ) {
 	return this->iterator->buffer;
 }
@@ -1562,14 +1570,6 @@ char ParsingContext_charAt ( ParsingContext* this, size_t offset ) {
 	return Iterator_charAt(this->iterator, offset);
 }
 
-void ParsingContext_free( ParsingContext* this ) {
-	if (this!=NULL) {
-		ParsingVariable_freeAll(this->variables);
-		Iterator_free(this->iterator);
-		ParsingStats_free(this->stats);
-		__DEALLOC(this);
-	}
-}
 
 void ParsingContext_push     ( ParsingContext* this ) {
 	this->variables = ParsingVariable_push(this->variables);
@@ -1626,7 +1626,7 @@ Match* ParsingContext_registerMatch(ParsingContext* this, Element* e, Match* m) 
 // ----------------------------------------------------------------------------
 
 ParsingStats* ParsingStats_new(void) {
-	__ALLOC(ParsingStats,this);
+	__NEW(ParsingStats,this);
 	this->bytesRead = 0;
 	this->parseTime = 0;
 	this->successBySymbol = NULL;
@@ -1640,17 +1640,15 @@ ParsingStats* ParsingStats_new(void) {
 
 void ParsingStats_free(ParsingStats* this) {
 	if (this != NULL) {
-		__DEALLOC(this->successBySymbol);
-		__DEALLOC(this->failureBySymbol);
+		__FREE(this->successBySymbol);
+		__FREE(this->failureBySymbol);
 	}
-	__DEALLOC(this);
+	__FREE(this);
 }
 
 void ParsingStats_setSymbolsCount(ParsingStats* this, size_t t) {
-	__DEALLOC(this->successBySymbol);
-	__DEALLOC(this->failureBySymbol);
-	this->successBySymbol = calloc(sizeof(size_t), t);
-	this->failureBySymbol = calloc(sizeof(size_t), t);
+	__RESIZE_ARRAY(this->successBySymbol, size_t, t);
+	__RESIZE_ARRAY(this->failureBySymbol, size_t, t);
 	this->symbolsCount    = t;
 }
 
@@ -1682,7 +1680,7 @@ Match* ParsingStats_registerMatch(ParsingStats* this, Element* e, Match* m) {
 // ----------------------------------------------------------------------------
 
 ParsingResult* ParsingResult_new(Match* match, ParsingContext* context) {
-	__ALLOC(ParsingResult,this);
+	__NEW(ParsingResult,this);
 	assert(match != NULL);
 	assert(context != NULL);
 	assert(context->iterator != NULL);
@@ -1734,7 +1732,7 @@ void ParsingResult_free(ParsingResult* this) {
 		Match_free(this->match);
 		ParsingContext_free(this->context);
 	}
-	__DEALLOC(this);
+	__FREE(this);
 }
 
 // ----------------------------------------------------------------------------
@@ -1819,8 +1817,7 @@ void Grammar_prepare ( Grammar* this ) {
 			this->skipCount = Element__walk(this->skip, Grammar__assignElementIDs, count + 1, NULL) - count;
 		}
 		// Now we register the elements
-		__DEALLOC(this->elements);
-		this->elements = calloc( sizeof(Element*), this->skipCount + this->axiomCount);
+		__RESIZE_ARRAY(this->elements, Element*, this->skipCount + this->axiomCount);
 		count = Element_walk(this->axiom, Grammar__registerElement, this);
 		if (this->skip != NULL) {
 			Element__walk(this->skip, Grammar__registerElement, count, this);
@@ -1869,22 +1866,23 @@ ParsingResult* Grammar_parseString( Grammar* this, const char* text ) {
 // ----------------------------------------------------------------------------
 
 Processor* Processor_new() {
-	__ALLOC(Processor,this);
+	__NEW(Processor,this);
 	this->callbacksCount = 100;
-	this->callbacks      = calloc(this->callbacksCount, sizeof(ProcessorCallback));
+	this->callbacks      = __ARRAY( ProcessorCallback, this->callbacksCount);
 	this->fallback       = NULL;
 	return this;
 }
 
 void Processor_free(Processor* this) {
-	//__DEALLOC(this);
+	__FREE(this);
+	__FREE(this);
 }
 
 void Processor_register (Processor* this, int symbolID, ProcessorCallback callback ) {
 	if (this->callbacksCount < (symbolID + 1)) {
 		int cur_count        = this->callbacksCount;
 		int new_count        = symbolID + 100;
-		this->callbacks      = realloc(this->callbacks, sizeof(ProcessorCallback) * new_count);
+		__RESIZE_ARRAY(this->callbacks, ProcessorCallback, new_count);
 		this->callbacksCount = new_count;
 		// We zero the new values, as `realloc` does not guarantee zero data.
 		while (cur_count < new_count) {

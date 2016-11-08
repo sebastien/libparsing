@@ -798,7 +798,7 @@ Match* ParsingStats_registerMatch(ParsingStats* this, Element* e, Match* m);
 
 // @type
 typedef struct ParsingVariable {
-	const char* key;
+	char* key;
 	void* value;
 	struct ParsingVariable* previous;
 	struct ParsingVariable* parent;

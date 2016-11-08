@@ -23,26 +23,33 @@
 */
 
 /**
- * :: `__ALLOC`
+ * :: `__NEW`
  *
  * Allocates an object of type `T`, binding it as `v`
  *
  * ```
- * __ALLOC(Array_Int,a) ; a->push(1);
+ * __NEW(Array_Int,a) ; a->push(1);
  * ```
 */
 typedef char  bool;
 #define TRUE  1
 #define FALSE 0
-#define __ALLOC(T,v) T* v = (T*) malloc(sizeof(T)) ; assert (v!=NULL);
+
+#define __NEW(T,v) T* v = (T*) malloc(sizeof(T)) ; assert (v!=NULL);
+
+#define __ARRAY(T,count)    calloc(count, sizeof(T));
 
 /**
- * :: `__DEALLOC`
+ * :: `__FREE`
  *
  * Deallocates a reference to an object.
- * __ALLOC(Array_Int,a) ; __DEALLOC(a);
+ * __ALLOC(Array_Int,a) ; __FREE(a);
 */
-#define __DEALLOC(v) if (v!=NULL) {free(v);}
+#define __FREE(v) if (v!=NULL) {free(v);}
+
+#define __RESIZE(v,size)          v=realloc(v,size);
+
+#define __RESIZE_ARRAY(v,T,count) v=realloc(v,count * sizeof(T));
 
 /**
  * :: `__NEW`
