@@ -1157,7 +1157,7 @@ Match* Group_recognize(ParsingElement* this, ParsingContext* context){
 			child            = NULL;
 			break;
 		} else {
-			// Otherwise we skip to the next child
+			// Otherwise we try the next child
 			Match_free(match);
 			child  = child->next;
 			step  += 1;
