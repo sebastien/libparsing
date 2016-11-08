@@ -134,6 +134,12 @@ bool Iterator_moveTo ( Iterator* this, size_t offset ) {
 	return this->move(this, offset - this->offset );
 }
 
+char Iterator_charAt ( Iterator* this, size_t offset ) {
+	assert(this->offset == (this->current - this->buffer));
+	assert(offset <= this->available);
+	return (char)(this->buffer[offset]);
+}
+
 void Iterator_free( Iterator* this ) {
 	// FIXME: Should close input file
 	// TRACE("Iterator_free: %p", this)
@@ -486,7 +492,6 @@ int Match_countAll(Match* this) {
 
 // FIXME: Fix that
 void Match__toJSON(Match* match, int fd) {
-	printf("JSON!\n");return;
 	if (match == NULL || match->element == NULL) {return;}
 	ParsingElement* element = (ParsingElement*)match->element;
 	if (element->type != TYPE_REFERENCE) {
@@ -1553,6 +1558,10 @@ iterated_t* ParsingContext_text( ParsingContext* this ) {
 	return this->iterator->buffer;
 }
 
+char ParsingContext_charAt ( ParsingContext* this, size_t offset ) {
+	return Iterator_charAt(this->iterator, offset);
+}
+
 void ParsingContext_free( ParsingContext* this ) {
 	if (this!=NULL) {
 		ParsingVariable_freeAll(this->variables);
@@ -1703,12 +1712,8 @@ bool ParsingResult_isPartial(ParsingResult* this) {
 	return this->status == STATUS_PARTIAL;
 }
 
-bool ParsingResult_isComplete(ParsingResult* this) {
-	return this->status == STATUS_SUCCESS;
-}
-
 bool ParsingResult_isSuccess(ParsingResult* this) {
-	return this->status == STATUS_PARTIAL || this->status == STATUS_SUCCESS;
+	return this->status == STATUS_SUCCESS;
 }
 
 iterated_t* ParsingResult_text(ParsingResult* this) {

@@ -685,6 +685,8 @@ class ParsingContext(CObject):
 	void   ParsingContext_on(ParsingContext* this, ConditionCallback callback);
 	int    ParsingContext_getVariableCount(ParsingContext* this);
 	size_t ParsingContext_getOffset(ParsingContext* this);
+	char   ParsingContext_charAt ( ParsingContext* this, size_t offset );
+	void ParsingContext_free( ParsingContext* this );
 	"""
 
 	@property
@@ -694,6 +696,12 @@ class ParsingContext(CObject):
 	@property
 	def text( self ):
 		return self.iterator.buffer
+
+	def char( self, offset ):
+		return self.charAt(offset)
+
+	def __getitem__( self, offset ):
+		return self.charAt(offset)
 
 # -----------------------------------------------------------------------------
 #
@@ -777,7 +785,6 @@ class ParsingResult(CObject):
 	bool   ParsingResult_isFailure(ParsingResult* this);  // @as _isFailure
 	bool   ParsingResult_isPartial(ParsingResult* this);  // @as _isPartial
 	bool   ParsingResult_isSuccess(ParsingResult* this);  // @as _isSuccess
-	bool   ParsingResult_isComplete(ParsingResult* this); // @as _isComplete
 	int    ParsingResult_textOffset(ParsingResult* this); // @as _textOffset
 	size_t ParsingResult_remaining(ParsingResult* this);
 	"""
@@ -807,9 +814,6 @@ class ParsingResult(CObject):
 
 	def isFailure( self ):
 		return True if self._isFailure() != 0 else False
-
-	def isComplete( self ):
-		return True if self._isComplete() != 0 else False
 
 	def isPartial( self ):
 		return True if self._isPartial() != 0 else False
@@ -939,7 +943,6 @@ class HandlerException(Exception):
 	"""An exception that happened in processor handler. Stores a reference to
 	the handler as well as the arguments and context, which is super useful
 	for debugging."""
-
 
 	def __init__( self, exception, args, handler, context):
 		self.exception = exception

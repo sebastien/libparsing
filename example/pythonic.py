@@ -80,13 +80,12 @@ def grammar(verbose=False):
 
 EXAMPLE1 = """
 do this
-
 """
 
 if __name__ == "__main__":
 	g = grammar(True)
 	r = g.parseString(EXAMPLE1)
-	print (r)
+	print (r.describe())
 
 
 # EOF - vim: ts=4 sw=4 noet

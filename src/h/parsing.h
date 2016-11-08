@@ -239,6 +239,10 @@ size_t Iterator_remaining( Iterator* this );
 bool Iterator_moveTo ( Iterator* this, size_t offset );
 
 // @method
+// Gets the character at the given offset
+char Iterator_charAt ( Iterator* this, size_t offset );
+
+// @method
 bool String_move ( Iterator* this, int offset );
 
 // @define
@@ -864,6 +868,10 @@ ParsingContext* ParsingContext_new( Grammar* g, Iterator* iterator );
 iterated_t* ParsingContext_text( ParsingContext* this );
 
 // @method
+// Gets the character at the given offset
+char ParsingContext_charAt ( ParsingContext* this, size_t offset );
+
+// @method
 size_t ParsingContext_getOffset( ParsingContext* this );
 
 // @destructor
@@ -914,9 +922,6 @@ bool ParsingResult_isFailure(ParsingResult* this);
 
 // @method
 bool ParsingResult_isPartial(ParsingResult* this);
-
-// @method
-bool ParsingResult_isComplete(ParsingResult* this);
 
 // @method
 iterated_t* ParsingResult_text(ParsingResult* this);
