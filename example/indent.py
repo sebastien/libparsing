@@ -21,19 +21,15 @@ NAME:
 
 def check_indent(element, context):
 	"""Checks that the last match has the same length as the current indent."""
-	i = context.get("indent") or 0
-	o = context.lastMatch.offset or 0 if context.lastMatch else 0
-	t = 0
-	j = i
-	while o >= 0 and j > 0:
-		c = context.char(o)
-		if c == "\t":
-			t += 1
-		else:
-			break
-		j -= 1
-		o -= 1
-	return t == i
+	indent = context.get("indent") or 0
+	o      = context.offset
+	so     = max(o - indent, 0)
+	eo     = o
+	tabs   = 0
+	for i in xrange(so, eo):
+		if context[i] == "\t":
+			tabs += 1
+	return tabs == indent
 
 def indent(element, context):
 	"""Increases the required indentation"""
@@ -100,8 +96,6 @@ block:
 
 EXAMPLE3 = """
 block:
-	asdsa = 2
-	property=value
 	block:
 		property=value
 """
@@ -112,7 +106,7 @@ property=value
 """
 
 if __name__ == "__main__":
-	g = grammar(False)
+	g = grammar(True)
 	r = g.parseString(EXAMPLE3)
 	print (r.describe())
 	#r.match.toJSON(1)
