@@ -753,17 +753,8 @@ Match* ParsingElement_process( ParsingElement* this, Match* match ) {
 }
 
 size_t ParsingElement_skip( ParsingElement* this, ParsingContext* context) {
-	size_t result  = 0;
-	size_t skipped = 0;
-	do {
-		skipped = ParsingElement_skipOnce(this, context);
-		result += skipped;
-	} while (skipped > 0);
-	return skipped;
-}
-
-size_t ParsingElement_skipOnce( ParsingElement* this, ParsingContext* context) {
-	if (this == NULL || context == NULL) {return 0;}
+	if (this == NULL || context == NULL || context->flags & FLAG_SKIPPING) {return 0;}
+	context->flags = context->flags | FLAG_SKIPPING;
 	OUT_IF(context->grammar->isVerbose, " %s  ►┐", context->indent)
 	ParsingElement* skip = context->grammar->skip;
 	size_t offset        = context->iterator->offset;
@@ -773,6 +764,7 @@ size_t ParsingElement_skipOnce( ParsingElement* this, ParsingContext* context) {
 	if (skipped > 0) {
 		OUT_IF(context->grammar->isVerbose, " %s   ╘⟹skipped %zd", context->indent, skipped)
 	}
+	context->flags = context->flags & ~FLAG_SKIPPING;
 	return skipped;
 }
 
@@ -921,6 +913,7 @@ Match* Reference_recognize(Reference* this, ParsingContext* context) {
 	assert(this->element->type != TYPE_PROCEDURE || this->cardinality == CARDINALITY_ONE || this->cardinality == CARDINALITY_OPTIONAL );
 
 	// We loop while there is more data to parse, or if the element type is a procedure (or condition)
+	size_t current_offset = offset;
 	while ((Iterator_hasMore(context->iterator) || this->element->type == TYPE_PROCEDURE || this->element->type == TYPE_CONDITION)) {
 
 		// We log the current iteration, but only if we know there's going to be more than one
@@ -964,11 +957,14 @@ Match* Reference_recognize(Reference* this, ParsingContext* context) {
 		} else {
 			// If the match is not a success, then we try to skip some input
 			// and see if we get a match.
-			size_t skipped = ParsingElement_skipOnce((ParsingElement*)this, context);
+			size_t skipped = ParsingElement_skip((ParsingElement*)this, context);
 			// We only break when there's not skipped input.
 			if (skipped == 0) {
 				break;
 			}
+		}
+		if (current_offset == context->iterator->offset) {
+			break;
 		}
 	}
 
@@ -1374,7 +1370,7 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 		if (!Match_isSuccess(match)) {
 
 			Match_free(match);
-			size_t skipped = ParsingElement_skipOnce(this, context);
+			size_t skipped = ParsingElement_skip(this, context);
 
 			// If we've skipped at least one input element, then we can
 			// try the match again.
@@ -1687,6 +1683,7 @@ ParsingContext* ParsingContext_new( Grammar* g, Iterator* iterator ) {
 	this->variables = ParsingVariable_new("depth", 0);
 	this->callback  = NULL;
 	this->indent    = INDENT + (INDENT_MAX * INDENT_WIDTH);
+	this->flags     = 0;
 	return this;
 }
 
