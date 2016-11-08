@@ -1196,8 +1196,7 @@ ParsingElement* Rule_new(Reference* children[]) {
 }
 
 Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
-	OUT_IF(context->grammar->isVerbose, "??? %s┌── Rule:" BOLDYELLOW "%s" RESET " at %zd", context->indent, this->name, context->iterator->offset);
-	Reference* child  = this->children;
+
 	// An empty rule will fail. Not sure if this is the right thing to do, but
 	// if we don't set the result, it will return NULL and break assertions
 	Match*      result    = FAILURE;
@@ -1205,56 +1204,73 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 	int         step      = 0;
 	const char* step_name = NULL;
 	size_t      offset    = context->iterator->offset;
+	Reference* child      = this->children;
+
+	OUT_IF(context->grammar->isVerbose, "??? %s┌── Rule:" BOLDYELLOW "%s" RESET " at %zd", context->indent, this->name, context->iterator->offset);
+
 	// We create a new parsing variable context
 	ParsingContext_push(context);
+
 	// We don't need to care wether the parsing context has more
 	// data, the Reference_recognize will take care of it.
 	while (child != NULL) {
-		// We iterate over the children of the rule. We expect each child to
-		// match, and we might skip inbetween the children to find a match.
+
 		if (child->next != NULL) {
 			OUT_IF(context->grammar->isVerbose, " ‥%s├─" BOLDYELLOW "%d" RESET, context->indent, step);
 		} else {
 			OUT_IF(context->grammar->isVerbose, " ‥%s└─" BOLDYELLOW "%d" RESET, context->indent, step);
 		}
+
+
+		// We iterate over the children of the rule. We expect each child to
+		// match, and we might skip inbetween the children to find a match.
 		Match* match = Reference_recognize(child, context);
-		DEBUG("Rule:%s[%d]=%s %s at %zd-%zd", this->name, step, child->element->name, (Match_isSuccess(match) ? "matched" : "failed"), (Match_isSuccess(match) ?  context->iterator->offset - match->length : context->iterator->offset), context->iterator->offset);
+
+		// If the match is not a success, we will try to skip some input
+		// and try the match again.
 		if (!Match_isSuccess(match)) {
-			ParsingElement* skip = context->grammar->skip;
-			if (skip == NULL ) {
-				// We break if we had FAILURE and there is no skip defined.
-				break;
-			}
-			// DEBUG("Rule:Skipping with element %p", skip)
-			// DEBUG("Rule:Skipping with element %c#%d", skip->type, skip->id)
-			Match* skip_match    = skip->recognize(skip, context);
-			int    skip_count    = 0;
-			DEBUG_CODE(size_t skip_offset   = context->iterator->offset)
-			while (Match_isSuccess(skip_match)){skip_match = skip->recognize(skip, context); skip_count++; }
-			if (skip_count > 0) {
+
+			Match_free(match);
+			size_t skipped = ParsingElement_skipOnce(this, context);
+
+			// If we've skipped at least one input element, then we can
+			// try the match again.
+			if (skipped > 0) {
+
 				// If the rule failed, we try to skip characters. We free any
 				// failure match, as we won't need it anymore.
-				Match_free(match);
-				DEBUG("Rule:%s#%d[%d] skipped %d (%zd elements)", this->name, this->id, step, skip_count, context->iterator->offset - skip_offset);
 				match = Reference_recognize(child, context);
-			}
-			// If we haven't matched even after the skip, then we have a failure.
-			if (!Match_isSuccess(match)) {
-				// We free any failure match
-				Match_free(match);
+
+				// If we haven't matched even after the skip, then we have a failure.
+				if (!Match_isSuccess(match)) {
+					// We free any failure match
+					Match_free(match);
+					result = FAILURE;
+					// NOTE: We don't need to backtrack here, as a failure will
+					// automatically backtrack to the start offset, so we
+					// don't have the problem of skipping eating input
+					// as in Reference_recognize
+					break;
+				}
+			// If we didn't skip, then we fail the rule
+			} else {
 				result = FAILURE;
 				break;
 			}
 		}
+
+		// So we had a match
+		assert(Match_isSuccess(match));
 		if (last == NULL) {
 			// If this is the first child (ie. last == NULL), we create
 			// a new match success at the original parsing offset.
-			result = Match_Success(0, this, context);
+			result           = Match_Success(0, this, context);
 			result->offset   = offset;
 			result->children = last = match;
 		} else {
 			last = last->next = match;
 		}
+
 		// We log the step name, for debugging purposes
 		step_name = child->name;
 		// And we get the next child.
@@ -1262,22 +1278,27 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 		// We increment the step counter, used for debugging as well.
 		step++;
 	}
-	// FIXME?
+
+	// We pop the parsing context
 	ParsingContext_pop(context);
-	if (!Match_isSuccess(result)) {
-		OUT_IF( context->grammar->isVerbose && offset != context->iterator->offset, " !  %s╘ Rule " BOLDRED "%s" RESET "#%d failed on step %d=%s at %zd:%zd-%zd", context->indent, this->name, this->id, step, step_name == NULL ? "-" : step_name, context->iterator->lines, offset, context->iterator->offset)
-		// If we had a failure, then we backtrack the iterator
-		if (offset != context->iterator->offset) {
-			DEBUG( "... backtracking to %zd", offset)
-			Iterator_moveTo(context->iterator, offset);
-			assert( context->iterator->offset == offset );
-		}
-	} else {
+
+	// We process the result
+	if (Match_isSuccess(result)) {
+		OUT_IF( context->grammar->isVerbose , "[✓] %s╘═⇒ Rule " BOLDGREEN "%s" RESET "#%d[%d] matched " BOLDGREEN "%zd:%zd-%zd" RESET "[%zdb]",
+				context->indent, this->name, this->id, step, offset,context->iterator->lines,  context->iterator->offset, result->length)
 		// In case of a success, we update the length based on the last
 		// match.
 		result->length = last->offset - result->offset + last->length;
-		OUT_IF( context->grammar->isVerbose , "[✓] %s╘═⇒ Rule " BOLDGREEN "%s" RESET "#%d[%d] matched " BOLDGREEN "%zd:%zd-%zd" RESET "[%zdb]", context->indent, this->name, this->id, step, offset,context->iterator->lines,  context->iterator->offset, result->length)
+	} else {
+		OUT_IF( context->grammar->isVerbose && offset != context->iterator->offset, " !  %s╘ Rule " BOLDRED "%s" RESET "#%d failed on step %d=%s at %zd:%zd-%zd",
+				context->indent, this->name, this->id, step, step_name == NULL ? "-" : step_name, context->iterator->lines, offset, context->iterator->offset)
+		// If we had a failure, then we backtrack the iterator
+		if (offset != context->iterator->offset) {
+			Iterator_moveTo(context->iterator, offset);
+			assert( context->iterator->offset == offset );
+		}
 	}
+
 	return MATCH_STATS(result);
 }
 
