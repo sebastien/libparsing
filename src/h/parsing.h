@@ -178,7 +178,7 @@ typedef ITERATION_UNIT iterated_t;
 // @type Iterator
 typedef struct Iterator {
 	char           status;    // The status of the iterator, one of STATUS_{INIT|PROCESSING|INPUT_ENDED|ENDED}
-	char*          buffer;    // The buffer to the read data, note how it is a (void*) and not an `iterated_t`
+	char*          buffer;    // The buffer to the read data, note how it is a (char*) and not an `iterated_t`
 	iterated_t*    current;   // The pointer current offset within the buffer
 	iterated_t     separator; // The character for line separator, `\n` by default.
 	size_t         offset;    // Offset in input (in bytes), might be different from `current - buffer` if some input was freed.
@@ -187,7 +187,7 @@ typedef struct Iterator {
 	size_t         available; // Available data in buffer (in bytes), always `<= capacity`
 	bool           freeBuffer;
 	// FIXME: The head should be freed when the offsets have been parsed, no need to keep in memory stuff we won't need.
-	void*          input;     // Pointer to the input source
+	void*          input;     // Pointer to the input source (opaque structure)
 	bool          (*move) (struct Iterator*, int n); // Plug-in function to move to the previous/next positions
 } Iterator;
 
@@ -231,7 +231,7 @@ bool Iterator_hasMore( Iterator* this );
 // @method
 // Returns the number of bytes available from the current iterator's position
 // up to the last available data. For dynamic streams, where the length is
-// unknown, this should be lesser or equalt to `ITERATOR_BUFFER_AHEAD`.
+// unknown, this should be lesser or equal to `ITERATOR_BUFFER_AHEAD`.
 size_t Iterator_remaining( Iterator* this );
 
 // @method
@@ -362,10 +362,10 @@ typedef struct Match {
 	size_t          offset;     // The offset of `iterated_t` matched
 	size_t          length;     // The number of `iterated_t` matched
 	Element*        element;
-	ParsingContext* context;
 	void*           data;      // The matched data (usually a subset of the input stream)
 	struct Match*   next;      // A pointer to the next  match (see `References`)
 	struct Match*   children;  // A pointer to the child match (see `References`)
+	struct Match*   parent;    // A pointer to the parent match
 	void*           result;    // A pointer to the result of the match
 } Match;
 

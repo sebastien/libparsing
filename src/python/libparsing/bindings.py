@@ -85,10 +85,10 @@ class TMatch(ctypes.Structure):
 	size_t          offset;     // The offset of `iterated_t` matched
 	size_t          length;     // The number of `iterated_t` matched
 	Element*        element;
-	ParsingContext* context;
 	void*           data;      // The matched data (usually a subset of the input stream)
 	Match*          next;      // A pointer to the next  match (see `References`)
 	Match*          children;  // A pointer to the child match (see `References`)
+	Match*          parent;
 	void*           result;    // A pointer to the result of the match
 	"""
 

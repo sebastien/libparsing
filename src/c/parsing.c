@@ -380,7 +380,6 @@ Match* Match_Success(size_t length, Element* element, ParsingContext* context) {
 	assert( element != NULL );
 	this->status  = STATUS_MATCHED;
 	this->element = element;
-	this->context = context;
 	this->offset  = context->iterator->offset;
 	this->length  = length;
 	return this;
@@ -393,10 +392,10 @@ Match* Match_new(void) {
 	this->element   = NULL;
 	this->length    = 0;
 	this->offset    = 0;
-	this->context   = NULL;
 	this->data      = NULL;
 	this->children  = NULL;
 	this->next      = NULL;
+	this->parent    = NULL;
 	this->result    = NULL;
 	return this;
 }
@@ -894,7 +893,6 @@ Match* Word_recognize(ParsingElement* this, ParsingContext* context) {
 		// NOTE: You can see here that the word actually consumes input
 		// and moves the iterator.
 		Match* success = MATCH_STATS(Match_Success(config->length, this, context));
-		size_t offset = context->iterator->offset;
 		ASSERT(config->length > 0, "Word: %s configuration length == 0", config->word)
 		context->iterator->move(context->iterator, config->length);
 		OUT_IF(context->grammar->isVerbose, "[✓] %s└ Word %s#%d:`" CYAN "%s" RESET "` matched %zd-%zd", context->indent, this->name, this->id, ((WordConfig*)this->config)->word, context->iterator->offset - config->length, context->iterator->offset);
@@ -1048,7 +1046,6 @@ Match* Token_recognize(ParsingElement* this, ParsingContext* context) {
 const char* TokenMatch_group(Match* match, int index) {
 	assert (match                != NULL);
 	assert (match->data          != NULL);
-	assert (match->context       != NULL);
 	assert (((ParsingElement*)(match->element))->type == TYPE_TOKEN);
 	TokenMatch* m = (TokenMatch*)match->data;
 	assert (index >= 0);
@@ -1059,7 +1056,6 @@ const char* TokenMatch_group(Match* match, int index) {
 int TokenMatch_count(Match* match) {
 	assert (match                != NULL);
 	assert (match->data          != NULL);
-	assert (match->context       != NULL);
 	assert (((ParsingElement*)(match->element))->type == TYPE_TOKEN);
 	TokenMatch* m = (TokenMatch*)match->data;
 	return m->count;
@@ -1075,7 +1071,6 @@ void TokenMatch_free(Match* match) {
 	TRACE("TokenMatch_free: %p", match)
 	assert (match                != NULL);
 	assert (match->data          != NULL);
-	assert (match->context       != NULL);
 	assert (((ParsingElement*)(match->element))->type == TYPE_TOKEN);
 	TokenMatch* m = (TokenMatch*)match->data;
 #ifdef WITH_PCRE

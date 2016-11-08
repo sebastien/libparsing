@@ -6,7 +6,7 @@
 # License           : BSD License
 # -----------------------------------------------------------------------------
 # Creation date     : 2016-01-21
-# Last modification : 2016-02-10
+# Last modification : 2016-11-08
 # -----------------------------------------------------------------------------
 
 from __future__ import print_function
@@ -49,6 +49,7 @@ STATUS_MATCHED            = b'Y'
 STATUS_FAILED             = b'X'
 STATUS_INPUT_ENDED        = b'.'
 STATUS_ENDED              = b'E'
+
 # -----------------------------------------------------------------------------
 #
 # PARSING ELEMENTS
@@ -690,6 +691,10 @@ class ParsingContext(CObject):
 	def offset( self ):
 		return self.getOffset()
 
+	@property
+	def text( self ):
+		return self.iterator.buffer
+
 # -----------------------------------------------------------------------------
 #
 # PARSING STATS
@@ -814,18 +819,35 @@ class ParsingResult(CObject):
 		r = self.context.stats.matchLength or 0
 		return (o, o + r)
 
-	def textAround( self ):
-		# We should get the offset range covered by the iterator's buffer
-		# FIXME: This does not work
-		o = self.offset - self.textOffset
-		t = self.text
-		s = o
-		e = o
-		while s > 0      and t[s] != "\n": s -= 1
-		while e < len(t) and t[e] != "\n": e += 1
-		l = t[s:e]
-		i = " " * (o - s - 1) + "^"
-		return l.decode("utf8") + "\n" + i
+	def textAround( self, before=3, after=3 ):
+		t    = self.text
+		s,e  = self.lastMatchRange()
+		bt   = t[0:s].rsplit("\n", before + 1)[-before-1:]
+		at   = t[e:].split("\n", after + 1)[:after+1]
+		c    = bt[-1] + t[s:e] + at[0]
+		bc   = len(bt[-1]) * " "
+		cc   = "⤒" + (max(0,e-s)) * "⤒"
+		ac   = max(0,len(at[-1]) - 1) * " "
+		return (
+			"\n│ ".join(bt[:-1]) + \
+			"\n└┐" + c +  \
+			"\n┌┘" + bc + cc + ac + "\n│ " + \
+			"\n│ ".join(at[1:])
+		)
+
+	def describe( self ):
+		if self.isSuccess():
+			return "Parsing successful"
+		else:
+			s,e   = self.lastMatchRange ()
+			t     = self.textAround()
+			lines = self.text[:s].split("\n")
+			line  = len(lines) - 1
+			char  = len(lines[-1])
+			return "Parsing failed at line {0}:{1}, range {2}→{3}:{4}".format(
+				line, char, s, e,
+				"\n".join([_ for _ in t.split("\n")])
+			)
 
 	def __repr__( self ):
 		return "<{0}(status={2}, line={3}, char={4}, offset={5}, remaining={6}) at {1:02x}>".format(
@@ -1095,9 +1117,6 @@ class Processor(object):
 	# 	LIB.symbols.Match__walk(match._cobjectPointer, callback, 0, c_context)
 	# 	return context["result"]
 
-
-
-
 # -----------------------------------------------------------------------------
 #
 # TREE WRITER
@@ -1203,29 +1222,14 @@ class Libparsing(CLibrary):
 			elif resolved_type is TMatch:
 				# Values are most likely to be matches, and we create
 				# specific instances based on the element type
-				element_type = value.contents.element.contents.type
-				py_value     = self.MATCH_TABLE[element_type](value)
-				# NOTE: Kept here for reference
-				# if element_type == TYPE_REFERENCE:   py_value = ReferenceMatch.Wrap(value)
-				# elif element_type == TYPE_WORD:      py_value = WordMatch.Wrap(value)
-				# elif element_type == TYPE_TOKEN:     py_value = TokenMatch.Wrap(value)
-				# elif element_type == TYPE_RULE:      py_value = RuleMatch.Wrap(value)
-				# elif element_type == TYPE_GROUP:     py_value = GroupMatch.Wrap(value)
-				# elif element_type == TYPE_CONDITION: py_value = ConditionMatch.Wrap(value)
-				# elif element_type == TYPE_PROCEDURE: py_value = ProcedureMatch.Wrap(value)
-				# else: raise ValueError("Match type not supported yet: {0}".format(element_type))
+				if not value.contents or not value.contents.element:
+					py_value = None
+				else:
+					element_type = value.contents.element.contents.type
+					py_value     = self.MATCH_TABLE[element_type](value)
 			elif resolved_type is TParsingElement:
 				element_type = value.contents.type
 				py_value = self.ELEMENT_TABLE[element_type](value)
-				# NOTE: Kept here for reference
-				# if element_type == TYPE_REFERENCE:   py_value = Reference.Wrap(value)
-				# elif element_type == TYPE_WORD:      py_value = Word.Wrap(value)
-				# elif element_type == TYPE_TOKEN:     py_value = Token.Wrap(value)
-				# elif element_type == TYPE_RULE:      py_value = Rule.Wrap(value)
-				# elif element_type == TYPE_GROUP:     py_value = Group.Wrap(value)
-				# elif element_type == TYPE_CONDITION: py_value = Condition.Wrap(value)
-				# elif element_type == TYPE_PROCEDURE: py_value = Procedure.Wrap(value)
-				# else: raise ValueError("ParsingElement type not supported yet: {0} from {1}".format(element_type, wrapped))
 			elif resolved_type is TReference:
 				py_value    = Reference.Wrap(value)
 			elif resolved_type in self.ctypeToCObject:
