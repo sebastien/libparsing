@@ -97,7 +97,8 @@ bool Iterator_open( Iterator* this, const char *path ) {
 		assert(this->buffer == NULL);
 		// FIXME: Capacity should be in units, no?
 		this->capacity = sizeof(iterated_t) * ITERATOR_BUFFER_AHEAD * 2;
-		this->buffer   = __ARRAY(iterated_t, this->capacity + 1);
+		__ARRAY_NEW(new_buffer, iterated_t, this->capacity + 1)
+		this->buffer   = new_buffer;
 		assert(this->buffer != NULL);
 		this->current = (iterated_t*)this->buffer;
 		// We make sure we have a trailing \0 sign to stop any string parsing
@@ -906,7 +907,7 @@ ParsingElement* Word_new(const char* word) {
 	// causing problems with PyPy, hinting at potential allocation issues
 	// elsewhere.
 	assert(sizeof(char*) == sizeof(const char*));
-	config->word         = (const char*)strdup(word);
+	__STRING_COPY(config->word, word);
 	assert(config->length>0);
 	this->config         = config;
 	assert(this->config    != NULL);
@@ -971,7 +972,7 @@ ParsingElement* Token_new(const char* expr) {
 	// NOTE: As of 0.7.5 we now keep a copy of the string, as it was
 	// causing problems with PyPy, hinting at potential allocation issues
 	// elsewhere.
-	config->expr         = (const char*)strdup(expr);
+	__STRING_COPY(config->expr, expr);
 #ifdef WITH_PCRE
 	const char* pcre_error;
 	int         pcre_error_offset = -1;
@@ -1006,7 +1007,7 @@ void Token_free(ParsingElement* this) {
 		if (config->regexp != NULL) {}
 		if (config->extra  != NULL) {pcre_free_study(config->extra);}
 #endif
-		__FREE((void*)config->expr);
+		__FREE(config->expr);
 		__FREE(config);
 	}
 	__FREE(this);
@@ -1419,7 +1420,7 @@ void ParsingOffset_free( ParsingOffset* this ) {
 
 ParsingVariable* ParsingVariable_new(const char* key, void* value) {
 	__NEW(ParsingVariable, this);
-	this->key      = strdup(key);
+	__STRING_COPY(this->key, key);
 	this->value    = value;
 	this->previous = NULL;
 	this->parent   = NULL;
@@ -1647,8 +1648,8 @@ void ParsingStats_free(ParsingStats* this) {
 }
 
 void ParsingStats_setSymbolsCount(ParsingStats* this, size_t t) {
-	__RESIZE_ARRAY(this->successBySymbol, size_t, t);
-	__RESIZE_ARRAY(this->failureBySymbol, size_t, t);
+	__ARRAY_RESIZE(this->successBySymbol, size_t, t);
+	__ARRAY_RESIZE(this->failureBySymbol, size_t, t);
 	this->symbolsCount    = t;
 }
 
@@ -1817,7 +1818,7 @@ void Grammar_prepare ( Grammar* this ) {
 			this->skipCount = Element__walk(this->skip, Grammar__assignElementIDs, count + 1, NULL) - count;
 		}
 		// Now we register the elements
-		__RESIZE_ARRAY(this->elements, Element*, this->skipCount + this->axiomCount);
+		__ARRAY_RESIZE(this->elements, Element*, this->skipCount + this->axiomCount);
 		count = Element_walk(this->axiom, Grammar__registerElement, this);
 		if (this->skip != NULL) {
 			Element__walk(this->skip, Grammar__registerElement, count, this);
@@ -1868,7 +1869,8 @@ ParsingResult* Grammar_parseString( Grammar* this, const char* text ) {
 Processor* Processor_new() {
 	__NEW(Processor,this);
 	this->callbacksCount = 100;
-	this->callbacks      = __ARRAY( ProcessorCallback, this->callbacksCount);
+	__ARRAY_NEW(callbacks, ProcessorCallback, (size_t)this->callbacksCount);
+	this->callbacks      = callbacks;
 	this->fallback       = NULL;
 	return this;
 }
@@ -1882,7 +1884,7 @@ void Processor_register (Processor* this, int symbolID, ProcessorCallback callba
 	if (this->callbacksCount < (symbolID + 1)) {
 		int cur_count        = this->callbacksCount;
 		int new_count        = symbolID + 100;
-		__RESIZE_ARRAY(this->callbacks, ProcessorCallback, new_count);
+		__ARRAY_RESIZE(this->callbacks, ProcessorCallback, new_count);
 		this->callbacksCount = new_count;
 		// We zero the new values, as `realloc` does not guarantee zero data.
 		while (cur_count < new_count) {

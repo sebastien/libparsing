@@ -5,7 +5,7 @@
 // License           : BSD License
 // ----------------------------------------------------------------------------
 // Creation date     : 12-Dec-2014
-// Last modification : 27-Jan-2016
+// Last modification : 08-Nov-2016
 // ----------------------------------------------------------------------------
 
 #ifndef __OO__
@@ -35,21 +35,22 @@ typedef char  bool;
 #define TRUE  1
 #define FALSE 0
 
-#define __NEW(T,v) T* v = (T*) malloc(sizeof(T)) ; assert (v!=NULL);
 
-#define __ARRAY(T,count)    calloc(count, sizeof(T));
+// See <bin/memcheck.py> for hte tool that checks memory allocations.
+#ifdef MEMCHECK_ENABLED
+#define MEMCHECK_LOG(msg,...) printf(msg, __VA_ARGS__);
+#define MEMCHECK_LOG_END      printf("\t@%s:%d\n", __FILE__, __LINE__);
+#else
+#define MEMCHECK_LOG(msg,...)
+#define MEMCHECK_LOG_END
+#endif
 
-/**
- * :: `__FREE`
- *
- * Deallocates a reference to an object.
- * __ALLOC(Array_Int,a) ; __FREE(a);
-*/
-#define __FREE(v) if (v!=NULL) {free(v);}
-
-#define __RESIZE(v,size)          v=realloc(v,size);
-
-#define __RESIZE_ARRAY(v,T,count) v=realloc(v,count * sizeof(T));
+#define __NEW(T,v)                T* v = (T*) malloc(sizeof(T)); assert (v!=NULL);         MEMCHECK_LOG("memcheck:__NEW(%p)", v) MEMCHECK_LOG_END
+#define __FREE(v)                 if (v!=NULL) {MEMCHECK_LOG("memcheck:__FREE(%p)", v); v = NULL;} MEMCHECK_LOG_END
+#define __RESIZE(v,size)          MEMCHECK_LOG("memcheck:__RESIZE(%p,%zd)=", v, size) v=realloc(v,size);  MEMCHECK_LOG("=%p", v) MEMCHECK_LOG_END
+#define __STRING_COPY(v,str)      v = strdup(str) ; assert (v!=NULL); MEMCHECK_LOG("memcheck:__STRING_COPY(%p)", v) MEMCHECK_LOG_END
+#define __ARRAY_NEW(v,T,count)    T* v = (T*) calloc(count, sizeof(T)) ; assert (v!=NULL); MEMCHECK_LOG("memcheck:__ARRAY_NEW(%p, %zd * %zd)", v, sizeof(T), count) MEMCHECK_LOG_END
+#define __ARRAY_RESIZE(v,T,count) MEMCHECK_LOG("memcheck:__ARRAY_RESIZE(%p,%zd)", v, sizeof(T)*count) v=realloc(v,count * sizeof(T)); MEMCHECK_LOG("=%p", v) MEMCHECK_LOG_END
 
 /**
  * :: `__NEW`

@@ -16,7 +16,7 @@ CC       = gcc
 # TODO: Support FEATURES
 PYTHON_VERSION=2.7
 LIBS    := libpcre # libpython$(PYTHON_VERSION)
-CFLAGS  += -Isrc/h -O6 -Wall -fPIC $(FEATURES:%=-D%) -g #-pg # -DDEBUG_ENABLED -DTRACE_ENABLED
+CFLAGS  += -Isrc/h -O6 -Wall -fPIC $(FEATURES:%=-D%) -g #-DMEMCHECK_ENABLED -pg # -DDEBUG_ENABLED -DTRACE_ENABLED
 LDFLAGS :=  $(shell pkg-config --cflags --libs $(LIBS))
 PRODUCTS = lib$(PROJECT) lib$(PROJECT).so.$(VERSION) src/python/$(PY_MODULE)/$(PY_MODULE_SO)
 
