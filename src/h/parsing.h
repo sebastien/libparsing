@@ -448,6 +448,9 @@ int Match_getOffset(Match* this);
 int Match_getLength(Match* this);
 
 // @method
+int Match_getEndOffset(Match* this);
+
+// @method
 // Calls `callback` with `(Match, step, context)` as arguments, doing
 // the same for all descendants (depth-first traversal), stopping the
 // traversal when `callbacks` return 0 or less.
