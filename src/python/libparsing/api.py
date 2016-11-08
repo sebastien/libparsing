@@ -381,7 +381,7 @@ class Match(CObject):
 	void Match_free(Match* this);
 	int Match__walk(Match* this, WalkingCallback callback, int step, PyObject* context );
 	int Match_countAll(Match* this);
-	void Match_toJSON(Match* this, int fd);
+	void Match_toJSON(Match* this, int fd); // @as _toJSON
 	"""
 
 	def _init( self ):
@@ -441,6 +441,9 @@ class Match(CObject):
 	def text( self ):
 		s,e = self.range()
 		return self.context.text()[s:e]
+
+	def toJSON( self ):
+		return self._toJSON(1)
 
 	def __repr__( self ):
 		element = self.element
@@ -852,6 +855,10 @@ class ParsingResult(CObject):
 				line, char, s, e,
 				"\n".join([_ for _ in t.split("\n")])
 			)
+
+
+	def toJSON( self ):
+		return self.match.toJSON()
 
 	def __repr__( self ):
 		return "<{0}(status={2}, line={3}, char={4}, offset={5}, remaining={6}) at {1:02x}>".format(

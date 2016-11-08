@@ -41,6 +41,63 @@ const char* INDENT       = "                                                    
 
 // ----------------------------------------------------------------------------
 //
+// TOOLS
+//
+// ----------------------------------------------------------------------------
+
+char* String_escape(const char* string) {
+	const char* p = string;
+	int   n = 0;
+	int   l = 0;
+	while (*p != '\0') {
+		switch(*p) {
+			case '\n':
+			case '\t':
+			case '\r':
+			case '"':
+				n++;
+			default:
+				l++;
+		}
+		p++;
+	}
+	char* res = malloc(l + n + 1);
+	p = string;
+	n = 0;
+	l = 0;
+	while (*p != '\0') {
+		char c = *p;
+		switch(c) {
+			case '\n':
+				res[l   + n++] = '\\';
+				res[l++ + n]   = 'n';
+				break;
+			case '\t':
+				res[l   + n++] = '\\';
+				res[l++ + n]   = 't';
+				break;
+			case '\r':
+				res[l   + n++] = '\\';
+				res[l++ + n]   = 'r';
+				break;
+			case '"':
+				res[l   + n++] = '\\';
+				res[l++ + n]   = '"';
+				break;
+			default:
+				res[l + n] = c;
+				l++;
+		}
+		p++;
+	}
+	res[l + n] = '\0';
+	return res;
+}
+
+
+
+// ----------------------------------------------------------------------------
+//
 // ITERATOR
 //
 // ----------------------------------------------------------------------------
@@ -489,43 +546,115 @@ int Match_countAll(Match* this) {
 	return Match__walk(this, Match__walkCounter, 0, NULL);
 }
 
+int Match_countChildren(Match* this) {
+	int count = 0;
+	Match* child = this->children;
+	while (child!=NULL){
+		count += 1;
+		child = child->next;
+	}
+	return count;
+}
 
-// FIXME: Fix that
+// ============================================================================
+// JSON FORMATTING
+// ============================================================================
+//
+#define JSONV(format,...) printf(format, __VA_ARGS__)
+#define JSON(format)      printf(format)
+
+void Match__childrenToJSON(Match* match, int fd) {
+	int count = 0 ;
+	Match* child = match->children;
+	while (child != NULL) {
+		ParsingElement* element = ParsingElement_Ensure(child->element);
+		if (element->type != TYPE_PROCEDURE && element->type != TYPE_CONDITION) {
+			count += 1;
+		}
+		child = child->next;
+	}
+	child = match->children;
+	int i = 0;
+	while (child != NULL) {
+		ParsingElement* element = ParsingElement_Ensure(child->element);
+		if (element->type != TYPE_PROCEDURE && element->type != TYPE_CONDITION) {
+			Match__toJSON(child, fd);
+			if ( (i+1) < count ) {
+				JSON(",");
+			}
+			i += 1;
+		}
+		child = child->next;
+	}
+}
+
 void Match__toJSON(Match* match, int fd) {
-	if (match == NULL || match->element == NULL) {return;}
+	if (match == NULL || match->element == NULL) {
+		JSON("null");
+		return;
+	}
+
 	ParsingElement* element = (ParsingElement*)match->element;
-	if (element->type != TYPE_REFERENCE) {
+
+	if (element->type == TYPE_REFERENCE) {
+		Reference* ref = (Reference*)match->element;
+		if (ref->cardinality == CARDINALITY_ONE || ref->cardinality == CARDINALITY_OPTIONAL) {
+			Match__toJSON(match->children, fd);
+		} else {
+			JSON("[");
+			Match__childrenToJSON(match, fd);
+			JSON("]");
+		}
+	}
+	else if (element->type != TYPE_REFERENCE) {
 		//printf("{\"type\":\"%c\",\"name\":%s,\"start\":%l ,\"length\":%l ,\"value\":", element->type, element->name, match->offset, match->length);
-		printf("{\"value\":");
 		int i     = 0;
 		int count = 0;
+		char* word = NULL;
 		switch(element->type) {
 			case TYPE_WORD:
-				//printf("\"%s\"", Word_word(element));
+				word = String_escape(Word_word(element));
+				JSONV("\"%s\"", word);
+				free(word);
 				break;
 			case TYPE_TOKEN:
 				count = TokenMatch_count(match);
-				printf("[");
+				if (count>1) {JSON("[");}
 				for (i=0 ; i < count ; i++) {
-					printf("\"%s\"", TokenMatch_group(match, i));
-					if (i + 1 < count) {printf(",");}
+					word = String_escape(TokenMatch_group(match, i));
+					JSONV("\"%s\"", word);
+					free(word);
+					if ((i + 1) < count) {JSON(",X");}
 				}
-				printf("]");
+				if (count>1) {JSON("]");}
 				break;
 			case TYPE_GROUP:
+				if (match->children == NULL)  {
+					JSON("GROUP:undefined");
+				} else {
+					Match__toJSON(match->children, fd);
+				}
 				break;
 			case TYPE_RULE:
-				printf("[");
-				printf("]");
+				JSON("[");
+				Match__childrenToJSON(match, fd);
+				JSON("]");
 				break;
+			case TYPE_PROCEDURE:
+				break;
+			case TYPE_CONDITION:
+				break;
+			default:
+				JSONV("\"ERROR:undefined element type=%c\"", element->type);
 		}
-		printf("}");
+	} else {
+		JSONV("\"ERROR:unsupported element type=%c\"", element->type);
 	}
 }
 
 // @method
 void Match_toJSON(Match* this, int fd) {
-	//Match__toJSON(this, 1);
+	Match__toJSON(this, 1);
 }
 
 // ----------------------------------------------------------------------------
@@ -549,6 +678,13 @@ bool ParsingElement_Is(void *this) {
 		default:
 			return FALSE;
 	}
+}
+
+ParsingElement* ParsingElement_Ensure(void* elementOrReference) {
+	void * element = elementOrReference;
+	assert(element!=NULL);
+	assert(Reference_Is(element) || ParsingElement_Is(element));
+	return Reference_Is(element) ? ((Reference*)element)->element : (ParsingElement*)element;
 }
 
 ParsingElement* ParsingElement_new(Reference* children[]) {

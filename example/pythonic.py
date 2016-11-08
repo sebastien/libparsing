@@ -67,7 +67,7 @@ def grammar(verbose=False):
 
 	g.group("Program", s.Block.zeroOrMore())
 
-	g.axiom = s.Statement
+	g.axiom = s.Program
 	g.skip  = s.WHITESPACE
 
 	return g
@@ -82,11 +82,33 @@ EXAMPLE1 = """
 do this
 """
 
+EXAMPLE2 = """
+if condition:
+	do this
+"""
+
+EXAMPLE3 = """
+if condition:
+	do this
+else:
+	do that
+"""
+
+EXAMPLE3 = """
+if condition:
+	do this
+	if other:
+		lorem ipsum
+	else:
+		dolor sit amet
+else:
+	do that
+"""
+
 if __name__ == "__main__":
-	g = grammar(True)
-	r = g.parseString(EXAMPLE1)
-	print r
-	#time.sleep(5)
+	g = grammar(False)
+	r = g.parseString(EXAMPLE3)
+	r.toJSON()
 
 
 # EOF - vim: ts=4 sw=4 noet

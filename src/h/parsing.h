@@ -464,6 +464,13 @@ int Match__walk(Match* this, WalkingCallback callback, int step, void* context )
 int Match_countAll(Match* this);
 
 // @method
+int Match_countChildren(Match* this);
+
+// @method
+// Protected method
+void Match__toJSON(Match* match, int fd);
+
+// @method
 void Match_toJSON(Match* this, int fd);
 
 // @type ParsingElement
@@ -490,6 +497,8 @@ ParsingElement* ParsingElement_new(Reference* children[]);
 
 // @destructor
 void ParsingElement_free(ParsingElement* this);
+
+ParsingElement* ParsingElement_Ensure(void* referenceOfElement);
 
 // @method
 // Adds a new reference as child of this parsing element. This will only
