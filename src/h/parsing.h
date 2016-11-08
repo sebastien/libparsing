@@ -30,7 +30,7 @@
 
 #ifndef __PARSING_H__
 #define __PARSING_H__
-#define __PARSING_VERSION__ "0.8.2"
+#define __PARSING_VERSION__ "0.8.0"
 
 /**
  * #  libparsing
@@ -175,8 +175,6 @@ typedef ITERATION_UNIT iterated_t;
  *
 */
 
-// FIXME: Rework the notion of freeing the input, it does not work.
-
 // @type Iterator
 typedef struct Iterator {
 	char           status;    // The status of the iterator, one of STATUS_{INIT|PROCESSING|INPUT_ENDED|ENDED}
@@ -237,32 +235,11 @@ bool Iterator_hasMore( Iterator* this );
 size_t Iterator_remaining( Iterator* this );
 
 // @method
-// A variant of `Iterator_remaining` that takes the offset from
-// which to calculate the remaining elements.
-size_t Iterator_remainingAt( Iterator* this, size_t offset );
-
-// @method
 // Moves the iterator to the given offset
 bool Iterator_moveTo ( Iterator* this, size_t offset );
 
 // @method
-// Returns the text fragment starting at `offset` in this
-// iterator. This might return NULL if the input is not available anymore.
-iterated_t* Iterator_text ( Iterator* this, size_t offset );
-
-// @method
-// Returns the offset of the buffer, which might be different
-// from the offset within the input stream (in case some of the input
-// has been discarded).
-size_t Iterator_bufferOffset( Iterator* this );
-
-// @method
-char Iterator_char ( Iterator* this, size_t offset );
-
-// @method
 bool String_move ( Iterator* this, int offset );
-
-
 
 // @define
 // The number of `iterated_t` that should be loaded after the iterator's
@@ -469,6 +446,9 @@ int Match_getOffset(Match* this);
 
 // @method
 int Match_getLength(Match* this);
+
+// @method
+int Match_getEndOffset(Match* this);
 
 // @method
 // Calls `callback` with `(Match, step, context)` as arguments, doing
@@ -881,10 +861,7 @@ typedef struct ParsingContext {
 ParsingContext* ParsingContext_new( Grammar* g, Iterator* iterator );
 
 // @method
-iterated_t* ParsingContext_text( ParsingContext* this, size_t offset );
-
-// @method
-char ParsingContext_char( ParsingContext* this, size_t offset );
+iterated_t* ParsingContext_text( ParsingContext* this );
 
 // @method
 size_t ParsingContext_getOffset( ParsingContext* this );

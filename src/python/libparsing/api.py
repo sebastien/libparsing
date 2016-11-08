@@ -6,7 +6,7 @@
 # License           : BSD License
 # -----------------------------------------------------------------------------
 # Creation date     : 2016-01-21
-# Last modification : 2016-02-10
+# Last modification : 2016-11-08
 # -----------------------------------------------------------------------------
 
 from __future__ import print_function
@@ -49,6 +49,7 @@ STATUS_MATCHED            = b'Y'
 STATUS_FAILED             = b'X'
 STATUS_INPUT_ENDED        = b'.'
 STATUS_ENDED              = b'E'
+
 # -----------------------------------------------------------------------------
 #
 # PARSING ELEMENTS
@@ -684,7 +685,6 @@ class ParsingContext(CObject):
 	void   ParsingContext_on(ParsingContext* this, ConditionCallback callback);
 	int    ParsingContext_getVariableCount(ParsingContext* this);
 	size_t ParsingContext_getOffset(ParsingContext* this);
-	char   ParsingContext_char(ParsingContext* this, size_t offset);
 	"""
 
 	@property
@@ -848,7 +848,6 @@ class ParsingResult(CObject):
 				line, char, s, e,
 				"\n".join([_ for _ in t.split("\n")])
 			)
-
 
 	def __repr__( self ):
 		return "<{0}(status={2}, line={3}, char={4}, offset={5}, remaining={6}) at {1:02x}>".format(
@@ -1228,27 +1227,9 @@ class Libparsing(CLibrary):
 				else:
 					element_type = value.contents.element.contents.type
 					py_value     = self.MATCH_TABLE[element_type](value)
-					# NOTE: Kept here for reference
-					# if element_type == TYPE_REFERENCE:   py_value = ReferenceMatch.Wrap(value)
-					# elif element_type == TYPE_WORD:      py_value = WordMatch.Wrap(value)
-					# elif element_type == TYPE_TOKEN:     py_value = TokenMatch.Wrap(value)
-					# elif element_type == TYPE_RULE:      py_value = RuleMatch.Wrap(value)
-					# elif element_type == TYPE_GROUP:     py_value = GroupMatch.Wrap(value)
-					# elif element_type == TYPE_CONDITION: py_value = ConditionMatch.Wrap(value)
-					# elif element_type == TYPE_PROCEDURE: py_value = ProcedureMatch.Wrap(value)
-					# else: raise ValueError("Match type not supported yet: {0}".format(element_type))
 			elif resolved_type is TParsingElement:
 				element_type = value.contents.type
 				py_value = self.ELEMENT_TABLE[element_type](value)
-				# NOTE: Kept here for reference
-				# if element_type == TYPE_REFERENCE:   py_value = Reference.Wrap(value)
-				# elif element_type == TYPE_WORD:      py_value = Word.Wrap(value)
-				# elif element_type == TYPE_TOKEN:     py_value = Token.Wrap(value)
-				# elif element_type == TYPE_RULE:      py_value = Rule.Wrap(value)
-				# elif element_type == TYPE_GROUP:     py_value = Group.Wrap(value)
-				# elif element_type == TYPE_CONDITION: py_value = Condition.Wrap(value)
-				# elif element_type == TYPE_PROCEDURE: py_value = Procedure.Wrap(value)
-				# else: raise ValueError("ParsingElement type not supported yet: {0} from {1}".format(element_type, wrapped))
 			elif resolved_type is TReference:
 				py_value    = Reference.Wrap(value)
 			elif resolved_type in self.ctypeToCObject:
