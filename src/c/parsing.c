@@ -1307,7 +1307,7 @@ Match* Group_recognize(ParsingElement* this, ParsingContext* context){
 
 	// We've either found one element, or nothing
 	if (Match_isSuccess(result)) {
-		OUT_STEP( "[✓] %s╘═⇒ Group " BOLDGREEN "%s" RESET "#%d[%d] matched" BOLDGREEN "%zd:%zd-%zd" RESET "[%zd][→%d]", context->indent, this->name, this->id, step, result->offset, context->iterator->lines, context->iterator->offset, result->length, context->depth)
+		OUT_STEP( "[✓] %s╘═⇒ Group " BOLDGREEN "%s" RESET "#%d[%d] matched" BOLDGREEN "%zd:%zd-%zd" RESET "[%zd][→%d]", context->indent, this->name, this->id, step,  context->iterator->lines, result->offset, context->iterator->offset, result->length, context->depth)
 		return MATCH_STATS(result);
 	} else {
 		// If no child has succeeded, the whole group fails
@@ -1347,7 +1347,7 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 	size_t      offset    = context->iterator->offset;
 	Reference* child      = this->children;
 
-	OUT_STEP("??? %s┌── Rule:" BOLDYELLOW "%s" RESET " at %zd", context->indent, this->name, context->iterator->offset);
+	OUT_STEP("??? %s┌── Rule:" BOLDYELLOW "%s" RESET " at %zd:%zd[→%d]", context->indent, this->name, context->iterator->lines, context->iterator->offset, context->depth);
 
 	// We create a new parsing variable context
 	ParsingContext_push(context);
@@ -1426,7 +1426,7 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 	// We process the result
 	if (Match_isSuccess(result)) {
 		OUT_STEP("[✓] %s╘═⇒ Rule " BOLDGREEN "%s" RESET "#%d[%d] matched " BOLDGREEN "%zd:%zd-%zd" RESET "[%zdb][→%d]",
-				context->indent, this->name, this->id, step, offset,context->iterator->lines,  context->iterator->offset, result->length, context->depth)
+				context->indent, this->name, this->id, step, context->iterator->lines,  offset, context->iterator->offset, result->length, context->depth)
 		// In case of a success, we update the length based on the last
 		// match.
 		result->length = last->offset - result->offset + last->length;
