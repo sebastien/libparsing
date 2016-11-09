@@ -35,6 +35,8 @@ typedef char  bool;
 #define TRUE  1
 #define FALSE 0
 
+#define HAS_FLAG(v,flag) (v & flag)
+
 
 // See <bin/memcheck.py> for hte tool that checks memory allocations.
 #ifdef MEMCHECK_ENABLED
