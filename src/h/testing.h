@@ -1,4 +1,4 @@
-#define DEBUG_ENABLED 1
+#define WITH_DEBUG 1
 #include "oo.h"
 
 // extern int started;

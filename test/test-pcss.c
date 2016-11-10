@@ -1,5 +1,4 @@
-#!/usr/bin/tcc -run
-#include "../src/parsing.h"
+#include "parsing.h"
 
 int main (void) {
 	// We define the grammar

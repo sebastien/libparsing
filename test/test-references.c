@@ -1,6 +1,6 @@
-#define TRACE_ENABLED 1
-#include "../src/testing.h"
-#include "../src/parsing.h"
+#define WITH_TRACE 1
+#include "testing.h"
+#include "parsing.h"
 
 void test_reference_creation() {
 	ParsingElement*  word = Word_new("HELLO");

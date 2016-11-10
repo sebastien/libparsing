@@ -39,7 +39,7 @@ typedef char  bool;
 
 
 // See <bin/memcheck.py> for hte tool that checks memory allocations.
-#ifdef MEMCHECK_ENABLED
+#ifdef WITH_MEMCHECK
 #define MEMCHECK_LOG(msg,...) printf(msg, __VA_ARGS__);
 #define MEMCHECK_LOG_END      printf("\t@%s:%d\n", __FILE__, __LINE__);
 #else
@@ -120,7 +120,7 @@ typedef char  bool;
 
 #define PUBLIC /* @public */
 
-#ifdef DEBUG_ENABLED
+#ifdef WITH_DEBUG
 #define DEBUG(msg,...)   fprintf(DEBUG_STREAM,   "--- ");fprintf(DEBUG_STREAM,   msg, __VA_ARGS__);fprintf(DEBUG_STREAM,   "\n");
 #define DEBUG_IF(cond,msg,...)   if (cond) {DEBUG(msg, __VA_ARGS__);}
 #define DEBUG_CODE(_) _ ;
@@ -130,7 +130,7 @@ typedef char  bool;
 #define DEBUG_CODE(_)            ;
 #endif
 
-#ifdef TRACE_ENABLED
+#ifdef WITH_TRACE
 #define TRACE(msg,...)   fprintf(DEBUG_STREAM,   "--- ");fprintf(DEBUG_STREAM,   msg, __VA_ARGS__);fprintf(DEBUG_STREAM,   "\n");
 #else
 #define TRACE(msg,...)          ;
@@ -143,7 +143,7 @@ typedef char  bool;
 #define LOG_IF(cond,msg,...)     if(cond){LOG(msg, __VA_ARGS__);}
 #define OUT_IF(cond,msg,...)     if(cond){OUT(msg, __VA_ARGS__);}
 
-#ifdef DEBUG_ENABLED
+#ifdef WITH_DEBUG
 #define ASSERT(v,msg,...) if(!(v)){DEBUG(msg,__VA_ARGS__);abort();}
 #else
 #define ASSERT(v,msg,...) /* */
