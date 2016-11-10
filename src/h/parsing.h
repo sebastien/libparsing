@@ -1175,6 +1175,8 @@ Match* Utilites_checkIndent( ParsingElement *this, ParsingContext* context );
 // If a parsing element is given, it will be automatically wrapped in a reference.
 #define MANY_OPTIONAL(v)  Reference_cardinality(Reference_Ensure(v), CARDINALITY_MANY_OPTIONAL)
 
+#include "parsing+python.h"
+
 /*
  * Grammar declaration with macros
  * -------------------------------

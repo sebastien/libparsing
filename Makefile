@@ -28,6 +28,11 @@ endif
 ifneq (,$(findstring python3,$(FEATURES)))
 	LIBS +=python3
 endif
+ifneq (,$(findstring debug,$(FEATURES)))
+	CFLAGS+=-Og
+else
+	CFLAGS+=-O3
+endif
 
 # === PATHS ===================================================================
 
@@ -50,10 +55,9 @@ TESTS_PY       =$(wildcard $(TESTS)/test-*.py)
 
 # === BUILD FILES =============================================================
 
-OBJECTS         =$(SOURCES_C:$(SOURCES)/c/%.c=$(BUILD)/%.o)
-OBJECTS        +=$(TESTS_C:$(TESTS)/%.c=$(BUILD)/%.o)
-
-PY_MODULE_SO    :=__$(PYMODULE).so
+BUILD_SOURCES_O =$(SOURCES_C:$(SOURCES)/c/%.c=$(BUILD)/%.o)
+BUILD_TESTS_O   =$(TESTS_C:$(TESTS)/%.c=$(BUILD)/%.o)
+BUILD_O         =$(BUILD_SOURCES_O) $(BUILD_TESTS_O)
 
 # === DIST FILES ==============================================================
 
@@ -61,15 +65,22 @@ DIST_BIN      = $(TESTS_C:$(TESTS)/%.c=$(DIST)/%)
 DIST_SO       = $(DIST)/lib$(PROJECT).so $(DIST)/lib$(PROJECT).so.$(VERSION) 
 DIST_FILES    = $(DIST_BIN) $(DIST_SO)
 
-PRODUCTS      = $(DIST_FILES)
-
 # === COMPILER FILES ==========================================================
 
 CC       ?= gcc
 CFEATURES =`echo $(FEATURES:%=-DWITH_%) | tr a-z A-Z`
 CFLAGS   +=$(shell pkg-config --cflags $(LIBS))
-CFLAGS   +=-I$(SOURCES)/h -O6 -Wall -fPIC $(CFEATURES) -g #-DMEMCHECK_ENABLED -pg # -DDEBUG_ENABLED -DTRACE_ENABLED
+CFLAGS   +=-I$(SOURCES)/h -Wall -fPIC $(CFEATURES) -g #-DMEMCHECK_ENABLED -pg # -DDEBUG_ENABLED -DTRACE_ENABLED
 LDFLAGS  +=$(shell pkg-config --cflags --libs $(LIBS))
+
+# === DEPENDENCY MANAGEMENT ===================================================
+# SEE: http://make.mad-scientist.net/papers/advanced-auto-dependency-generation/
+
+DEPDIR  := .build/d
+$(shell mkdir -p $(DEPDIR) >/dev/null)
+DEPFLAGS    = -MT $@ -MMD -MP -MF $(DEPDIR)/$*.Td
+COMPILE.c   = $(CC)  $(DEPFLAGS) $(CFLAGS)  $(TARGET_ARCH) -c
+POSTCOMPILE = mv -f $(DEPDIR)/$*.Td $(DEPDIR)/$*.d
 
 # === META ====================================================================
 
@@ -104,7 +115,6 @@ all: $(PRODUCTS) ## Builds all the products
 info: ## Displays information about the project
 	@echo libparsing: $(VERSION)
 
-
 dist: $(PRODUCT) $(DIST_FILES) ## Creates source and binary Python distributions
 	$(PYTHON) setup.py check clean sdist bdist_wheel
 
@@ -134,7 +144,7 @@ check: $(SOURCES_C) $(SOURCES_H) ## Runs checks on the source code
 
 clean: ## Cleans the build files
 	@find . -name __pycache__ -exec rm -rf '{}' ';' ; true
-	@rm -rf $(DIST) *.egg-info $(OBJECTS) $(PRODUCTS) $(TEST_PRODUCTS); true
+	@rm -rf $(DIST) *.egg-info $(BUILD_O) $(PRODUCTS) $(TEST_PRODUCTS); true
 
 help: ## Displays a description of the different Makefile rules
 	@echo "$(CYAN)★★★ $(PROJECT) makefile ★★★$(RESET)"
@@ -144,20 +154,28 @@ help: ## Displays a description of the different Makefile rules
 # PRODUCTS
 # =============================================================================
 
-$(DIST)/lib%.so: $(BUILD)/%.o
+$(DIST)/lib%.so: $(BUILD_SOURCES_O)
 	@echo "$(GREEN)📝  $@ [LD]$(RESET)"
 	@mkdir -p `dirname $@`
-	$(LD) -shared -lpcre $< -o $@
+	$(LD) -shared $(LDFLAGS) $< -o $@
 
-$(DIST)/lib%.so.$(VERSION): $(BUILD)/%.o
+$(DIST)/lib%.a: $(BUILD_SOURCES_O)
 	@echo "$(GREEN)📝  $@ [LD]$(RESET)"
 	@mkdir -p `dirname $@`
-	$(LD) -shared -lpcre $< -o $@
+	$(LD) $(LDFLAGS) $< -o $@
 
-$(DIST)/test-%: $(BUILD)/test-%.o $(BUILD)/parsing.o
+$(DIST)/lib%.so.$(VERSION): $(DIST)/lib%.so
+	@echo "$(GREEN)📝  $@ [CP]$(RESET)"
+	@cp $< $@
+
+$(DIST)/lib%.a.$(VERSION): $(DIST)/lib%.a
+	@echo "$(GREEN)📝  $@ [CP]$(RESET)"
+	@cp $< $@
+
+$(DIST)/test-%: $(BUILD)/test-%.o $(BUILD_SOURCES_O)
 	@echo "$(GREEN)📝  $@ [CC ]$(RESET)"
 	@mkdir -p `dirname $@`
-	$(CC) $? $(LDFLAGS) -o $@
+	$(COMPILE.c) $(OUTPUT_OPTION) -o $@ $?
 	chmod +x $@
 
 # =============================================================================
@@ -174,17 +192,22 @@ $(SOURCES)/python/$(PYMODULE)/$(PYMODULE_SO): $(PRODUCT_SO)
 $(BUILD)/test-%.o: $(TESTS)/test-%.c $(SOURCES_H)
 	@echo "$(GREEN)📝  $@ [CC TEST]$(RESET)"
 	@mkdir -p `dirname $@`
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(COMPILE.c) $(OUTPUT_OPTION) $@ $<
 
-$(BUILD)/%.o: $(SOURCES)/c/%.c $(SOURCES)/h/%.h $(SOURCES)/h/oo.h
+$(BUILD)/%.o: $(SOURCES)/c/%.c $(DEPDIR)/%.d
 	@echo "$(GREEN)📝  $@ [CC SOURCE]$(RESET)"
 	@mkdir -p `dirname $@`
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(COMPILE.c) $(OUTPUT_OPTION) $@ $<
+
+$(DEPDIR)/%.d: ;
+.PRECIOUS: $(DEPDIR)/%.d
 
 # === HELPERS =================================================================
 
 print-%:
 	@echo $*=
 	@echo $($*) | xargs -n1 echo | sort -dr
+
+-include $(patsubst %,$(DEPDIR)/%.d,$(basename $(SRCS)))
 
 # EOF
