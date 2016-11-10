@@ -24,9 +24,11 @@ ifneq (,$(findstring pcre,$(FEATURES)))
 endif
 ifneq (,$(findstring python2,$(FEATURES)))
 	LIBS +=python2
+	CFLAGS+=-DWITH_PYTHON
 endif
 ifneq (,$(findstring python3,$(FEATURES)))
 	LIBS +=python3
+	CFLAGS+=-DWITH_PYTHON
 endif
 ifneq (,$(findstring debug,$(FEATURES)))
 	CFLAGS+=-Og
@@ -58,17 +60,20 @@ TESTS_PY       =$(wildcard $(TESTS)/test-*.py)
 BUILD_SOURCES_O =$(SOURCES_C:$(SOURCES)/c/%.c=$(BUILD)/%.o)
 BUILD_TESTS_O   =$(TESTS_C:$(TESTS)/%.c=$(BUILD)/%.o)
 BUILD_O         =$(BUILD_SOURCES_O) $(BUILD_TESTS_O)
+BUILD_SO        =$(SOURCES)/python/lib$(PROJECT)/__lib$(PROJECT).so
+BUILD_ALL       =$(BUILD_O) $(BUILD_SO)
 
 # === DIST FILES ==============================================================
 
-DIST_BIN      = $(TESTS_C:$(TESTS)/%.c=$(DIST)/%)
+#DIST_BIN      = $(TESTS_C:$(TESTS)/%.c=$(DIST)/%)
 DIST_SO       = $(DIST)/lib$(PROJECT).so $(DIST)/lib$(PROJECT).so.$(VERSION) 
 DIST_FILES    = $(DIST_BIN) $(DIST_SO)
+PRODUCTS      = $(DIST_FILES)
 
 # === COMPILER FILES ==========================================================
 
 CC       ?= gcc
-CFEATURES =`echo $(FEATURES:%=-DWITH_%) | tr a-z A-Z`
+CFEATURES:=$(shell echo $(FEATURES:%=-DWITH_%) | tr a-z A-Z)
 CFLAGS   +=$(shell pkg-config --cflags $(LIBS))
 CFLAGS   +=-I$(SOURCES)/h -Wall -fPIC $(CFEATURES) -g #-DMEMCHECK_ENABLED -pg # -DDEBUG_ENABLED -DTRACE_ENABLED
 LDFLAGS  +=$(shell pkg-config --cflags --libs $(LIBS))
@@ -109,7 +114,7 @@ MAKEFILE_DIR    := $(notdir $(patsubst %/,%,$(dir $(MAKEFILE_PATH))))
 # MAIN RULES
 # =============================================================================
 
-all: $(PRODUCTS) ## Builds all the products
+all: $(PRODUCTS) $(BUILD_ALL) ## Builds all the products
 	
 
 info: ## Displays information about the project
@@ -154,50 +159,42 @@ help: ## Displays a description of the different Makefile rules
 # PRODUCTS
 # =============================================================================
 
-$(DIST)/lib%.so: $(BUILD_SOURCES_O)
-	@echo "$(GREEN)📝  $@ [LD]$(RESET)"
+$(DIST)/lib$(PROJECT).so: $(BUILD_SOURCES_O)
+	@echo "$(GREEN)📝  $@ [SO]$(RESET)"
 	@mkdir -p `dirname $@`
-	$(LD) -shared $(LDFLAGS) $< -o $@
+	$(LD) -shared $(LDFLAGS) $? -o $@
 
-$(DIST)/lib%.a: $(BUILD_SOURCES_O)
-	@echo "$(GREEN)📝  $@ [LD]$(RESET)"
-	@mkdir -p `dirname $@`
-	$(LD) $(LDFLAGS) $< -o $@
-
-$(DIST)/lib%.so.$(VERSION): $(DIST)/lib%.so
-	@echo "$(GREEN)📝  $@ [CP]$(RESET)"
+$(DIST)/lib$(PROJECT).so.$(VERSION): $(DIST)/lib$(PROJECT).so
+	@echo "$(GREEN)📝  $@ [SO $(VERSION)]$(RESET)"
 	@cp $< $@
 
-$(DIST)/lib%.a.$(VERSION): $(DIST)/lib%.a
-	@echo "$(GREEN)📝  $@ [CP]$(RESET)"
-	@cp $< $@
-
-$(DIST)/test-%: $(BUILD)/test-%.o $(BUILD_SOURCES_O)
-	@echo "$(GREEN)📝  $@ [CC ]$(RESET)"
+$(DIST)/test-%: $(BUILD)/test-%.o $(SOURCES_O)
+	@echo "$(GREEN)📝  $@ [EXE]$(RESET)"
 	@mkdir -p `dirname $@`
-	$(COMPILE.c) $(OUTPUT_OPTION) -o $@ $?
+	$(CC) -L$(DIST) -static -l$(PROJECT) $(OUTPUT_OPTION) $?
 	chmod +x $@
 
 # =============================================================================
 # PYTHON MODULE
 # =============================================================================
 
-$(SOURCES)/python/$(PYMODULE)/$(PYMODULE_SO): $(PRODUCT_SO)
-	cp $< $@
+$(SOURCES)/python/lib$(PROJECT)/__lib$(PROJECT).so: $(DIST)/lib$(PROJECT).so
+	@echo "$(GREEN)📝  $@ [PYTHON SO]$(RESET)"
+	@cp $< $@
 
 # =============================================================================
 # OBJECTS
 # =============================================================================
 
-$(BUILD)/test-%.o: $(TESTS)/test-%.c $(SOURCES_H)
-	@echo "$(GREEN)📝  $@ [CC TEST]$(RESET)"
+$(BUILD)/test-%.o: $(TESTS)/test-%.c $(SOURCES_H) Makefile
+	@echo "$(GREEN)📝  $@ [C TEST]$(RESET)"
 	@mkdir -p `dirname $@`
-	$(COMPILE.c) $(OUTPUT_OPTION) $@ $<
+	$(COMPILE.c) $(OUTPUT_OPTION) $<
 
-$(BUILD)/%.o: $(SOURCES)/c/%.c $(DEPDIR)/%.d
-	@echo "$(GREEN)📝  $@ [CC SOURCE]$(RESET)"
+$(BUILD)/%.o: $(SOURCES)/c/%.c $(DEPDIR)/%.d Makefile
+	@echo "$(GREEN)📝  $@ [C SOURCE]$(RESET)"
 	@mkdir -p `dirname $@`
-	$(COMPILE.c) $(OUTPUT_OPTION) $@ $<
+	$(COMPILE.c) $(OUTPUT_OPTION) $<
 
 $(DEPDIR)/%.d: ;
 .PRECIOUS: $(DEPDIR)/%.d

@@ -971,8 +971,10 @@ class Processor(object):
 	if it is a composite symbol (rule, group, etc). The named elements
 	are the ones you declare using `_as`."""
 
+
 	def __init__( self, grammar=None ):
 		self.setGrammar(grammar)
+		LIB.symbols.Processor_dispatchPython(None, [1,2,3,4,5])
 
 	def setGrammar( self, grammar ):
 		self.result       = None
@@ -1185,6 +1187,10 @@ class Libparsing(CLibrary):
 		TYPE_PROCEDURE  : Procedure.Wrap,
 	}
 
+	DECLARES = """
+	PyObject* Processor_dispatchPython( Match* match, PyObject* callback );
+	"""
+
 	@classmethod
 	def Init( cls ):
 		"""Initializes the types and structures defined in libparsing."""
@@ -1193,7 +1199,7 @@ class Libparsing(CLibrary):
 		# It's OK if they're void* instead of the actual structure definition.
 		cls.IsInitialized = True
 
-	def __init__( self, name="_libparsing"):
+	def __init__( self, name="__libparsing"):
 		self.__class__.Init()
 		CLibrary.__init__(self, name)
 		self.register(

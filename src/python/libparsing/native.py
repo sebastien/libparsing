@@ -6,7 +6,7 @@
 # License           : BSD License
 # -----------------------------------------------------------------------------
 # Creation date     : 2016-01-21
-# Last modification : 2016-11-02
+# Last modification : 2016-11-10
 # -----------------------------------------------------------------------------
 
 import ctypes, os, re, sys, weakref, types, inspect
@@ -233,6 +233,7 @@ class CLibrary:
 		"/usr/lib",
 		"/lib",
 	]
+	DECLARES = None
 	PREFIX = [""]
 	EXT    = ["", ".so", ".ld", ".dyld"]
 
@@ -267,6 +268,7 @@ class CLibrary:
 		self._cdll   = self.Load(path)
 		self.symbols = CLibrary.Symbols()
 		self.ctypeToCObject = {}
+		if self.DECLARES: self.declare(self.DECLARES)
 
 	def register( self, *wrapperClasses ):
 		"""Register the given `CObject` in this library, loading the
@@ -274,17 +276,21 @@ class CLibrary:
 		for _ in wrapperClasses:
 			_.LIBRARY = self
 			assert issubclass(_, CObject)
-			# We load the functions from the library
-			functions = C.LoadFunctions(self._cdll, _.GetFunctions(), _.WRAPPED)
-			for func, proto in functions:
-				name = proto[0][0]
-				# print ("L:Library: binding symbol {0} with {1} → {2}".format(name, func.argtypes, func.restype))
-				self.symbols.__dict__[name] = func
+			functions = self.declare(_.GetFunctions(), selfType=_.WRAPPED)
 			# We bind the functions declared in the wrapper
 			_.BindFunctions(functions)
 			_.BindFields()
 			self.ctypeToCObject[_.WRAPPED] = _
 		return self
+
+	def declare( self, prototypes, selfType=None ):
+		# We load the functions from the library
+		functions = C.LoadFunctions(self._cdll, prototypes, selfType)
+		for func, proto in functions:
+			name = proto[0][0]
+			# print ("L:Library: binding symbol {0} with {1} → {2}".format(name, func.argtypes, func.restype))
+			self.symbols.__dict__[name] = func
+		return functions
 
 	def wrap( self, cValue ):
 		"""Wraps the given C value in a Python object."""

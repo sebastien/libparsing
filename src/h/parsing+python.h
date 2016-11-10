@@ -1,8 +1,10 @@
 #ifdef WITH_PYTHON
-#ifndef __PARSING+PYTHON_H__
-#define __PARSING+PYTHON_H__
+#ifndef __PARSING_PYTHON_H__
+#define __PARSING_PYTHON_H__
 
-void Processor_dispatchPython( Match* match, PyObject* callback );
+#include <Python.h>
+
+PyObject* Processor_dispatchPython( Match* match, PyObject* callback );
 
 #endif
 #endif

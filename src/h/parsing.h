@@ -8,9 +8,14 @@
 // Last modification : 31-Nov-2016
 // ----------------------------------------------------------------------------
 
- /* Enable certain library functions (strdup) on linux.  See feature_test_macros(7) */
-#define _XOPEN_SOURCE 500
+#ifndef __PARSING_H__
+#define __PARSING_H__
+#define __PARSING_VERSION__ "0.8.0"
 
+ /* Enable certain library functions (strdup) on linux.  See feature_test_macros(7) */
+#ifdef _XOPEN_SOURCE
+#define _XOPEN_SOURCE 700
+#endif
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -23,14 +28,7 @@
 #ifdef WITH_PCRE
 #include <pcre.h>
 #endif
-#ifdef WITH_PYTHON
-#include <Python.h>
-#endif
 #include "oo.h"
-
-#ifndef __PARSING_H__
-#define __PARSING_H__
-#define __PARSING_VERSION__ "0.8.0"
 
 /**
  * #  libparsing
