@@ -6,12 +6,23 @@
 PyObject* Processor_dispatchPython( Match* match, PyObject* callbacks ) {
 	if (match == NULL) {return NULL;}
 
-	int i                   = PyList_Size(callbacks);
 	ParsingElement* element = (ParsingElement*)match->element;
 	PyObject* callback      = PyList_GET_ITEM(callbacks, element->id);
-	PyObject* value         = NULL;
+	printf("Element:%d\n", element->id);
 
-	int count               = Match_countChildren(match);
+	Py_RETURN_NONE;
+
+	/*
+	return Py_BuildValue("(i)", 10);
+
+	int i                   = PyList_Size(callbacks);
+	//ParsingElement* element = (ParsingElement*)match->element;
+	printf("POUET\n")
+	//PyObject* callback      = PyList_GET_ITEM(callbacks, element->id);
+	//PyObject* value         = NULL;
+
+	//int count               = Match_countChildren(match);
+	count = 0;
 
 	if (count==0) {
 		switch (element->type) {
@@ -52,6 +63,7 @@ PyObject* Processor_dispatchPython( Match* match, PyObject* callbacks ) {
 	Py_DECREF(range);
 	Py_DECREF(args);
 	return result;
+	*/
 
 }
 
