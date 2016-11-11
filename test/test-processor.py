@@ -39,6 +39,7 @@ def run():
 	# callbacks = [process] * ids
 	callbacks = [lambda x,y:process(x)] * 100
 	res = LIB.symbols.Match_processPython(p.match._cobject, callbacks)
+	print ("Res", res)
 
 if __name__ == "__main__":
 	run()

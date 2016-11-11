@@ -166,7 +166,7 @@ bool Iterator_open( Iterator* this, const char *path ) {
 		((char*)this->buffer)[this->capacity] = '\0';
 		assert(strlen(((char*)this->buffer)) == 0);
 		FileInput_preload(this);
-		DEBUG("Iterator_open: strlen(buffer)=%zd/%zd", strlen((char*)this->buffer), this->capacity);
+		DEBUG("Iterator_open: strlen(buffer)=%zu/%zu", strlen((char*)this->buffer), this->capacity);
 		this->move   = FileInput_move;
 		ENSURE(input->file);
 		return TRUE;
@@ -177,7 +177,7 @@ bool Iterator_open( Iterator* this, const char *path ) {
 
 bool Iterator_hasMore( Iterator* this ) {
 	size_t remaining = Iterator_remaining(this);
-	// DEBUG("Iterator_hasMore: %zd, offset=%zd available=%zd capacity=%zd ", remaining, this->offset, this->available, this->capacity)
+	// DEBUG("Iterator_hasMore: %zu, offset=%zu available=%zu capacity=%zu ", remaining, this->offset, this->available, this->capacity)
 	// NOTE: This used to be STATUS_ENDED, but I changed it to the actual.
 	return remaining > 0;
 }
@@ -187,7 +187,7 @@ size_t Iterator_remaining( Iterator* this ) {
 	// FIXME: Does not work if iterated_t is not the same as char
 	int remaining = this->available - buffer_offset;
 	assert(remaining >= 0);
-	//DEBUG("Iterator_remaining: %d, offset=%zd available=%zd capacity=%zd", remaining, this->offset, this->available, this->capacity)
+	//DEBUG("Iterator_remaining: %d, offset=%zu available=%zu capacity=%zu", remaining, this->offset, this->available, this->capacity)
 	return (size_t)remaining;
 }
 
@@ -208,7 +208,6 @@ void Iterator_free( Iterator* this ) {
 		__FREE(this->buffer);
 	}
 	__FREE(this);
-
 }
 
 // ----------------------------------------------------------------------------
@@ -222,7 +221,7 @@ bool String_move ( Iterator* this, int n ) {
 	if ( n == 0) {
 		// --- STAYING IN PLACE -----------------------------------------------
 		// We're not moving position
-		DEBUG("String_move: did not move (n=%d) offset=%zd/length=%zd, available=%zd, current-buffer=%ld\n", n, this->offset, this->capacity, this->available, this->current - this->buffer);
+		DEBUG("String_move: did not move (n=%d) offset=%zu/length=%zu, available=%zu, current-buffer=%ud\n", n, this->offset, this->capacity, this->available, (unsigned int)(this->current - this->buffer));
 		return TRUE;
 	} else if ( n >= 0 ) {
 		// --- MOVING FORWARD -------------------------------------------------
@@ -241,7 +240,7 @@ bool String_move ( Iterator* this, int n ) {
 		}
 		// We then store the amount of available
 		left = this->available - this->offset;
-		// DEBUG("String_move: moved forward by c=%zd, n=%d offset=%zd capacity=%zd, available=%zd, current-buffer=%ld", c_copy, n, this->offset, this->capacity, this->available, this->current - this->buffer);
+		// DEBUG("String_move: moved forward by c=%zu, n=%d offset=%zu capacity=%zu, available=%zu, current-buffer=%ld", c_copy, n, this->offset, this->capacity, this->available, this->current - this->buffer);
 		if (left == 0) {
 			// If we have no more available elements, then the status of
 			// the stream is STATUS_ENDED
@@ -263,7 +262,7 @@ bool String_move ( Iterator* this, int n ) {
 			this->status  = STATUS_PROCESSING;
 		}
 		assert(Iterator_remaining(this) >= 0 - n);
-		DEBUG("String_move: moved backwards by n=%d offset=%zd/length=%zd, available=%zd, current-buffer=%ld", n, this->offset, this->capacity, this->available, this->current - this->buffer);
+		DEBUG("String_move: moved backwards by n=%d offset=%zu/length=%zu, available=%zu, current-buffer=%ud", n, this->offset, this->capacity, this->available, (unsigned int)(this->current - this->buffer));
 		return TRUE;
 	}
 }
@@ -301,9 +300,7 @@ size_t FileInput_preload( Iterator* this ) {
 	size_t       read          = this->current   - this->buffer;
 	size_t       left          = this->available - read;
 	size_t       until_eob     = this->capacity  - read;
-	DEBUG("FileInput_preload: %zd read, %zd available/%zd buffer capacity [%c]", read, this->available, this->capacity, this->status);
-	assert (read >= 0);
-	assert (left >= 0);
+	DEBUG("FileInput_preload: %zu read, %zu available/%zu buffer capacity [%c]", read, this->available, this->capacity, this->status);
 	assert (left < this->capacity);
 	// Do the number of bytes up until the end of the buffer is less than
 	// ITERATOR_BUFFER_AHEAD, then we need to expand the the buffer and make
@@ -318,7 +315,7 @@ size_t FileInput_preload( Iterator* this ) {
 		this->capacity += ITERATOR_BUFFER_AHEAD;
 		// This assertion is a bit weird, but it does not hurt
 		assert(this->capacity + 1 > 0);
-		DEBUG("<<< FileInput: growing buffer to %zd", this->capacity + 1)
+		DEBUG("<<< FileInput: growing buffer to %zu", this->capacity + 1)
 		// FIXME: Not sure that realloc is a good idea, as any previous pointer
 		// to the buffer would change...
 		__RESIZE(this->buffer, this->capacity + 1);
@@ -329,14 +326,14 @@ size_t FileInput_preload( Iterator* this ) {
 		this->buffer[this->capacity] = '\0';
 		// We want to read as much as possible so that we fill the buffer
 		size_t to_read         = this->capacity - left;
-		size_t read            = fread((void*)this->buffer + this->available, sizeof(iterated_t), to_read, input->file);
+		size_t read            = fread((iterated_t*)this->buffer + this->available, sizeof(iterated_t), to_read, input->file);
 		this->available        += read;
 		left                   += read;
-		DEBUG("<<< FileInput: read %zd bytes from input, available %zd, remaining %zd", read, this->available, Iterator_remaining(this));
+		DEBUG("<<< FileInput: read %zu bytes from input, available %zu, remaining %zu", read, this->available, Iterator_remaining(this));
 		assert(Iterator_remaining(this) == left);
 		assert(Iterator_remaining(this) >= read);
 		if (read == 0) {
-			 DEBUG("FileInput_preload: End of file reached with %zd bytes available", this->available);
+			 DEBUG("FileInput_preload: End of file reached with %zu bytes available", this->available);
 			this->status = STATUS_INPUT_ENDED;
 		}
 	}
@@ -361,7 +358,7 @@ bool FileInput_move   ( Iterator* this, int n ) {
 				if (*(this->current) == this->separator) {this->lines++;}
 				c--;
 			}
-			DEBUG("[>] %d+%d == %zd (%zd bytes left)", ((int)this->offset) - n, n, this->offset, left);
+			DEBUG("[>] %d+%d == %zu (%zu bytes left)", ((int)this->offset) - n, n, this->offset, left);
 			if (n>left) {
 				this->status = STATUS_INPUT_ENDED;
 				return FALSE;
@@ -369,7 +366,7 @@ bool FileInput_move   ( Iterator* this, int n ) {
 				return TRUE;
 			}
 		} else {
-			DEBUG("FileInput_move: end of input stream reach at %zd", this->offset);
+			DEBUG("FileInput_move: end of input stream reach at %zu", this->offset);
 			assert (this->status == STATUS_INPUT_ENDED || this->status == STATUS_ENDED);
 			this->status = STATUS_ENDED;
 			return FALSE;
@@ -377,13 +374,13 @@ bool FileInput_move   ( Iterator* this, int n ) {
 	} else {
 		// The assert below is temporary, once we figure out when to free the input data
 		// that we don't need anymore this would work.
-		ASSERT(this->capacity > this->offset, "FileInput_move: offset is greater than capacity (%zd > %zd)", this->offset, this->capacity)
+		ASSERT(this->capacity > this->offset, "FileInput_move: offset is greater than capacity (%zu > %zu)", this->offset, this->capacity)
 		// We make sure that `n` is not bigger than the length of the available buffer
 		n = ((int)this->capacity )+ n < 0 ? 0 - (int)this->capacity : n;
 		this->current = (((char*)this->current) + n);
 		this->offset += n;
 		if (n!=0) {this->status  = STATUS_PROCESSING;}
-		DEBUG("[<] %d%d == %zd (%zd available, %zd capacity, %zd bytes left)", ((int)this->offset) - n, n, this->offset, this->available, this->capacity, Iterator_remaining(this));
+		DEBUG("[<] %d%d == %zu (%zu available, %zu capacity, %zu bytes left)", ((int)this->offset) - n, n, this->offset, this->available, this->capacity, Iterator_remaining(this));
 		assert(Iterator_remaining(this) >= 0 - n);
 		return TRUE;
 	}
@@ -764,7 +761,7 @@ size_t ParsingElement_skip( ParsingElement* this, ParsingContext* context) {
 	Match_free(skip->recognize(skip, context));
 	size_t skipped = context->iterator->offset - offset;
 	if (skipped > 0) {
-		OUT_IF(context->grammar->isVerbose, " %s   ►►►skipped %zd", context->indent, skipped)
+		OUT_IF(context->grammar->isVerbose, " %s   ►►►skipped %zu", context->indent, skipped)
 	}
 	context->flags = context->flags & ~FLAG_SKIPPING;
 	return skipped;
@@ -1044,7 +1041,6 @@ ParsingElement* Word_new(const char* word) {
 	// NOTE: As of 0.7.5 we now keep a copy of the string, as it was
 	// causing problems with PyPy, hinting at potential allocation issues
 	// elsewhere.
-	assert(sizeof(char*) == sizeof(const char*));
 	__STRING_COPY(config->word, word);
 	assert(config->length>0);
 	this->config         = config;
@@ -1078,10 +1074,10 @@ Match* Word_recognize(ParsingElement* this, ParsingContext* context) {
 		Match* success = MATCH_STATS(Match_Success(config->length, this, context));
 		ASSERT(config->length > 0, "Word: %s configuration length == 0", config->word)
 		context->iterator->move(context->iterator, config->length);
-		OUT_STEP("[✓] %s└ Word %s#%d:`" CYAN "%s" RESET "` matched %zd:%zd-%zd[→%d]", context->indent, this->name, this->id, ((WordConfig*)this->config)->word, context->iterator->lines, context->iterator->offset - config->length, context->iterator->offset, context->depth);
+		OUT_STEP("[✓] %s└ Word %s#%d:`" CYAN "%s" RESET "` matched %zu:%zu-%zu[→%d]", context->indent, this->name, this->id, ((WordConfig*)this->config)->word, context->iterator->lines, context->iterator->offset - config->length, context->iterator->offset, context->depth);
 		return success;
 	} else {
-		OUT_STEP(" !  %s└ Word %s#%d:" CYAN "`%s`" RESET " failed at %zd:%zd[→%d]", context->indent, this->name, this->id, ((WordConfig*)this->config)->word, context->iterator->lines, context->iterator->offset, context->depth);
+		OUT_STEP(" !  %s└ Word %s#%d:" CYAN "`%s`" RESET " failed at %zu:%zu[→%d]", context->indent, this->name, this->id, ((WordConfig*)this->config)->word, context->iterator->lines, context->iterator->offset, context->depth);
 		return MATCH_STATS(FAILURE);
 	}
 }
@@ -1158,9 +1154,9 @@ const char* Token_expr(ParsingElement* this) {
 Match* Token_recognize(ParsingElement* this, ParsingContext* context) {
 	assert(this->config);
 	if(this->config == NULL) {return FAILURE;}
-	TokenConfig* config     = (TokenConfig*)this->config;
 	Match* result           = NULL;
 #ifdef WITH_PCRE
+	TokenConfig* config = (TokenConfig*)this->config;
 	// NOTE: This has to be a multiple of 3, according to `man pcre_exec`
 	int vector_length = 30;
 	int vector[vector_length];
@@ -1188,7 +1184,7 @@ Match* Token_recognize(ParsingElement* this, ParsingContext* context) {
 			case PCRE_ERROR_NOMEMORY     : ERROR("Token:%s Ran out of memory", config->expr);                       break;
 			default                      : ERROR("Token:%s Unknown error", config->expr);                           break;
 		};
-		OUT_STEP("    %s└✘Token " BOLDRED "%s" RESET "#%d:`" CYAN "%s" RESET "` failed at %zd:%zd", context->indent, this->name, this->id, config->expr, context->iterator->lines, context->iterator->offset);
+		OUT_STEP("    %s└✘Token " BOLDRED "%s" RESET "#%d:`" CYAN "%s" RESET "` failed at %zu:%zu", context->indent, this->name, this->id, config->expr, context->iterator->lines, context->iterator->offset);
 	} else {
 		if(r == 0) {
 			ERROR("Token: %s many substrings matched\n", config->expr);
@@ -1201,7 +1197,7 @@ Match* Token_recognize(ParsingElement* this, ParsingContext* context) {
 		}
 		// FIXME: Make sure it is the length and not the end offset
 		result           = Match_Success(vector[1], this, context);
-		OUT_STEP("[✓] %s└ Token " BOLDGREEN "%s" RESET "#%d:" CYAN "`%s`" RESET " matched " BOLDGREEN "%zd:%zd-%zd" RESET, context->indent, this->name, this->id, config->expr, context->iterator->lines, context->iterator->offset, context->iterator->offset + result->length);
+		OUT_STEP("[✓] %s└ Token " BOLDGREEN "%s" RESET "#%d:" CYAN "`%s`" RESET " matched " BOLDGREEN "%zu:%zu-%zu" RESET, context->indent, this->name, this->id, config->expr, context->iterator->lines, context->iterator->offset, context->iterator->offset + result->length);
 
 		// We create the token match
 		__NEW(TokenMatch, data);
@@ -1256,8 +1252,8 @@ void TokenMatch_free(Match* match) {
 	assert (match                != NULL);
 	assert (match->data          != NULL);
 	assert (((ParsingElement*)(match->element))->type == TYPE_TOKEN);
-	TokenMatch* m = (TokenMatch*)match->data;
 #ifdef WITH_PCRE
+	TokenMatch* m = (TokenMatch*)match->data;
 	if (m != NULL ) {
 		for (int j=0 ; j<m->count ; j++) {
 			pcre_free_substring(m->groups[j]);
@@ -1282,7 +1278,7 @@ ParsingElement* Group_new(Reference* children[]) {
 Match* Group_recognize(ParsingElement* this, ParsingContext* context){
 
 	// The goal is to find ONE (and only one) matching element.
-	OUT_STEP("??? %s┌── Group " BOLDYELLOW "%s" RESET ":#%d at %zd:%zd[→%d]", context->indent, this->name, this->id, context->iterator->lines, context->iterator->offset, context->depth);
+	OUT_STEP("??? %s┌── Group " BOLDYELLOW "%s" RESET ":#%d at %zu:%zu[→%d]", context->indent, this->name, this->id, context->iterator->lines, context->iterator->offset, context->depth);
 	Match*     result           = NULL;
 	size_t     offset           = context->iterator->offset;
 	int        step             = 0;
@@ -1311,11 +1307,11 @@ Match* Group_recognize(ParsingElement* this, ParsingContext* context){
 
 	// We've either found one element, or nothing
 	if (Match_isSuccess(result)) {
-		OUT_STEP( "[✓] %s╘═⇒ Group " BOLDGREEN "%s" RESET "#%d[%d] matched" BOLDGREEN "%zd:%zd-%zd" RESET "[%zd][→%d]", context->indent, this->name, this->id, step,  context->iterator->lines, result->offset, context->iterator->offset, result->length, context->depth)
+		OUT_STEP( "[✓] %s╘═⇒ Group " BOLDGREEN "%s" RESET "#%d[%d] matched" BOLDGREEN "%zu:%zu-%zu" RESET "[%zu][→%d]", context->indent, this->name, this->id, step,  context->iterator->lines, result->offset, context->iterator->offset, result->length, context->depth)
 		return MATCH_STATS(result);
 	} else {
 		// If no child has succeeded, the whole group fails
-		OUT_STEP(" !  %s╘═⇒ Group " BOLDRED "%s" RESET "#%d[%d] failed at %zd:%zd-%zd[→%d]", context->indent, this->name, this->id, step, context->iterator->lines, context->iterator->offset, offset, context->depth)
+		OUT_STEP(" !  %s╘═⇒ Group " BOLDRED "%s" RESET "#%d[%d] failed at %zu:%zu-%zu[→%d]", context->indent, this->name, this->id, step, context->iterator->lines, context->iterator->offset, offset, context->depth)
 		if (context->iterator->offset != offset ) {
 			Iterator_moveTo(context->iterator, offset);
 			assert( context->iterator->offset == offset );
@@ -1351,7 +1347,7 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 	size_t      offset    = context->iterator->offset;
 	Reference* child      = this->children;
 
-	OUT_STEP("??? %s┌── Rule:" BOLDYELLOW "%s" RESET " at %zd:%zd[→%d]", context->indent, this->name, context->iterator->lines, context->iterator->offset, context->depth);
+	OUT_STEP("??? %s┌── Rule:" BOLDYELLOW "%s" RESET " at %zu:%zu[→%d]", context->indent, this->name, context->iterator->lines, context->iterator->offset, context->depth);
 
 	// We create a new parsing variable context
 	ParsingContext_push(context);
@@ -1429,13 +1425,13 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 
 	// We process the result
 	if (Match_isSuccess(result)) {
-		OUT_STEP("[✓] %s╘═⇒ Rule " BOLDGREEN "%s" RESET "#%d[%d] matched " BOLDGREEN "%zd:%zd-%zd" RESET "[%zdb][→%d]",
+		OUT_STEP("[✓] %s╘═⇒ Rule " BOLDGREEN "%s" RESET "#%d[%d] matched " BOLDGREEN "%zu:%zu-%zu" RESET "[%zub][→%d]",
 				context->indent, this->name, this->id, step, context->iterator->lines,  offset, context->iterator->offset, result->length, context->depth)
 		// In case of a success, we update the length based on the last
 		// match.
 		result->length = last->offset - result->offset + last->length;
 	} else {
-		OUT_STEP(" !  %s╘ Rule " BOLDRED "%s" RESET "#%d failed on step %d=%s at %zd:%zd-%zd[→%d]",
+		OUT_STEP(" !  %s╘ Rule " BOLDRED "%s" RESET "#%d failed on step %d=%s at %zu:%zu-%zu[→%d]",
 				context->indent, this->name, this->id, step, step_name == NULL ? "-" : step_name, context->iterator->lines, offset, context->iterator->offset, context->depth)
 		// If we had a failure, then we backtrack the iterator
 		if (offset != context->iterator->offset) {
@@ -1466,7 +1462,7 @@ Match*  Procedure_recognize(ParsingElement* this, ParsingContext* context) {
 		// FIXME: Executing handlers is still quite problematic
 		((ProcedureCallback)(this->config))(this, context);
 	}
-	OUT_STEP_IF(strcmp(this->name, "_") != 0, "[✓] %sProcedure " BOLDGREEN "%s" RESET "#%d executed at %zd", context->indent, this->name, this->id, context->iterator->offset)
+	OUT_STEP_IF(strcmp(this->name, "_") != 0, "[✓] %sProcedure " BOLDGREEN "%s" RESET "#%d executed at %zu", context->indent, this->name, this->id, context->iterator->offset)
 	return MATCH_STATS(Match_Success(0, this, context));
 }
 
@@ -1492,11 +1488,11 @@ Match*  Condition_recognize(ParsingElement* this, ParsingContext* context) {
 		// We support special cases where the condition can return a boolean
 		if      (result == (Match*)0) { result = FAILURE; }
 		else if (result == (Match*)1) { result = Match_Success(0, this, context);}
-		OUT_STEP_IF(Match_isSuccess(result), "[✓] %s└ Condition " BOLDGREEN "%s" RESET "#%d matched %zd:%zd-%zd[→%d]", context->indent, this->name, this->id, context->iterator->lines, context->iterator->offset - result->length, context->iterator->offset, context->depth)
-		OUT_STEP_IF(!Match_isSuccess(result), " !  %s└ Condition " BOLDRED "%s" RESET "#%d failed at %zd:%zd[→%d]",  context->indent, this->name, this->id, context->iterator->lines, context->iterator->offset, context->depth)
+		OUT_STEP_IF(Match_isSuccess(result), "[✓] %s└ Condition " BOLDGREEN "%s" RESET "#%d matched %zu:%zu-%zu[→%d]", context->indent, this->name, this->id, context->iterator->lines, context->iterator->offset - result->length, context->iterator->offset, context->depth)
+		OUT_STEP_IF(!Match_isSuccess(result), " !  %s└ Condition " BOLDRED "%s" RESET "#%d failed at %zu:%zu[→%d]",  context->indent, this->name, this->id, context->iterator->lines, context->iterator->offset, context->depth)
 		return  MATCH_STATS(result);
 	} else {
-		OUT_STEP("[✓] %s└ Condition %s#%d matched by default at %zd", context->indent, this->name, this->id, context->iterator->offset)
+		OUT_STEP("[✓] %s└ Condition %s#%d matched by default at %zu", context->indent, this->name, this->id, context->iterator->offset)
 		Match* result = Match_Success(0, this, context);
 		assert(Match_isSuccess(result));
 		return  MATCH_STATS(result);
@@ -1574,9 +1570,8 @@ void ParsingVariable_free(ParsingVariable* this) {
 
 void ParsingVariable_freeAll(ParsingVariable* this) {
 	ParsingVariable* current = this;
-	ParsingVariable* to_free = NULL;
 	while (current!=NULL) {
-		to_free = current;
+		ParsingVariable* to_free = current;
 		current = current->previous;
 		ParsingVariable_free(to_free);
 	}
@@ -1648,10 +1643,9 @@ ParsingVariable* ParsingVariable_pop(ParsingVariable* this) {
 	if (this == NULL) {return NULL;}
 	ParsingVariable* parent   = this->parent;
 	ParsingVariable* current  = this;
-	ParsingVariable* to_free  = NULL;
 	// We want to pop any variable until the current cell is the parent
 	while (current != NULL && current != parent) {
-		to_free = current;
+		ParsingVariable* to_free  = current;
 		assert(current != current->previous);
 		current = current->previous;
 		ParsingVariable_free(to_free);
@@ -1796,7 +1790,7 @@ Match* ParsingStats_registerMatch(ParsingStats* this, Element* e, Match* m) {
 	// We can convert ParsingElements to Reference and vice-versa as they
 	// have the same start sequence (char type, int id).
 	Reference* r = (Reference*)e;
-	if (Match_isSuccess(m)) {
+	if (m!=NULL && Match_isSuccess(m)) {
 		this->successBySymbol[r->id] += 1;
 		if (m->offset >= this->matchOffset) {
 			this->matchOffset = m->offset;
@@ -1805,7 +1799,7 @@ Match* ParsingStats_registerMatch(ParsingStats* this, Element* e, Match* m) {
 	} else {
 		this->failureBySymbol[r->id] += 1;
 		// We register the deepest failure
-		if(m->offset >= this->failureOffset) {
+		if(m != NULL && m->offset >= this->failureOffset) {
 			this->failureOffset  = m->offset;
 			this->failureElement = m->element;
 		}
@@ -1828,14 +1822,14 @@ ParsingResult* ParsingResult_new(Match* match, ParsingContext* context) {
 	this->context = context;
 	if (match != FAILURE) {
 		if (Iterator_hasMore(context->iterator) && Iterator_remaining(context->iterator) > 0) {
-			LOG_IF(context->grammar->isVerbose, "Partial success, parsed %zd bytes, %zd remaining", context->iterator->offset, Iterator_remaining(context->iterator));
+			LOG_IF(context->grammar->isVerbose, "Partial success, parsed %zu bytes, %zu remaining", context->iterator->offset, Iterator_remaining(context->iterator));
 			this->status = STATUS_PARTIAL;
 		} else {
-			LOG_IF(context->grammar->isVerbose, "Succeeded, iterator at %zd, parsed %zd bytes, %zd remaining", context->iterator->offset, context->stats->bytesRead, Iterator_remaining(context->iterator));
+			LOG_IF(context->grammar->isVerbose, "Succeeded, iterator at %zu, parsed %zu bytes, %zu remaining", context->iterator->offset, context->stats->bytesRead, Iterator_remaining(context->iterator));
 			this->status = STATUS_SUCCESS;
 		}
 	} else {
-		LOG_IF(context->grammar->isVerbose, "Failed, parsed %zd bytes, %zd remaining", context->iterator->offset, Iterator_remaining(context->iterator))
+		LOG_IF(context->grammar->isVerbose, "Failed, parsed %zu bytes, %zu remaining", context->iterator->offset, Iterator_remaining(context->iterator))
 		this->status = STATUS_FAILED;
 	}
 	return this;
@@ -2015,7 +2009,6 @@ Processor* Processor_new() {
 }
 
 void Processor_free(Processor* this) {
-	__FREE(this);
 	__FREE(this);
 }
 

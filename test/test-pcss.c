@@ -207,10 +207,10 @@ int main (void) {
 		// Below is a simple test on how to iterate on the file
 		// int count = 0;
 		// while (FileInput_next(i)) {
-		// 	DEBUG("Read %c at %zd/%zd\n", *i->current, i->offset, i->available);
+		// 	DEBUG("Read %c at %zu/%zu\n", *i->current, i->offset, i->available);
 		// 	count += 1;
 		// }
-		printf("Status %c, read %zd/%zd bytes\n", r->status, r->context->iterator->offset, r->context->iterator->available);
+		printf("Status %c, read %zu/%zu bytes\n", r->status, r->context->iterator->offset, r->context->iterator->available);
 		// NOTE: The following core dumps
 		// ParsingResult_free(r);
 	}
