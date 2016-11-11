@@ -24,8 +24,8 @@ def grammar():
 	g.skip  = s.WHITESPACE
 	return g
 
-def process( value, r ):
-	print (value, r)
+def process( value=None, r=None ):
+	print "CALLING!", value, r
 	return value
 
 def run():
@@ -39,8 +39,7 @@ def run():
 	# 		ids = max(ids, v.id)
 	# 		m[v.id] = process
 	# callbacks = [process] * ids
-	callbacks = []
-	print ("DISPACTCH:1")
+	callbacks = [lambda x:process(x)] * 100
 	res = LIB.symbols.Processor_dispatchPython(p.match._cobject, callbacks)
 	print ("RES", res)
 	print ("DISPACTCH:2")

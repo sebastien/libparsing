@@ -4,25 +4,23 @@
 
 // SEE: http://stackoverflow.com/questions/10247779/python-c-api-functions-that-borrow-and-steal-references#10250720
 PyObject* Processor_dispatchPython( Match* match, PyObject* callbacks ) {
+
 	if (match == NULL) {return NULL;}
 
+	if(!Py_IsInitialized())
+	{
+		Py_Initialize();
+		PyEval_InitThreads(); //Initialize Python thread ability
+		PyEval_ReleaseLock(); //Release the implicit lock on the Python GIL
+	}
+
+	Py_XINCREF(callbacks);
 	ParsingElement* element = (ParsingElement*)match->element;
-	PyObject* callback      = PyList_GET_ITEM(callbacks, element->id);
-	printf("Element:%d\n", element->id);
+	PyObject* callback      = PyList_Check(callbacks) && PyList_GET_SIZE(callbacks) > element->id ? PyList_GetItem(callbacks, element->id) : NULL;
+	PyObject* value         = NULL;
+	Py_XINCREF(callback);
 
-	Py_RETURN_NONE;
-
-	/*
-	return Py_BuildValue("(i)", 10);
-
-	int i                   = PyList_Size(callbacks);
-	//ParsingElement* element = (ParsingElement*)match->element;
-	printf("POUET\n")
-	//PyObject* callback      = PyList_GET_ITEM(callbacks, element->id);
-	//PyObject* value         = NULL;
-
-	//int count               = Match_countChildren(match);
-	count = 0;
+	int count               = Match_countChildren(match);
 
 	if (count==0) {
 		switch (element->type) {
@@ -34,9 +32,9 @@ PyObject* Processor_dispatchPython( Match* match, PyObject* callbacks ) {
 				break;
 			case TYPE_CONDITION:
 			case TYPE_PROCEDURE:
-				break;
 			default:
-				break;
+				value = Py_None;
+				Py_INCREF(value);
 		}
 	}
 	else {
@@ -55,15 +53,28 @@ PyObject* Processor_dispatchPython( Match* match, PyObject* callbacks ) {
 
 	}
 
-	PyObject* range  = Py_BuildValue("(i,i)", match->offset, match->offset + match->length);
-	PyObject* args   = PyTuple_Pack(2, value ,range);
-	PyObject* result = PyObject_CallObject(callback, args);
-
-	Py_DECREF(value);
-	Py_DECREF(range);
-	Py_DECREF(args);
-	return result;
-	*/
+	// NOTE: New versions of Python have PyCallable_Check
+	// SEE:  http://svn.python.org/projects/python/trunk/Objects/object.c
+	if (callback!=NULL && PyFunction_Check(callback) ) {
+		assert(value != NULL);
+		printf("Is callable!\n");
+		PyObject* range  = Py_BuildValue("(i,i)", match->offset, match->offset + match->length);
+		PyObject* args   = Py_BuildValue("(i)",1);
+		// NOTE: This is super important, as otherwise it segfaults
+		PyGILState_STATE gstate; gstate = PyGILState_Ensure();
+		PyObject* result = PyObject_CallObject(callback, args);
+		PyGILState_Release(gstate);
+		Py_DECREF(value);
+		Py_DECREF(range);
+		Py_DECREF(args);
+		Py_XDECREF(callback);
+		Py_XDECREF(callbacks);
+		return result;
+	} else {
+		Py_XDECREF(callback);
+		Py_XDECREF(callbacks);
+		return value;
+	}
 
 }
 
