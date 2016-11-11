@@ -984,6 +984,7 @@ class Processor(object):
 		return None
 
 	def setGrammar( self, grammar ):
+		if grammar == self._grammar: return
 		self._grammar  = grammar
 		self._handlers = None
 		if grammar:
@@ -999,21 +1000,19 @@ class Processor(object):
 					h[v.id] = self._getHandler(v)
 					l.append(v)
 			self._handlers = [self._defaultHandler] * n
-			self._symbols = l
-			for element in l:
+			self._symbols = sorted(l, lambda a,b:cmp(int(a.id),int(b.id)))
+			for element in self._symbols:
 				self._handlers[element.id] = self._getHandler(element)
 
 	def process( self, match ):
 		if isinstance(match, ParsingResult): match = match.match
 		if isinstance(match, Match):
-			print ("PROCESS", match, self._handlers[match.element.id])
-			return LIB.symbols.Match_processPython(match._cobject, [lambda a,b,c:self._defaultHandler(a,b,c)]) #self._handlers)
+			return LIB.symbols.Match_processPython(match._cobject, self._handlers)
 		else:
 			return match
 
 	def _defaultHandler( self, match=None, range=None, id=None ):
-		print ("DEFAULT HANDLER", match, this._symbols[id])
-		return ("POUET", match)
+		return match
 
 	def _getHandler( self, element ):
 		name = element.name
@@ -1021,17 +1020,41 @@ class Processor(object):
 		mname   = "on" + name[0].upper() + name[1:]
 		mid     = "on" + str(i)
 		handler = self._defaultHandler
-		# if hasattr(self, mname):
-		# 	handler = self._wrapHandler(getattr(self, mname), element)
-		# elif hasattr(self, mid):
-		# 	handler = self._wrapHandler(getattr(self, mid), element)
+		if hasattr(self, mname):
+			print ("Element", element.id, element.name, "=", mname)
+			handler = self._wrapHandler(getattr(self, mname), element)
+		elif hasattr(self, mid):
+			print ("Element", element.id, element.name, "=", mid)
+			handler = self._wrapHandler(getattr(self, mid), element)
+		else:
+			print ("Element", element.id, name)
 		return handler
 
-	def _wrapHandler( self, function, element ):
-		print ("WRAP HANLDERS", function)
+	def _wrapHandler( self, handler, element ):
+		params = inspect.getargspec(handler).args
+		params = params[2:] if params[0]=="self" else params[1]
+		has_range = "range" in params
+		has_id    = "id"    in params
+		# We create simple wrappers for the regular cases, where
+		# the handler is h(match), h(match,range), h(match,range,id)
+		if len(params) == 0:
+			return lambda m,r,i:handler(m)
+		elif len(params) == 1 and params[0] == "range":
+			return lambda m,r,i:handler(m,r)
+		elif len(params) == 2 and params[0] == "range" and params[1] == "id":
+			return lambda m,r,i:handler(m,r,i)
+		# Now we're in a more complex case where we need to extract variables
+		kwargs         = [_ for _ in params if _ not in ("range", "id")]
+		slots          = dict( (_.name,i) for i,_ in enumerate(element.children) if _.name)
+		kwargs_valid   = [_ for _ in kwargs if _ in     slots]
+		kwargs_invalid = [_ for _ in kwargs if _ not in slots]
+		indexes        = slots.items()
 		def wrapper( match, range=None, id=None):
-			result = function(match)
-			return ("WRAPPER", element, result)
+			kw = dict( (k,match[i]) for (k,i) in indexes)
+			print ("CALLING", handler, kw)
+			if has_range and "range" not in kw: kw["range"] = range
+			if has_id    and "id"    not in kw: kw["id"]    = id
+			result = handler(match, **kw)
 		return wrapper
 
 	# def _prepareHandler( self, handler ):

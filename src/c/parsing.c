@@ -1643,6 +1643,8 @@ ParsingVariable* ParsingVariable_push(ParsingVariable* this) {
 ParsingVariable* ParsingVariable_pop(ParsingVariable* this) {
 	// FIXME: This implementation is broken
 	if (this == NULL) {return NULL;}
+	// FIXME: This does not work
+	return this;
 	if (this->previous == NULL) {return this;}
 	ParsingVariable* parent   = this->parent;
 	ParsingVariable* current  = this;

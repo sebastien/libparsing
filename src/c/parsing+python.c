@@ -3,6 +3,10 @@
 #include <frameobject.h>
 #include "parsing.h"
 
+// SEE: http://dan.iel.fm/posts/python-c-extensions/
+// TOOD: This needs to be a separate Python module named "_libparsing_helpers",
+// defining "ParsingException" and
+
 int Parsing_getPythonVersion() {
 #ifdef WITH_PYTHON3
 	return 3;
@@ -11,8 +15,37 @@ int Parsing_getPythonVersion() {
 #endif
 }
 
-// TODO: Ideally, we should throw an exception, but I don't know how this would work
+// static char module_docstring[] =
+//     "This module provides an interface for calculating chi-squared using C.";
+// static char chi2_docstring[] =
+//     "Calculate the chi-squared of some data given a model.";
+// static PyMethodDef module_methods[] = {
+//     {NULL, NULL, 0, NULL}
+// };
+// PyMODINIT_FUNC init_chi2(void)
+// {
+//     PyObject *m = Py_InitModule3("_chi2", module_methods, module_docstring);
+// 	printf("FFFU");
+//     if (m == NULL)
+//         return;
+//
+// }
+
 inline void Match_onPythonError(Match* match) {
+
+	// PyGILState_STATE gstate = PyGILState_Ensure ();
+	// 		PyObject *ptype, *pvalue, *ptraceback;
+	// 		PyErr_Fetch(&ptype, &pvalue, &ptraceback);
+	// 		char *pStrErrorMessage = PyString_AsString(pvalue);
+
+	// 		printf("[!] ERROR: %s\n", pStrErrorMessage);
+	// 		PyTracebackObject* traceback =ptraceback;
+	// 		int line = traceback->tb_lineno;
+	// 		const char* filename = PyString_AsString(traceback->tb_frame->f_code->co_filename);
+	// 		printf("[!] File: %s:%d\n", filename, line);
+
+	// 		PyErr_BadArgument();
+	// 		PyGILState_Release(gstate);
 
 	// SEE: http://stackoverflow.com/questions/1796510/accessing-a-python-traceback-from-the-c-api
 	PyGILState_STATE gstate = PyGILState_Ensure();
@@ -24,7 +57,7 @@ inline void Match_onPythonError(Match* match) {
 	const char* filename = PyString_AsString(tb->tb_frame->f_code->co_filename);
 	int line             = tb->tb_lineno;
 
-	printf("[!] libparsing: Error in handler for element #%d, at " CYAN "%s:%d\n    " RED "%s\n" RESET, ((ParsingElement*)match->element)->id, filename, line, error);
+	printf("[!] libparsing: Error in handler for element #%d, at " CYAN "%s:%d:\n    " RED "%s\n" RESET, ((ParsingElement*)match->element)->id, filename, line, error);
 
 	PyErr_BadArgument();
 	PyGILState_Release(gstate);
@@ -124,6 +157,7 @@ PyObject* Match_processPython( Match* match, PyObject* callbacks ) {
 		if (result == NULL) {
 			Match_onPythonError(match);
 			// NOTE: We should return NULL, but it segfaults
+			// http://stackoverflow.com/questions/39911099/segmentation-fault-with-python-ctypes-when-function-returns-a-null-pyobject-po
 			return Py_None;
 		} else {
 			return result;
