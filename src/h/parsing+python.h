@@ -4,7 +4,8 @@
 
 #include <Python.h>
 
-PyObject* Processor_dispatchPython( Match* match, PyObject* callback );
+int Parsing_getPythonVersion();
+PyObject* Match_processPython( Match* match, PyObject* callback );
 
 #endif
 #endif

@@ -25,24 +25,20 @@ def grammar():
 	return g
 
 def process( value=None, r=None ):
-	print "CALLING!", value, r
 	return value
 
 def run():
 	g = grammar() ; s = g.symbols
-	p = g.parseString("(hello (w o r l d))")
+	p = g.parseString("((h as asdasds sadaasd) (w o r l d))")
 	m = {} ; ids = 0
-	print ("P", p)
 	# for k in dir(s):
 	# 	v = getattr(s,k)
 	# 	if isinstance(v, ParsingElement) and v.id >= 0:
 	# 		ids = max(ids, v.id)
 	# 		m[v.id] = process
 	# callbacks = [process] * ids
-	callbacks = [lambda x:process(x)] * 100
-	res = LIB.symbols.Processor_dispatchPython(p.match._cobject, callbacks)
-	print ("RES", res)
-	print ("DISPACTCH:2")
+	callbacks = [lambda x,y:process(x)] * 100
+	res = LIB.symbols.Match_processPython(p.match._cobject, callbacks)
 
 if __name__ == "__main__":
 	run()

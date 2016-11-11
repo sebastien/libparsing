@@ -10,7 +10,7 @@
 
 #ifndef __PARSING_H__
 #define __PARSING_H__
-#define __PARSING_VERSION__ "0.8.0"
+#define __PARSING_VERSION__ "0.8.5"
 
  /* Enable certain library functions (strdup) on linux.  See feature_test_macros(7) */
 #ifdef _XOPEN_SOURCE
@@ -607,6 +607,14 @@ void TokenMatch_free(Match* match);
 // @method
 const char* TokenMatch_group(Match* match, int index);
 
+// TODO
+// @method
+// int TokenMatch_groupStart(Match* match, int index);
+
+// @method
+// int TokenMatch_groupEnd(Match* match, int index);
+
+
 // @method
 int TokenMatch_count(Match* match);
 
@@ -644,10 +652,15 @@ typedef struct Reference {
 // @define
 #define CARDINALITY_MANY          '+'
 
-//
 // @operation
 // Tells if the given pointer is a pointer to Reference
 bool Reference_Is(void * this);
+
+// @operation
+// Tells if the given pointer is a pointer to Reference with cardinality
+// of `+` or `*`.
+bool Reference_IsMany(void * this);
+
 
 // @operation
 // Ensures that the given element (or reference) is a reference.

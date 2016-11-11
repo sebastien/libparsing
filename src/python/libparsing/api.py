@@ -1188,7 +1188,8 @@ class Libparsing(CLibrary):
 	}
 
 	DECLARES = """
-	PyObject* Processor_dispatchPython( Match* match, PyObject* callback );
+	int Parsing_getPythonVersion():
+	PyObject* Match_processPython( Match* match, PyObject* callback );
 	"""
 
 	@classmethod

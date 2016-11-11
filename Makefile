@@ -162,7 +162,8 @@ help: ## Displays a description of the different Makefile rules
 $(DIST)/lib$(PROJECT).so: $(BUILD_SOURCES_O)
 	@echo "$(GREEN)📝  $@ [SO]$(RESET)"
 	@mkdir -p `dirname $@`
-	$(LD) -shared $(LDFLAGS) $? -o $@
+	@echo "$(CYAN)→ " $(BUILD_SOURCES_O) "$(RESET)"
+	$(LD) -shared $(LDFLAGS) $(BUILD_SOURCES_O) -o $@
 
 $(DIST)/lib$(PROJECT).so.$(VERSION): $(DIST)/lib$(PROJECT).so
 	@echo "$(GREEN)📝  $@ [SO $(VERSION)]$(RESET)"

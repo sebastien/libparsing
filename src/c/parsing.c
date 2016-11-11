@@ -830,6 +830,10 @@ bool Reference_Is(void * this) {
 	return this!=NULL && ((Reference*)this)->type == TYPE_REFERENCE;
 }
 
+bool Reference_IsMany(void * this) {
+	return Reference_Is(this) && (((Reference*)this)->cardinality == CARDINALITY_MANY || ((Reference*)this)->cardinality == CARDINALITY_OPTIONAL);
+}
+
 Reference* Reference_Ensure(void* elementOrReference) {
 	void * element = elementOrReference;
 	assert(element!=NULL);
