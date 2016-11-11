@@ -971,16 +971,20 @@ class Processor(object):
 	if it is a composite symbol (rule, group, etc). The named elements
 	are the ones you declare using `_as`."""
 
+	PROCESS_NATIVE = 1
+	PROCESS_PYTHON = 0
 
 	def __init__( self, grammar=None ):
+		self._method = self.PROCESS_NATIVE
 		self.setGrammar(grammar)
-		LIB.symbols.Processor_dispatchPython(None, [1,2,3,4,5])
+		self.depth = 0
 
 	def setGrammar( self, grammar ):
 		self.result       = None
 		self.symbolByName = {}
 		self.symbolByID   = {}
 		self.handlerByID  = {}
+		self.handlers     = []
 		self.grammar      = grammar
 		if grammar:
 			self._bindSymbols(grammar)
@@ -1000,6 +1004,7 @@ class Processor(object):
 		will create a mapping from the symbol name and the symbol id to the
 		symbol itself."""
 		grammar.prepare()
+		self.symbolCount = 0
 		for name, symbol in grammar._symbols.items():
 			# print ("SYMBOL#{0:4d}={1}".format(symbol.id, name))
 			if symbol.id < 0:
@@ -1009,10 +1014,12 @@ class Processor(object):
 				raise Exception("Duplicate symbol id: %d, has %s already while trying to assign %s" % (symbol.id, self.symbolByID[symbol.id].name, symbol.name))
 			self.symbolByID[symbol.id]     = symbol
 			self.symbolByName[symbol.name] = symbol
+			self.symbolCount               = max(symbol.id + 1, self.symbolCount)
 
 	def _bindHandlers( self ):
 		"""Discovers the handlers"""
 		assert len(self.symbolByName) > 0, "{0}._bindHandlers: No symbols registered, got {1} symbol IDs from grammar {2}".format(self.__class__.__name__, len(self.symbolByID), self.grammar)
+		self.handlers = [self._pythonHandler if self._method == self.PROCESS_PYTHON else self._nativeHandler] * self.symbolCount
 		for k in dir(self):
 			if not k.startswith("on"): continue
 			name = k[2:]
@@ -1025,6 +1032,7 @@ class Processor(object):
 				handler  = getattr(self, k)
 				callback = self._prepareHandler(handler)
 				self.handlerByID[symbol.id] = callback
+				self.handlers[symbol.id]    = lambda a:a
 
 	def on( self, symbol, callback ):
 		"""Binds a handler for the given symbol."""
@@ -1040,10 +1048,39 @@ class Processor(object):
 		else:
 			return None
 
-	def process( self, match ):
-		return self._defaultHandler(match)
+	def process( self, match=None ):
+		if isinstance(match, ParsingResult):
+			match = r.match
+		if self.depth == 0:
+			self.depth += 1
+			result      = None
+			if match is None:
+				pass
+			elif self._method == self.PROCESS_NATIVE:
+				result = LIB.symbols.Match_processPython(match._cobject, self.handlers)
+			else:
+				result =  self.process(r.match)
+			self.depth -= 1
+			return result
+		else:
+			if self._method == self.PROCESS_NATIVE:
+				return match
+			else:
+				self.depth += 1
+				result =  self._pythonHandler(match)
+				self.depth -= 1
+				return result
 
-	def _defaultHandler( self, match ):
+	def _nativeHandler( self, match ):
+		return match
+
+	# =========================================================================
+	# PURE-PYTHON HANDLER
+	# =========================================================================
+	# This is the fallback implementation of the matches/parsing result
+	# processing in pure Python. It is much slower than the pure C version
+	# due to the constant wrapping/unwrapping of match objects.
+	def _pythonHandler( self, match ):
 		if isinstance(match, ReferenceMatch):
 			result = [self.process(_) for _ in match]
 			if result and (match.isOne() or match.isOptional()): result = result[0]
@@ -1074,9 +1111,6 @@ class Processor(object):
 			argnames = argnames[2:]
 		else:
 			argnames = argnames[1:]
-		# def callback(match, handler=handler, argnames=argnames):
-		# 	return self._applyHandler(handler, match, argnames)
-		# return callback
 		return lambda m:self._applyHandler(handler, m, argnames)
 
 	def _applyHandler( self, handler, match, argnames ):
@@ -1099,35 +1133,6 @@ class Processor(object):
 			logging.error(res)
 			for _ in context: logging.warn(_)
 			raise res
-
-
-	# NOTE: This is the seed for a faster implementation, where we bypass
-	# the wrapper.
-	# def _defaultHandler( self, match ):
-	# 	TokenMatch_group = LIB.symbols.TokenMatch_group
-	# 	WordMatch_group  = LIB.symbols.WordMatch_group
-	# 	def walk( match, step, matches ):
-	# 		matches    = ctypes.cast(matches, ctypes.py_object).value
-	# 		match      = ctypes.cast(match, C.TYPES["Match*"])
-	# 		element    = ctypes.cast(match.contents.element, C.TYPES["ParsingElement*"])
-	# 		match_type = LIB.symbols.Match_getElementType(match)
-	# 		match_name = LIB.symbols.Match_getElementName(match)
-	# 		if   match_type == TYPE_REFERENCE:
-	# 			value = None
-	# 		elif match_type == TYPE_RULE:
-	# 			value = None
-	# 		elif match_type == TYPE_GROUP:
-	# 			value = None
-	# 		elif match_type == TYPE_TOKEN:
-	# 			value = TokenMatch_group(match,0)
-	# 		elif match_type == TYPE_WORD:
-	# 			value = WordMatch_group(match)
-	# 		return step
-	# 	callback  = C.TYPES["WalkingCallback"](walk)
-	# 	context   = {"result":None}
-	# 	c_context = ctypes.py_object(context)
-	# 	LIB.symbols.Match__walk(match._cobjectPointer, callback, 0, c_context)
-	# 	return context["result"]
 
 # -----------------------------------------------------------------------------
 #

@@ -24,7 +24,7 @@ PyObject* Match_processPython( Match* match, PyObject* callbacks ) {
 
 	Py_XINCREF(callbacks);
 	ParsingElement* element = (ParsingElement*)match->element;
-	PyObject* callback      = PyList_Check(callbacks) && PyList_GET_SIZE(callbacks) > element->id ? PyList_GetItem(callbacks, element->id) : NULL;
+	PyObject* callback      = PyList_Check(callbacks) && PyList_GET_SIZE(callbacks) > element->id && element->id >= 0 ? PyList_GetItem(callbacks, element->id) : NULL;
 	PyObject* value         = NULL;
 	Py_XINCREF(callback);
 
@@ -53,10 +53,12 @@ PyObject* Match_processPython( Match* match, PyObject* callbacks ) {
 				value = Py_None;
 				Py_INCREF(value);
 		}
+		assert(value != NULL);
 	}
 	else if (count == 1 && !Reference_IsMany(match->element)) {
 		// If it's not a many reference, we return the result as-is.
 		value = Match_processPython(match->children, callbacks);
+		assert( value != NULL);
 	} else {
 		value = PyTuple_New(count);
 		Match* child    = match->children;
@@ -78,14 +80,19 @@ PyObject* Match_processPython( Match* match, PyObject* callbacks ) {
 
 	// NOTE: New versions of Python have PyCallable_Check
 	// SEE:  http://svn.python.org/projects/python/trunk/Objects/object.c
-	if (callback!=NULL && PyFunction_Check(callback) ) {
-		assert(value != NULL);
+	assert(value != NULL);
+	if (callback!=NULL) {
 		PyObject* range  = Py_BuildValue("(i,i)", match->offset, match->offset + match->length);
-		PyObject* args   = Py_BuildValue("(O,O)" ,value, range);
+		PyObject* args   = Py_BuildValue("(O,O,i)" ,value, range, element->id);
 		// NOTE: This is super important, as otherwise it segfaults
 		PyGILState_STATE gstate; gstate = PyGILState_Ensure();
 		PyObject* result = PyObject_CallObject(callback, args);
 		PyGILState_Release(gstate);
+		if (result == NULL) {
+			result = Py_None;
+			Py_INCREF(result);
+		}
+		assert (result != NULL);
 		Py_DECREF(value);
 		Py_DECREF(range);
 		Py_DECREF(args);

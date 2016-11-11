@@ -572,7 +572,7 @@ const char* WordMatch_group(Match* match);
 // The parsing element configuration information that is used by the
 // `Token` methods.
 typedef struct TokenConfig {
-	const char* expr;
+	char* expr;
 #ifdef WITH_PCRE
 	pcre*       regexp;
 	pcre_extra* extra;
