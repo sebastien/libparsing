@@ -1564,7 +1564,8 @@ ParsingVariable* ParsingVariable_new(const char* key, void* value) {
 void ParsingVariable_free(ParsingVariable* this) {
 	if (this!=NULL) {
 		__FREE(this->key);
-		__FREE(this);
+		// FIXME
+		// __FREE(this);
 	}
 }
 
@@ -1640,11 +1641,13 @@ ParsingVariable* ParsingVariable_push(ParsingVariable* this) {
 }
 
 ParsingVariable* ParsingVariable_pop(ParsingVariable* this) {
+	// FIXME: This implementation is broken
 	if (this == NULL) {return NULL;}
+	if (this->previous == NULL) {return this;}
 	ParsingVariable* parent   = this->parent;
 	ParsingVariable* current  = this;
 	// We want to pop any variable until the current cell is the parent
-	while (current != NULL && current != parent) {
+	while (current != NULL && current->previous != NULL && current != parent) {
 		ParsingVariable* to_free  = current;
 		assert(current != current->previous);
 		current = current->previous;
@@ -1716,8 +1719,12 @@ void ParsingContext_push     ( ParsingContext* this ) {
 }
 
 void ParsingContext_pop      ( ParsingContext* this ) {
+	if (this == NULL) {return;}
 	if (this->callback != NULL) {this->callback(this, '-');}
-	this->variables = ParsingVariable_pop(this->variables);
+	// FIXME: This should be 0
+	if (this->depth > 1) {
+		this->variables = ParsingVariable_pop(this->variables);
+	}
 	this->depth -= 1;
 	if (this->depth <= 0) {
 		this->indent = INDENT + INDENT_MAX * INDENT_WIDTH;

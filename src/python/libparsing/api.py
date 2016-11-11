@@ -942,7 +942,7 @@ class Grammar(CObject):
 
 # -----------------------------------------------------------------------------
 #
-# PROCESS
+# PROCESSOR
 #
 # -----------------------------------------------------------------------------
 
@@ -971,168 +971,98 @@ class Processor(object):
 	if it is a composite symbol (rule, group, etc). The named elements
 	are the ones you declare using `_as`."""
 
-	PROCESS_NATIVE = 1
-	PROCESS_PYTHON = 0
-
-	def __init__( self, grammar=None ):
-		self._method = self.PROCESS_NATIVE
+	def __init__(self, grammar=None):
+		self._handlers = None
+		self._grammar  = None
 		self.setGrammar(grammar)
-		self.depth = 0
 
-	def setGrammar( self, grammar ):
-		self.result       = None
-		self.symbolByName = {}
-		self.symbolByID   = {}
-		self.handlerByID  = {}
-		self.handlers     = []
-		self.grammar      = grammar
-		if grammar:
-			self._bindSymbols(grammar)
-			self._bindHandlers()
+	def ensureGrammar( self ):
+		if not self._grammar: self.setGrammar(self.createGrammar())
+		return self._grammar
 
 	def createGrammar( self ):
 		return None
 
-	def ensureGrammar( self ):
-		if not self.grammar:
-			self.setGrammar(self.createGrammar())
-			assert self.grammar, "Processor has not grammar bound: {0}".format(self)
-		return self.grammar
+	def setGrammar( self, grammar ):
+		self._grammar  = grammar
+		self._handlers = None
+		if grammar:
+			g = grammar
+			s = g.symbols
+			h = {}
+			n = 0
+			l = []
+			for k in dir(s):
+				v = getattr(s,k)
+				if isinstance(v, ParsingElement) and v.id >= 0:
+					n = max(n, v.id + 1)
+					h[v.id] = self._getHandler(v)
+					l.append(v)
+			self._handlers = [self._defaultHandler] * n
+			self._symbols = l
+			for element in l:
+				self._handlers[element.id] = self._getHandler(element)
 
-	def _bindSymbols( self, grammar ):
-		"""Registers the symbols from the grammar into this processor. This
-		will create a mapping from the symbol name and the symbol id to the
-		symbol itself."""
-		grammar.prepare()
-		self.symbolCount = 0
-		for name, symbol in grammar._symbols.items():
-			# print ("SYMBOL#{0:4d}={1}".format(symbol.id, name))
-			if symbol.id < 0:
-				logging.warn("Unused symbol: %s" % (repr(symbol)))
-				continue
-			if symbol.id in self.symbolByID:
-				raise Exception("Duplicate symbol id: %d, has %s already while trying to assign %s" % (symbol.id, self.symbolByID[symbol.id].name, symbol.name))
-			self.symbolByID[symbol.id]     = symbol
-			self.symbolByName[symbol.name] = symbol
-			self.symbolCount               = max(symbol.id + 1, self.symbolCount)
-
-	def _bindHandlers( self ):
-		"""Discovers the handlers"""
-		assert len(self.symbolByName) > 0, "{0}._bindHandlers: No symbols registered, got {1} symbol IDs from grammar {2}".format(self.__class__.__name__, len(self.symbolByID), self.grammar)
-		self.handlers = [self._pythonHandler if self._method == self.PROCESS_PYTHON else self._nativeHandler] * self.symbolCount
-		for k in dir(self):
-			if not k.startswith("on"): continue
-			name = k[2:]
-			if not name:
-				continue
-			if name not in self.symbolByName:
-				logging.warn("Handler `{0}` does not match any of {1}".format(k, ", ".join(self.symbolByName.keys())))
-			else:
-				symbol   = self.symbolByName[name]
-				handler  = getattr(self, k)
-				callback = self._prepareHandler(handler)
-				self.handlerByID[symbol.id] = callback
-				self.handlers[symbol.id]    = lambda a:a
-
-	def on( self, symbol, callback ):
-		"""Binds a handler for the given symbol."""
-		if not isinstance(symbol, ParsingElement):
-			symbol = self.symbolByName[symbol]
-		self.handlerByID[symbol.id] = self._prepareHandler(callback)
-		return self
-
-	def parse( self, text ):
-		self.result = r = self.ensureGrammar().parseString(text)
-		if r.isSuccess():
-			return self.process(r.match)
+	def process( self, match ):
+		if isinstance(match, ParsingResult): match = match.match
+		if isinstance(match, Match):
+			print ("PROCESS", match, self._handlers[match.element.id])
+			return LIB.symbols.Match_processPython(match._cobject, [lambda a,b,c:self._defaultHandler(a,b,c)]) #self._handlers)
 		else:
-			return None
+			return match
 
-	def process( self, match=None ):
-		if isinstance(match, ParsingResult):
-			match = r.match
-		if self.depth == 0:
-			self.depth += 1
-			result      = None
-			if match is None:
-				pass
-			elif self._method == self.PROCESS_NATIVE:
-				result = LIB.symbols.Match_processPython(match._cobject, self.handlers)
-			else:
-				result =  self.process(r.match)
-			self.depth -= 1
-			return result
-		else:
-			if self._method == self.PROCESS_NATIVE:
-				return match
-			else:
-				self.depth += 1
-				result =  self._pythonHandler(match)
-				self.depth -= 1
-				return result
+	def _defaultHandler( self, match=None, range=None, id=None ):
+		print ("DEFAULT HANDLER", match, this._symbols[id])
+		return ("POUET", match)
 
-	def _nativeHandler( self, match ):
-		return match
+	def _getHandler( self, element ):
+		name = element.name
+		i    = element.id
+		mname   = "on" + name[0].upper() + name[1:]
+		mid     = "on" + str(i)
+		handler = self._defaultHandler
+		# if hasattr(self, mname):
+		# 	handler = self._wrapHandler(getattr(self, mname), element)
+		# elif hasattr(self, mid):
+		# 	handler = self._wrapHandler(getattr(self, mid), element)
+		return handler
 
-	# =========================================================================
-	# PURE-PYTHON HANDLER
-	# =========================================================================
-	# This is the fallback implementation of the matches/parsing result
-	# processing in pure Python. It is much slower than the pure C version
-	# due to the constant wrapping/unwrapping of match objects.
-	def _pythonHandler( self, match ):
-		if isinstance(match, ReferenceMatch):
-			result = [self.process(_) for _ in match]
-			if result and (match.isOne() or match.isOptional()): result = result[0]
-			match.value = result
-			return result
-		else:
-			assert isinstance(match, Match), "Match expected, got: {0}".format(match)
-			eid     = match.element.id
-			handler = self.handlerByID.get(eid)
-			if handler:
-				# A handler was found, so we apply it to the match. The handler
-				# returns a value that should be assigned to the match
-				# print ("process[H]: applying handler", handler, "TO", match)
-				result = match.value = handler( match )
-				# print ("processed[H]: {0}#{1} : {2} --> {3}".format(match.__class__.__name__, match.name, repr(match.value), repr(result)))
-			elif isinstance(match, GroupMatch):
-				result = match.value = self.process(match[0])
-			elif isinstance(match, CompositeMatch):
-				result = match.value = [self.process(_) for _ in match]
-			else:
-				result = match.value
-			return result
+	def _wrapHandler( self, function, element ):
+		print ("WRAP HANLDERS", function)
+		def wrapper( match, range=None, id=None):
+			result = function(match)
+			return ("WRAPPER", element, result)
+		return wrapper
 
-	def _prepareHandler( self, handler ):
-		argnames = inspect.getargspec(handler).args
-		# We want argnames to be anything after (self, match, ...) or (match, ...)
-		if argnames[0] == "self":
-			argnames = argnames[2:]
-		else:
-			argnames = argnames[1:]
-		return lambda m:self._applyHandler(handler, m, argnames)
+	# def _prepareHandler( self, handler ):
+	# 	argnames = inspect.getargspec(handler).args
+	# 	# We want argnames to be anything after (self, match, ...) or (match, ...)
+	# 	if argnames[0] == "self":
+	# 		argnames = argnames[2:]
+	# 	else:
+	# 		argnames = argnames[1:]
+	# 	return lambda m:self._applyHandler(handler, m, argnames)
 
-	def _applyHandler( self, handler, match, argnames ):
-		"""Applies the given handler to the given match, returning the value
-		produces but the handler."""
-		# We skip self and match, which are required
-		kwargs = dict((_.name,self.process(_)) for _ in match.children if _.name in argnames)
-		try:
-			result = handler(match, **kwargs)
-			#print ("_applyHandler: {0}.value={1} --> {2}".format(match, repr(value), repr(result)))
-			match.value = result
-			return result
-		except HandlerException as e:
-			raise e
-		except Exception as e:
-			args                  = ["match"] + list(kwargs.keys())
-			exc_type, exc_obj, tb = sys.exc_info()
-			context               = traceback.format_exc().splitlines()
-			res                   = HandlerException(e, kwargs, handler, context)
-			logging.error(res)
-			for _ in context: logging.warn(_)
-			raise res
+	# def _applyHandler( self, handler, match, argnames ):
+	# 	"""Applies the given handler to the given match, returning the value
+	# 	produces but the handler."""
+	# 	# We skip self and match, which are required
+	# 	kwargs = dict((_.name,self.process(_)) for _ in match.children if _.name in argnames)
+	# 	try:
+	# 		result = handler(match, **kwargs)
+	# 		#print ("_applyHandler: {0}.value={1} --> {2}".format(match, repr(value), repr(result)))
+	# 		match.value = result
+	# 		return result
+	# 	except HandlerException as e:
+	# 		raise e
+	# 	except Exception as e:
+	# 		args                  = ["match"] + list(kwargs.keys())
+	# 		exc_type, exc_obj, tb = sys.exc_info()
+	# 		context               = traceback.format_exc().splitlines()
+	# 		res                   = HandlerException(e, kwargs, handler, context)
+	# 		logging.error(res)
+	# 		for _ in context: logging.warn(_)
+	# 		raise res
 
 # -----------------------------------------------------------------------------
 #
