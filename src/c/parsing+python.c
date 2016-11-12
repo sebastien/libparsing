@@ -48,24 +48,37 @@ inline void Match_onPythonError(Match* match) {
 	// 		PyGILState_Release(gstate);
 
 	// SEE: http://stackoverflow.com/questions/1796510/accessing-a-python-traceback-from-the-c-api
-	PyGILState_STATE gstate = PyGILState_Ensure();
-	PyObject *type, *value, *traceback;
-	PyErr_Fetch(&type, &value, &traceback);
 
-	PyTracebackObject* tb = (PyTracebackObject*)traceback;
-	char* error          = PyString_AsString(value);
-	const char* filename = PyString_AsString(tb->tb_frame->f_code->co_filename);
-	int line             = tb->tb_lineno;
+	PyThreadState * ts = PyThreadState_Get();
+	PyFrameObject* frame = ts->frame;
+	printf("ERROR\n");
+	while (frame != 0)
+	{
+		char const* filename = PyString_AsString(frame->f_code->co_filename);
+		char const* name = PyString_AsString(frame->f_code->co_name);
+		printf("foo: filename=%s, name=%s\n", filename, name);
+		frame = frame->f_back;
+	}
 
-	printf("[!] libparsing: Error in handler for element #%d, at " CYAN "%s:%d:\n    " RED "%s\n" RESET, ((ParsingElement*)match->element)->id, filename, line, error);
+	// PyGILState_STATE gstate = PyGILState_Ensure();
+	// PyObject *type, *value, *traceback;
+	// PyErr_Fetch(&type, &value, &traceback);
 
-	PyErr_BadArgument();
-	PyGILState_Release(gstate);
+	// PyTracebackObject* tb = (PyTracebackObject*)traceback;
+	// char* error          = PyString_AsString(value);
+	// const char* filename = PyString_AsString(tb->tb_frame->f_code->co_filename);
+	// int line             = tb->tb_lineno;
+
+	// printf("[!] libparsing: Error in handler for element #%d, at " CYAN "%s:%d:\n    " RED "%s\n" RESET, ((ParsingElement*)match->element)->id, filename, line, error);
+
+	// PyErr_BadArgument();
+	// PyGILState_Release(gstate);
 }
 
 // SEE: http://stackoverflow.com/questions/10247779/python-c-api-functions-that-borrow-and-steal-references#10250720
 PyObject* Match_processPython( Match* match, PyObject* callbacks ) {
 
+	return NULL;
 	if (match == NULL) {return NULL;}
 
 	if(!Py_IsInitialized())

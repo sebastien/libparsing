@@ -1021,13 +1021,9 @@ class Processor(object):
 		mid     = "on" + str(i)
 		handler = self._defaultHandler
 		if hasattr(self, mname):
-			print ("Element", element.id, element.name, "=", mname)
 			handler = self._wrapHandler(getattr(self, mname), element)
 		elif hasattr(self, mid):
-			print ("Element", element.id, element.name, "=", mid)
 			handler = self._wrapHandler(getattr(self, mid), element)
-		else:
-			print ("Element", element.id, name)
 		return handler
 
 	def _wrapHandler( self, handler, element ):
