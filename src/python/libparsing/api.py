@@ -974,7 +974,6 @@ class Processor(object):
 
 	def __init__( self, grammar=None ):
 		self.setGrammar(grammar)
-		LIB.symbols.Processor_dispatchPython(None, [1,2,3,4,5])
 
 	def setGrammar( self, grammar ):
 		self.result       = None
