@@ -1,4 +1,12 @@
 
+C embedding:
+
+1) Come back to a stable version where PCSS does not abort because of memory
+   errors.
+
+2) Test various ways to identify the handler that is being executed and the
+   call stack. Usually, if an error happens the current frame will be the handler's.
+
 High-priority:
 
 [ ] Line numbers are not accurage because backtracking does not keep track of them
@@ -76,61 +84,26 @@ Maybe:
     the grammar rules (although in that case the symbol ID would change)
 
 
-Notes
-=====
+C dispatching
+=============
+
+The main issues are regarding logging and memory management.
+
+Python C API
+============
+
+Some gotchas when using ctypes to call a function that uses the Python C API:
+
+- Calling a C function using PyObject as parameters/return from ctypes has
+  some limitations: you can't return NULL, you can't raise exceptions, and 
+  logging errors is a bit difficult.
+
+- When calling back Python from C code called via ctypes, it's important
+  to acquire and release the GIL.
+
+- It's easy to get a segfault (duh!)
 
 
 
-# Lazy: we need to call process recursively, or make process async and 
-# use await.
-def on_Computation( match ):
-	left = match[0]
-
-# Non-lazy: stuff is pre-calculated
-def on_Computation( match ):
-	left = match[0]
-	righ = match[1]
-
-# And in this case, we would do something like
-
-Match->result;
-
-	void Match__createResult( Match*, ProcessCallback callback )
-
-where 
-
-	void* callback(Match*)
-
-if we do this, then we can move the processor to C code, and simply give
-a mapping [symbol id]->callback. The implementation would be like
-
-	Match* child = match->children;
-	while (child !=NULL ) {
-		Match__createResult(child, callback);
-		child = child->next;
-	}
-	// Now the match children all have results
-	match->result = callback(match);
-	
-and the dispatching callback
-
-	void Processor_dispatch( Match* match, ProcessCallback[] callbacks, ProcessCallback default ) {
-		ProcessCallback callback = callbacks[match->element->id];
-		if (callback == NULL) {
-			default(match);
-		} else {
-			callback(match);
-		}
-	}
-
-also
-
-	Processor_register(Processor*,   ParsingElement*,  ParsingCallback)
-	Processor_unregister(Processor*, ParsingElement*, ParsingCallback)
-	Processor_default(Processor*,  ParsingCallback)
-	Processor_process(Processor* this, Match* match)
-
-and in Python. This would very probably make it faster, but only if the processor
-is a full Python extension, as otherwise we'll pay for callback cost.
 
 
