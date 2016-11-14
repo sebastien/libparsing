@@ -72,6 +72,9 @@ class ParsingElement(CObject):
 		# By default, a parsing element has no children
 		return ()
 
+	def getBindings( self ):
+		return dict( (e.name,i) for i,e in enumerate(self.children) if e.name)
+
 	def _as( self, name ):
 		"""Returns a new Reference wrapping this parsing element."""
 		return Reference.FromElement(element=self, name=name)
@@ -968,6 +971,30 @@ class HandlerException(Exception):
 	def __str__( self ):
 		return "{0}: {1} in {2} with {3}".format(self.__class__.__name__, self.exception, self.handler, self.args)
 
+class FastMatch(object):
+
+	def __init__( self, element ):
+		self.element  = element
+		self.bindings = element.getBindings() if element else {}
+		self.value    = None
+		self.range    = None
+
+	def set( self, value, range ):
+		self.value = value
+		self.range = range
+		return self
+
+	def group( self, value ):
+		return self[value]
+
+	def __getitem__( self, value ):
+		if value == 0 and isinstance( self.element, Group):
+			return self.value
+		elif isinstance(value,str) or isinstance(value,bytes):
+			return self.value[self.bindings[value]]
+		else:
+			return self.value[value]
+
 class FastProcessor(object):
 	"""The main entry point when using `libparsing` form Python. Subclass
 	the processor and define parsing element handlers using the convention
@@ -980,7 +1007,6 @@ class FastProcessor(object):
 	are the ones you declare using `_as`."""
 
 	def __init__(self, grammar=None):
-		self._handlers = None
 		self._grammar  = None
 		self.setGrammar(grammar)
 
@@ -994,23 +1020,24 @@ class FastProcessor(object):
 	def setGrammar( self, grammar ):
 		if grammar == self._grammar: return
 		self._grammar  = grammar
-		self._handlers = None
 		if grammar:
 			g = grammar
 			s = g.symbols
-			h = {}
-			n = 0
-			l = []
+			handlers = {}
+			max_id   = 0
+			elements = {}
 			for k in dir(s):
-				v = getattr(s,k)
-				if isinstance(v, ParsingElement) and v.id >= 0:
-					n = max(n, v.id + 1)
-					h[v.id] = self._getHandler(v)
-					l.append(v)
-			self._handlers = [self._defaultHandler] * n
-			self._symbols = sorted(l, lambda a,b:cmp(int(a.id),int(b.id)))
-			for element in self._symbols:
-				self._handlers[element.id] = self._getHandler(element)
+				e = getattr(s,k)
+				if isinstance(e, ParsingElement) and e.id >= 0:
+					max_id = max(max_id, e.id + 1)
+					elements[e.id] = e
+			self._symbols  = [elements.get(_)     for _ in range(0, max_id)]
+			self._matches  = [FastMatch(_)        for _ in self._symbols]
+			self._handlers = [self._getHandler(_) for _ in self._symbols]
+		else:
+			self._handlers = None
+			self._matches  = None
+			self._symbols  = None
 
 	def process( self, match ):
 		if isinstance(match, ParsingResult): match = match.match
@@ -1023,6 +1050,7 @@ class FastProcessor(object):
 		return match
 
 	def _getHandler( self, element ):
+		if not element: return None
 		name = element.name
 		i    = element.id
 		mname   = "on" + name[0].upper() + name[1:]
@@ -1037,28 +1065,36 @@ class FastProcessor(object):
 	def _wrapHandler( self, handler, element ):
 		params = inspect.getargspec(handler).args
 		params = params[2:] if params[0]=="self" else params[1]
-		has_range = "range" in params
-		has_id    = "id"    in params
+		match  = self._matches[int(element.id)]
 		# We create simple wrappers for the regular cases, where
 		# the handler is h(match), h(match,range), h(match,range,id)
-		if len(params) == 0:
-			return lambda m,r,i:handler(m)
-		elif len(params) == 1 and params[0] == "range":
-			return lambda m,r,i:handler(m,r)
-		elif len(params) == 2 and params[0] == "range" and params[1] == "id":
-			return lambda m,r,i:handler(m,r,i)
+		def wrapper(m,r,i):
+			try:
+				res = handler(match.set(m,r))
+				return res
+			except Exception as e:
+				exc_type, exc_obj, tb = sys.exc_info()
+				context         = traceback.format_exc().splitlines()
+				print ("libparsing: Error")
+				for _ in context:
+					print (_)
+				return None
+
 		# Now we're in a more complex case where we need to extract variables
-		kwargs         = [_ for _ in params if _ not in ("range", "id")]
-		slots          = dict( (_.name,i) for i,_ in enumerate(element.children) if _.name)
-		kwargs_valid   = [_ for _ in kwargs if _ in     slots]
-		kwargs_invalid = [_ for _ in kwargs if _ not in slots]
-		indexes        = slots.items()
-		def wrapper( match, range=None, id=None):
-			kw = dict( (k,match[i]) for (k,i) in indexes)
-			print ("CALLING", handler, kw)
-			if has_range and "range" not in kw: kw["range"] = range
-			if has_id    and "id"    not in kw: kw["id"]    = id
-			result = handler(match, **kw)
+		# kwargs         = [_ for _ in params if _ not in ("range", "id")]
+		# slots          = dict( (_.name,i) for i,_ in enumerate(element.children) if _.name)
+		# kwargs_valid   = [_ for _ in kwargs if _ in     slots]
+		# kwargs_invalid = [_ for _ in kwargs if _ not in slots]
+		# indexes        = slots.items()
+		# def wrapper( match, range=None, id=None):
+		# 	kw = dict( (k,match[i]) for (k,i) in indexes)
+		# 	print ("CALLING", handler, kw)
+		# 	if has_range and "range" not in kw: kw["range"] = range
+		# 	if has_id    and "id"    not in kw: kw["id"]    = id
+		# 	try:
+		# 		result = handler(match, **kw)
+		# 	except Exception as e:
+		# 		return error(e)
 		return wrapper
 
 class Processor(object):

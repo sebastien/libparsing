@@ -83,7 +83,7 @@ PyObject* Match_processPython( Match* match, PyObject* callbacks ) {
 		value = Match_processPython(match->children, callbacks);
 	} else {
 		value = PyTuple_New(count);
-		Match* child    = match->children;
+		Match* child  = match->children;
 		for( int i=0 ; i<count ; i++) {
 			if (child != NULL) {
 				PyObject* item = Match_processPython(child, callbacks);
@@ -114,7 +114,8 @@ PyObject* Match_processPython( Match* match, PyObject* callbacks ) {
 		return Py_None;
 	} else if (callback!=NULL && PyCallable_Check(callback)) {
 		PyObject* range  = Py_BuildValue("(i,i)", match->offset, match->offset + match->length);
-		PyObject* args   = Py_BuildValue("(O,O,i)", value, range, element->id);
+		//PyObject* args   = Py_BuildValue("(O,O,i)", value, range, 0d);
+		PyObject* args   = Py_BuildValue("(O,i,i)", value, 0, 0);
 		// NOTE: This is super important, as otherwise it segfaults
 		gstate = PyGILState_Ensure();
 		PyObject* result = PyObject_CallObject(callback, args);
