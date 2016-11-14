@@ -6,7 +6,7 @@
 // SEE: http://dan.iel.fm/posts/python-c-extensions/
 // TOOD: This needs to be a separate Python module named "_libparsing_helpers",
 // defining "ParsingException" and
-//
+
 int Parsing_getPythonVersion() {
 #ifdef WITH_PYTHON3
 	return 3;
@@ -19,7 +19,7 @@ inline void Match_onPythonError(Match* match) {
 	PyGILState_STATE gil = PyGILState_Ensure ();
 	PyObject *type, *value, *traceback;
 	PyErr_Fetch(&type, &value, &traceback);
-	PyTracebackObject* tb = traceback;
+	PyTracebackObject* tb = (PyTracebackObject*) traceback;
 	char *error           = PyString_AsString(value);
 	PyFrameObject* frame  = tb->tb_frame;
 	printf("libparsing error:" BOLDRED "%s" RESET "\n", error);

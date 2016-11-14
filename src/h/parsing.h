@@ -11,6 +11,9 @@
 #ifndef __PARSING_H__
 #define __PARSING_H__
 #define __PARSING_VERSION__ "0.8.6"
+#ifdef __cplusplus
+extern "C" {
+#endif
 
  /* Enable certain library functions (strdup) on linux.  See feature_test_macros(7) */
 #ifdef _XOPEN_SOURCE
@@ -1260,5 +1263,8 @@ Match* Utilites_checkIndent( ParsingElement *this, ParsingContext* context );
  * [END]
 */
 
+#ifdef __cplusplus
+}
+#endif
 #endif
 // EOF

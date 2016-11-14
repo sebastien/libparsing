@@ -1641,7 +1641,7 @@ ParsingVariable* ParsingVariable_set(ParsingVariable* this, const char* key, voi
 
 ParsingVariable* ParsingVariable_push(ParsingVariable* this) {
 	int depth            = this == NULL ? 0 : ParsingVariable_getDepth(this) + 1;
-	ParsingVariable* res = ParsingVariable_new(depth, "depth", (void*)depth);
+	ParsingVariable* res = ParsingVariable_new(depth, "depth", (void*)(long)depth);
 	res->previous        = this;
 	return res;
 }
