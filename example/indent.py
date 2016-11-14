@@ -107,8 +107,8 @@ property=value
 
 if __name__ == "__main__":
 	g = grammar(True)
-	r = g.parseString(EXAMPLE3)
-	print (r.describe())
+	r = g.parseString(EXAMPLE2)
+	#print (r.describe())
 	#r.match.toJSON(1)
 
 

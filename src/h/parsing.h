@@ -445,6 +445,19 @@ void Match_free(Match* this);
 // @method
 bool Match_isSuccess(Match* this);
 
+
+// @method
+bool Match_hasNext(Match* this);
+
+// @method
+Match* Match_getNext(Match* this);
+
+// @method
+bool Match_hasChildren(Match* this);
+
+// @method
+Match* Match_getChildren(Match* this);
+
 // @method
 int Match_getOffset(Match* this);
 
@@ -539,8 +552,8 @@ ParsingElement* ParsingElement_name( ParsingElement* this, const char* name );
 // The parsing element configuration information that is used by the
 // `Token` methods.
 typedef struct WordConfig {
-	const char* word;
-	size_t      length;
+	char*   word;
+	size_t  length;
 } WordConfig;
 
 // @constructor
@@ -572,7 +585,7 @@ const char* WordMatch_group(Match* match);
 // The parsing element configuration information that is used by the
 // `Token` methods.
 typedef struct TokenConfig {
-	const char* expr;
+	char* expr;
 #ifdef WITH_PCRE
 	pcre*       regexp;
 	pcre_extra* extra;
@@ -815,21 +828,20 @@ Match* ParsingStats_registerMatch(ParsingStats* this, Element* e, Match* m);
 
 // @type
 typedef struct ParsingVariable {
+	int depth;
 	char* key;
 	void* value;
 	struct ParsingVariable* previous;
-	struct ParsingVariable* parent;
 } ParsingVariable;
 
 // @constructor
-ParsingVariable* ParsingVariable_new(const char* key, void* value);
+ParsingVariable* ParsingVariable_new(int depth, const char* key, void* value);
 
 // @destructor
 void ParsingVariable_free(ParsingVariable* this);
 
 // @destructor
 void ParsingVariable_freeAll(ParsingVariable* this);
-
 
 // @method
 bool ParsingVariable_is(ParsingVariable* this, const char* key);
@@ -880,6 +892,9 @@ typedef struct ParsingContext {
 
 
 // @constructor
+//
+// The parsing context takes an *iterator* and a *grammar* as reference, none
+// of which will be freed when the parsing context is freed.
 ParsingContext* ParsingContext_new( Grammar* g, Iterator* iterator );
 
 // @method

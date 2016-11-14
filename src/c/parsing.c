@@ -538,6 +538,22 @@ int Match__walk(Match* this, WalkingCallback callback, int step, void* context )
 }
 
 
+bool Match_hasNext(Match* this) {
+	return this != NULL && this->next != NULL;
+}
+
+Match* Match_getNext(Match* this) {
+	return this != NULL ? this->next : NULL;
+}
+
+bool Match_hasChildren(Match* this) {
+	return this != NULL && this->children != NULL;
+}
+
+Match* Match_getChildren(Match* this) {
+	return this != NULL ? this->children : NULL;
+}
+
 int Match__walkCounter (Element* this, int step, void* context) {
 	return step;
 }
@@ -1552,12 +1568,12 @@ void ParsingOffset_free( ParsingOffset* this ) {
 //
 // ----------------------------------------------------------------------------
 
-ParsingVariable* ParsingVariable_new(const char* key, void* value) {
+ParsingVariable* ParsingVariable_new(int depth, const char* key, void* value) {
 	__NEW(ParsingVariable, this);
+	this->depth    = depth;
 	__STRING_COPY(this->key, key);
 	this->value    = value;
 	this->previous = NULL;
-	this->parent   = NULL;
 	return this;
 }
 
@@ -1578,13 +1594,7 @@ void ParsingVariable_freeAll(ParsingVariable* this) {
 }
 
 int ParsingVariable_getDepth(ParsingVariable* this) {
-	int count = 0;
-	ParsingVariable* current = this;
-	while (current != NULL && current->parent != current) {
-		current = current->parent;
-		count += 1;
-	}
-	return count;
+	return this == NULL ? -1 : this->depth;
 }
 
 const char* ParsingVariable_getName(ParsingVariable* this) {
@@ -1607,9 +1617,9 @@ ParsingVariable* ParsingVariable_find(ParsingVariable* this, const char* key, bo
 		if (ParsingVariable_is(current, key)) {
 			return current;
 		}
-		if (current->previous) {
-			// When local is TRUE, we stop the search when the parent changes
-			current = (local && current->previous->parent != current->parent) ? NULL : current->previous;
+		if (current->previous!=NULL) {
+			// When local is TRUE, we stop the search when the depth changes
+			current = (local && current->previous->depth != current->depth) ? NULL : current->previous;
 		} else {
 			current = NULL;
 		}
@@ -1620,45 +1630,40 @@ ParsingVariable* ParsingVariable_find(ParsingVariable* this, const char* key, bo
 ParsingVariable* ParsingVariable_set(ParsingVariable* this, const char* key, void* value) {
 	ParsingVariable* found = ParsingVariable_find(this, key, TRUE);
 	if (found == NULL) {
-		found = ParsingVariable_new( key, value );
-		found->parent   = this->parent;
+		found = ParsingVariable_new( this->depth, key, value );
 		found->previous = this;
 		return found;
 	} else {
 		found->value = value;
-		// Should we free the variable?
 		return found;
 	}
 }
 
 ParsingVariable* ParsingVariable_push(ParsingVariable* this) {
-	long depth           = ParsingVariable_getDepth(this) + 1;
-	ParsingVariable* res = ParsingVariable_new("depth", (void*)depth);
-	res->parent          = this;
+	int depth            = this == NULL ? 0 : ParsingVariable_getDepth(this) + 1;
+	ParsingVariable* res = ParsingVariable_new(depth, "depth", (void*)depth);
 	res->previous        = this;
 	return res;
 }
 
 ParsingVariable* ParsingVariable_pop(ParsingVariable* this) {
 	if (this == NULL) {return NULL;}
-	ParsingVariable* parent   = this->parent;
 	ParsingVariable* current  = this;
-	// We want to pop any variable until the current cell is the parent
-	while (current != NULL && current != parent) {
+	int depth = this->depth;
+	while (current != NULL && current->depth >= depth) {
 		ParsingVariable* to_free  = current;
-		assert(current != current->previous);
 		current = current->previous;
 		ParsingVariable_free(to_free);
 	}
-	return parent;
+	return current;
 }
 
 int  ParsingVariable_count(ParsingVariable* this) {
 	ParsingVariable* current = this;
 	int count = 0;
 	while (current!=NULL) {
-		count++;
 		current = current->previous;
+		count++;
 	}
 	return count;
 }
@@ -1680,7 +1685,7 @@ ParsingContext* ParsingContext_new( Grammar* g, Iterator* iterator ) {
 	this->offsets   = NULL;
 	this->current   = NULL;
 	this->depth     = 0;
-	this->variables = ParsingVariable_new("depth", 0);
+	this->variables = ParsingVariable_new(0, "depth", 0);
 	this->callback  = NULL;
 	this->indent    = INDENT + (INDENT_MAX * INDENT_WIDTH);
 	this->flags     = 0;
@@ -1690,7 +1695,6 @@ ParsingContext* ParsingContext_new( Grammar* g, Iterator* iterator ) {
 void ParsingContext_free( ParsingContext* this ) {
 	if (this!=NULL) {
 		ParsingVariable_freeAll(this->variables);
-		Iterator_free(this->iterator);
 		ParsingStats_free(this->stats);
 		__FREE(this);
 	}

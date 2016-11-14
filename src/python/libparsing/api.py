@@ -378,6 +378,10 @@ class Match(CObject):
 	int Match_getLength(Match* this);
 	char Match_getElementType(Match* this);
 	const char* Match_getElementName(Match* this);
+	bool Match_hasNext(Match* this);
+	Match* Match_getNext(Match* this);
+	bool Match_hasChildren(Match* this);
+	bool Match_getChildren(Match* this);
 	void Match_free(Match* this);
 	int Match__walk(Match* this, WalkingCallback callback, int step, PyObject* context );
 	int Match_countAll(Match* this);
@@ -883,7 +887,7 @@ class Grammar(CObject):
 	void Grammar_prepare ( Grammar* this );
 	ParsingResult* Grammar_parseIterator( Grammar* this, Iterator* iterator );
 	ParsingResult* Grammar_parsePath( Grammar* this, const char* path );
-	ParsingResult* Grammar_parseString( Grammar* this, const char* text );
+	ParsingResult* Grammar_parseString( Grammar* this, const char* text ); // @as _parseString
 	"""
 
 	PROPERTIES = lambda:dict(
@@ -939,6 +943,10 @@ class Grammar(CObject):
 			return self.LIBRARY.wrap(self._cobject.elements[id])
 		else:
 			return getattr(self.symbols, id)
+
+	def parseString( self, text ):
+		self.text = text
+		return self._parseString( text )
 
 # -----------------------------------------------------------------------------
 #
@@ -1033,6 +1041,7 @@ class Processor(object):
 		return self
 
 	def parse( self, text ):
+		self.text   = text
 		self.result = r = self.ensureGrammar().parseString(text)
 		if r.isSuccess():
 			return self.process(r.match)
