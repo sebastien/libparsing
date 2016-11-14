@@ -1,7 +1,12 @@
 #ifdef WITH_PYTHON
 #include <Python.h>
+#include <frameobject.h>
 #include "parsing.h"
 
+// SEE: http://dan.iel.fm/posts/python-c-extensions/
+// TOOD: This needs to be a separate Python module named "_libparsing_helpers",
+// defining "ParsingException" and
+//
 int Parsing_getPythonVersion() {
 #ifdef WITH_PYTHON3
 	return 3;
@@ -9,6 +14,25 @@ int Parsing_getPythonVersion() {
 	return 2;
 #endif
 }
+
+inline void Match_onPythonError(Match* match) {
+	PyGILState_STATE gil = PyGILState_Ensure ();
+	PyObject *type, *value, *traceback;
+	PyErr_Fetch(&type, &value, &traceback);
+	PyTracebackObject* tb = traceback;
+	char *error           = PyString_AsString(value);
+	PyFrameObject* frame  = tb->tb_frame;
+	printf("libparsing error:" BOLDRED "%s" RESET "\n", error);
+	while (frame != NULL)
+	{
+		char const* filename = PyString_AsString(frame->f_code->co_filename);
+		char const* name     = PyString_AsString(frame->f_code->co_name);
+		printf(" at " YELLOW "%s" RESET ":" BOLDWHITE "%d " RESET RED "%s " RESET "\n", filename, PyFrame_GetLineNumber(frame), name);
+		frame = frame->f_back;
+	}
+	PyGILState_Release(gil);
+}
+
 
 // SEE: http://stackoverflow.com/questions/10247779/python-c-api-functions-that-borrow-and-steal-references#10250720
 PyObject* Match_processPython( Match* match, PyObject* callbacks ) {
@@ -24,7 +48,7 @@ PyObject* Match_processPython( Match* match, PyObject* callbacks ) {
 
 	Py_XINCREF(callbacks);
 	ParsingElement* element = (ParsingElement*)match->element;
-	PyObject* callback      = PyList_Check(callbacks) && PyList_GET_SIZE(callbacks) > element->id ? PyList_GetItem(callbacks, element->id) : NULL;
+	PyObject* callback      = PyList_Check(callbacks) && PyList_GET_SIZE(callbacks) > element->id && element->id >= 0 ? PyList_GetItem(callbacks, element->id) : NULL;
 	PyObject* value         = NULL;
 	Py_XINCREF(callback);
 
@@ -65,7 +89,13 @@ PyObject* Match_processPython( Match* match, PyObject* callbacks ) {
 				PyObject* item = Match_processPython(child, callbacks);
 				// We don't need to increase the reference as the result is
 				// expected to be referenced
-				PyTuple_SET_ITEM(value, i, item);
+				if (item == NULL) {
+					Py_DECREF(value);
+					value = NULL;
+					break;
+				} else {
+					PyTuple_SET_ITEM(value, i, item);
+				}
 			} else {
 				// However, here we need to increase the refount
 				Py_INCREF(Py_None);
@@ -78,12 +108,15 @@ PyObject* Match_processPython( Match* match, PyObject* callbacks ) {
 
 	// NOTE: New versions of Python have PyCallable_Check
 	// SEE:  http://svn.python.org/projects/python/trunk/Objects/object.c
-	if (callback!=NULL && PyFunction_Check(callback) ) {
-		assert(value != NULL);
+	PyGILState_STATE gstate;
+	if (value == NULL) {
+		Match_onPythonError(match);
+		return Py_None;
+	} else if (callback!=NULL && PyCallable_Check(callback)) {
 		PyObject* range  = Py_BuildValue("(i,i)", match->offset, match->offset + match->length);
-		PyObject* args   = Py_BuildValue("(O,O)" ,value, range);
+		PyObject* args   = Py_BuildValue("(O,O,i)", value, range, element->id);
 		// NOTE: This is super important, as otherwise it segfaults
-		PyGILState_STATE gstate; gstate = PyGILState_Ensure();
+		gstate = PyGILState_Ensure();
 		PyObject* result = PyObject_CallObject(callback, args);
 		PyGILState_Release(gstate);
 		Py_DECREF(value);
@@ -91,7 +124,14 @@ PyObject* Match_processPython( Match* match, PyObject* callbacks ) {
 		Py_DECREF(args);
 		Py_XDECREF(callback);
 		Py_XDECREF(callbacks);
-		return result;
+		if (result == NULL) {
+			Match_onPythonError(match);
+			// NOTE: We should return NULL, but it segfaults
+			// http://stackoverflow.com/questions/39911099/segmentation-fault-with-python-ctypes-when-function-returns-a-null-pyobject-po
+			return Py_None;
+		} else {
+			return result;
+		}
 	} else {
 		Py_XDECREF(callback);
 		Py_XDECREF(callbacks);
