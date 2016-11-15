@@ -60,12 +60,14 @@ TESTS_PY       =$(wildcard $(TESTS)/test-*.py)
 BUILD_SOURCES_O =$(SOURCES_C:$(SOURCES)/c/%.c=$(BUILD)/%.o)
 BUILD_TESTS_O   =$(TESTS_C:$(TESTS)/%.c=$(BUILD)/%.o)
 BUILD_O         =$(BUILD_SOURCES_O) $(BUILD_TESTS_O)
-BUILD_SO        =$(SOURCES)/python/lib$(PROJECT)/__lib$(PROJECT).so
-BUILD_ALL       =$(BUILD_O) $(BUILD_SO)
+BUILD_SO        =$(SOURCES)/python/lib$(PROJECT)/__lib$(PROJECT).so \
+                 $(SOURCES)/python/alt$(PROJECT)/lib$(PROJECT).so
+BUILD_FFI       =$(SOURCES)/python/alt$(PROJECT)/lib$(PROJECT).ffi
+BUILD_ALL       =$(BUILD_O) $(BUILD_SO) $(BUILD_FFI)
 
 # === DIST FILES ==============================================================
 
-#DIST_BIN      = $(TESTS_C:$(TESTS)/%.c=$(DIST)/%)
+DIST_BIN      = $(TESTS_C:$(TESTS)/%.c=$(DIST)/%)
 DIST_SO       = $(DIST)/lib$(PROJECT).so $(DIST)/lib$(PROJECT).so.$(VERSION) 
 DIST_FILES    = $(DIST_BIN) $(DIST_SO)
 PRODUCTS      = $(DIST_FILES)
@@ -133,6 +135,8 @@ release: $(PRODUCT) update-python-version $(SOURCES)/python/lib$(PROJECT)/_lib$(
 
 tests: $(TEST_PRODUCTS)
 
+ffi: $(SOURCES)/alt$(PROJECT)/$(PROJECT).ffi ## Re-generates the FFI interface
+
 update-python-version: $(SOURCES)parsing.h
 	sed -i 's/VERSION \+= *"[^"]\+"/VERSION            = "$(VERSION)"/' $(SOURCES)python/$(PYMODULE)/__init__.py 
 
@@ -172,7 +176,7 @@ $(DIST)/lib$(PROJECT).so.$(VERSION): $(DIST)/lib$(PROJECT).so
 $(DIST)/test-%: $(BUILD)/test-%.o $(SOURCES_O)
 	@echo "$(GREEN)📝  $@ [EXE]$(RESET)"
 	@mkdir -p `dirname $@`
-	$(CC) -L$(DIST) -static -l$(PROJECT) $(OUTPUT_OPTION) $?
+	$(CC) -L$(DIST)  -shared $(LDFLAGS) $(OUTPUT_OPTION) $? 
 	chmod +x $@
 
 # =============================================================================
@@ -183,7 +187,11 @@ $(SOURCES)/python/lib$(PROJECT)/__lib$(PROJECT).so: $(DIST)/lib$(PROJECT).so
 	@echo "$(GREEN)📝  $@ [PYTHON SO]$(RESET)"
 	@cp $< $@
 
-$(SOURCES)/python/alt$(PROJECT)/libparsing.ffi: $(SOURCES)/h/$(PROJECT).h
+$(SOURCES)/python/alt$(PROJECT)/lib$(PROJECT).so: $(DIST)/lib$(PROJECT).so
+	@echo "$(GREEN)📝  $@ [PYTHON SO]$(RESET)"
+	@cp $< $@
+
+$(SOURCES)/python/alt$(PROJECT)/libparsing.ffi: $(SOURCES_H)
 	@echo "$(GREEN)📝  $@ [FFI]$(RESET)"
 	@mkdir -p `dirname $@`
 	@./bin/ffigen.py $< > $@

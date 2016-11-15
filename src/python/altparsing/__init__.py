@@ -6,7 +6,7 @@
 # License           : BSD License
 # -----------------------------------------------------------------------------
 # Creation date     : 18-Dec-2014
-# Last modification : 30-Dec-2014
+# Last modification : 15-Nov-2016
 # -----------------------------------------------------------------------------
 
 import sys, os, re
@@ -18,7 +18,7 @@ try:
 except ImportError:
 	import logging
 
-VERSION            = "0.5.1"
+VERSION            = "0.8.5"
 LICENSE            = "http://ffctn.com/doc/licenses/bsd"
 PACKAGE_PATH       = dirname(abspath(__file__))
 LIB_PATH           = dirname(PACKAGE_PATH)
@@ -36,7 +36,7 @@ NOTHING            = re
 
 ffi = FFI()
 with open(FFI_PATH, "r") as f:
-	ffi.cdef(f.read)
+	ffi.cdef(f.read())
 
 lib = None
 for p in (LIB_PATH, LIB_ALT_PATH, PACKAGE_PATH):
@@ -109,225 +109,6 @@ class CObject(object):
 
 # -----------------------------------------------------------------------------
 #
-# MATCH
-#
-# -----------------------------------------------------------------------------
-
-class Match(CObject):
-
-	_TYPE = "Match*"
-
-	@classmethod
-	def Wrap( cls, cobject ):
-		assert cobject.element != ffi.NULL, "Match C object does not have an element: %s %d+%d" % (cobject.status, cobject.offset, cobject.length)
-		e = ffi.cast("ParsingElement*", cobject.element)
-		if e.type == TYPE_WORD:
-			return WordMatch( cobject, wrap=cls._TYPE)
-		elif e.type == TYPE_TOKEN:
-			return TokenMatch( cobject, wrap=cls._TYPE)
-		else:
-			return cls(cobject, wrap=cls._TYPE)
-
-	def _new( self, o ):
-		return ffi.cast("Match*", o)
-
-	def group( self ):
-		e = ffi.cast("ParsingElement*", self._cobject.element)
-		if e.type == TYPE_GROUP:
-			return self.children()[0]
-		else:
-			return self.children()
-
-	def walk( self, callback ):
-		def c(m,s):
-			m = Match.Wrap(m)
-			return callback(m,s)
-		c = ffi.callback("int(*)(void *, int)", c)
-		return lib.Match__walk(self._cobject, c, 0)
-
-	def next( self ):
-		return Match.Wrap(self._cobject.next) if self._cobject.next != ffi.NULL else None
-
-	def child( self ):
-		return Match.Wrap(self._cobject.child) if self._cobject.child != ffi.NULL else None
-
-	def resolveID( self, id ):
-		for c in self.children():
-			e = match.element()
-			if isinstance(e, Reference) and e.id() == id:
-				pass
-
-	def variables( self ):
-		"""Returns a list of named references"""
-		pass
-
-	def children( self ):
-		child = self._cobject.child
-		res   = []
-		while child and child != ffi.NULL:
-			assert child.element
-			res.append(Match.Wrap(child))
-			child = child.next
-		return res
-
-	def element( self ):
-		return Reference.Wrap(self._cobject.element) if self.isFromReference() else ParsingElement.Wrap(self._cobject.element)
-
-	def isFromReference( self ):
-		return lib.Reference_Is(self._cobject.element)
-
-	def data( self, data=NOTHING ):
-		if data is NOTHING:
-			return self._cobject.data
-		else:
-			self._cobject.data = data
-			return data
-
-	def offset( self ):
-		return self._cobject.offset
-
-	def length( self ):
-		return self._cobject.length
-
-	def range( self ):
-		o, l = self.offset(), self.length()
-		return o, o + l
-
-	def __iter__( self ):
-		return self.children()
-
-	def __getitem__( self, index ):
-		if type(index) == int:
-			i = 0
-			for c in self.children():
-				if i == index:
-					return c
-				i += 1
-		else:
-			for c in self.children():
-				if c.element().name() == index:
-					return c
-			raise KeyError
-			return None
-
-	def __repr__(self):
-		element = self.element()
-		type    = element._cobject.type
-		name    = element.name() or "#" + str(element.id())
-		if isinstance(element, Reference):
-			suffix = element.cardinality()
-		else:
-			suffix = ""
-		return "<%s:%s[%s]%s(%d) %d-%d>" % (
-			self.__class__.__name__.rsplit(".", 1)[-1],
-			type,
-			name,
-			suffix,
-			len(self.children()),
-			self.offset(),
-			self.offset() + self.length(),
-		)
-
-# -----------------------------------------------------------------------------
-#
-# WORD MATCH
-#
-# -----------------------------------------------------------------------------
-
-class WordMatch(Match):
-
-	def group( self ):
-		element = ffi.cast("ParsingElement*", self._cobject.element)
-		config  = ffi.cast("WordConfig*", element.config)
-		return ffi.string(config.word)
-
-# -----------------------------------------------------------------------------
-#
-# TOKEN MATCH
-#
-# -----------------------------------------------------------------------------
-
-class TokenMatch(Match):
-
-	def group( self, i=0 ):
-		r = lib.TokenMatch_group(self._cobject, i)
-		s      = lib.TokenMatch_group(self._cobject, i)
-		r      = "" + ffi.string(s)
-		return r
-
-# -----------------------------------------------------------------------------
-#
-# REFERENCE
-#
-# -----------------------------------------------------------------------------
-
-class Reference(CObject):
-
-	@classmethod
-	def IsCType( self, element ):
-		return isinstance(element, FFI.CData) and lib.Reference_Is(element)
-
-	def _new( self, element ):
-		assert isinstance(element, ParsingElement)
-		r = lib.Reference_New(element._cobject)
-		assert r.element == element._cobject
-		return r
-
-	def name( self ):
-		return ffi.string(self._cobject.name) if self._cobject.name != ffi.NULL else None
-
-	def id( self ):
-		return self._cobject.id
-
-	def _as( self, name ):
-		lib.Reference_name(self._cobject, name)
-		return self
-
-	def element( self ):
-		return ParsingElement.Wrap(self._cobject.element)
-
-	def one( self ):
-		lib.Reference_cardinality(self._cobject, CARDINALITY_ONE)
-		return self
-
-	def isOne( self ):
-		return self.cardinality() == CARDINALITY_ONE
-
-	def optional( self ):
-		lib.Reference_cardinality(self._cobject, CARDINALITY_OPTIONAL)
-		return self
-
-	def isOptional( self ):
-		return self.cardinality() == CARDINALITY_OPTIONAL
-
-	def zeroOrMore( self ):
-		lib.Reference_cardinality(self._cobject, CARDINALITY_MANY_OPTIONAL)
-		return self
-
-	def isZeroOrMore( self ):
-		return self.cardinality() == CARDINALITY_MANY_OPTIONAL
-
-	def oneOrMore( self ):
-		lib.Reference_cardinality(self._cobject, CARDINALITY_MANY)
-		return self
-
-	def isOneOrMore( self ):
-		return self.cardinality() == CARDINALITY_MANY
-
-	def cardinality( self ):
-		return self._cobject.cardinality
-
-	def disableMemoize( self ):
-		return self
-
-	def disableFailMemoize( self ):
-		return self
-
-	def isReference( self ):
-		return True
-
-# -----------------------------------------------------------------------------
-#
 # PARSING ELEMENT
 #
 # -----------------------------------------------------------------------------
@@ -343,27 +124,27 @@ class ParsingElement(CObject):
 	def isReference( self ):
 		return False
 
+	@property
+	def name( self ):
+		return ffi.string(self._cobject.name)
+
+	@name.setter
+	def name( self, name ):
+		lib.ParsingElement_name(self._cobject, name)
+		return self
+
+	@property
+	def id( self ):
+		return self._cobject.id
+
+	def set( self, *children ):
+		return self.add(*children)
+
 	def add( self, *children ):
 		for c in children:
 			assert isinstance(c, ParsingElement) or isinstance(c, Reference)
 			lib.ParsingElement_add(self._cobject, lib.Reference_Ensure(c._cobject))
 		return self
-
-	def append( self, *children ):
-		return self.add(*children)
-
-	def name( self ):
-		return ffi.string(self._cobject.name)
-
-	def id( self ):
-		return self._cobject.id
-
-	def setName( self, name ):
-		lib.ParsingElement_name(self._cobject, name)
-		return self
-
-	def set( self, *children ):
-		return self.add(*children)
 
 	def _as( self, name ):
 		return Reference(self)._as(name)
@@ -455,7 +236,163 @@ class Condition(ParsingElement):
 		return c
 
 	def _new( self, callback ):
-		return lib.Condition_new(ffi.NULL) # ;self.WrapCallback(callback))
+		return self.WrapCallback(callback)
+
+# -----------------------------------------------------------------------------
+#
+# REFERENCE
+#
+# -----------------------------------------------------------------------------
+
+class Reference(CObject):
+
+	@classmethod
+	def IsCType( self, element ):
+		return isinstance(element, FFI.CData) and lib.Reference_Is(element)
+
+	def _new( self, element ):
+		assert isinstance(element, ParsingElement)
+		assert element._cobject
+		r = lib.Reference_FromElement(element._cobject)
+		assert r.element == element._cobject, "Reference element should be {0}, got {1}".format(element._cobject, r.element)
+		return r
+
+	# =========================================================================
+	# ACCESSORS
+	# =========================================================================
+
+	@property
+	def name( self ):
+		return ffi.string(self._cobject.name) if self._cobject.name != ffi.NULL else None
+
+	@property
+	def id( self ):
+		return self._cobject.id
+
+	@property
+	def element( self ):
+		return ParsingElement.Wrap(self._cobject.element)
+
+	# =========================================================================
+	# API
+	# =========================================================================
+
+	def _as( self, name ):
+		lib.Reference_name(self._cobject, name)
+		return self
+
+	def one( self ):
+		lib.Reference_cardinality(self._cobject, CARDINALITY_ONE)
+		return self
+
+	def optional( self ):
+		lib.Reference_cardinality(self._cobject, CARDINALITY_OPTIONAL)
+		return self
+
+	def zeroOrMore( self ):
+		lib.Reference_cardinality(self._cobject, CARDINALITY_MANY_OPTIONAL)
+		return self
+
+	def oneOrMore( self ):
+		lib.Reference_cardinality(self._cobject, CARDINALITY_MANY)
+		return self
+
+	# =========================================================================
+	# HELPERS
+	# =========================================================================
+
+	def cardinality( self ):
+		return self._cobject.cardinality
+
+	def isReference( self ):
+		return True
+
+	def isOne( self ):
+		return self.cardinality() == CARDINALITY_ONE
+
+	def isZeroOrMore( self ):
+		return self.cardinality() == CARDINALITY_MANY_OPTIONAL
+
+	def isOneOrMore( self ):
+		return self.cardinality() == CARDINALITY_MANY
+
+	def isOptional( self ):
+		return self.cardinality() == CARDINALITY_OPTIONAL
+
+# -----------------------------------------------------------------------------
+#
+# MATCH
+#
+# -----------------------------------------------------------------------------
+
+class Match(CObject):
+
+	_TYPE = "Match*"
+
+	@classmethod
+	def Wrap( cls, cobject ):
+		assert cobject.element != ffi.NULL, "Match C object does not have an element: %s %d+%d" % (cobject.status, cobject.offset, cobject.length)
+		e = ffi.cast("ParsingElement*", cobject.element)
+		return Match(cobject, wrap=cls._TYPE)
+
+	def _new( self, o ):
+		return ffi.cast("Match*", o)
+
+	# =========================================================================
+	# ACCESSORS
+	# =========================================================================
+
+	@property
+	def offset( self ):
+		return self._cobject.offset
+
+	@property
+	def length( self ):
+		return self._cobject.length
+
+	@property
+	def range( self ):
+		o, l = self.offset(), self.length()
+		return o, o + l
+
+	# =========================================================================
+	# METHODS
+	# =========================================================================
+
+	def group( self, index=0 ):
+		e = ffi.cast("ParsingElement*", self._cobject.element)
+		if e.type == TYPE_GROUP:
+			return self.children()[0]
+		else:
+			return self.children()
+
+	# =========================================================================
+	# SUGAR
+	# =========================================================================
+
+	def __iter__( self ):
+		return self.children()
+
+	def __getitem__( self, index ):
+		if type(index) == int:
+			i = 0
+			for c in self.children():
+				if i == index:
+					return c
+				i += 1
+		else:
+			for c in self.children():
+				if c.element().name() == index:
+					return c
+			raise KeyError
+			return None
+
+	# def __repr__(self):
+	# 	return "<{0} {1}-{2}>" % (
+	# 		self.__class__.__name__.rsplit(".", 1)[-1],
+	# 		self.offset,
+	# 		self.offset + self.length,
+	# 	)
 
 # -----------------------------------------------------------------------------
 #
@@ -475,7 +412,7 @@ class Procedure(ParsingElement):
 		return c
 
 	def _new( self, callback ):
-		return lib.Procedure_new(ffi.NULL) #;self.WrapCallback(callback))
+		return self.WrapCallback(callback)
 
 # -----------------------------------------------------------------------------
 #
@@ -508,30 +445,81 @@ class ParsingResult(CObject):
 	def status( self ):
 		return self._cobject.status
 
+	@property
 	def stats( self ):
 		return ParsingStats.Wrap(self._cobject.context.stats)
 
+	@property
 	def line( self ):
 		return self._cobject.context.iterator.lines
 
+	@property
 	def offset( self ):
 		return self._cobject.context.iterator.offset
 
+	@property
 	def text( self ):
 		return ffi.string(self._cobject.context.iterator.buffer)
 
-	def textaround( self, line=None ):
-		if line is None: line = self.line()
-		i = self.offset()
-		t = self.text()
-		while i > 1 and t[i] != "\n": i -= 1
-		if i != 0: i += 1
-		return t[i:(i+100)].split("\n")[0]
+	def isSuccess( self ):
+		return True if self._isSuccess() != 0 else False
+
+	def isFailure( self ):
+		return True if self._isFailure() != 0 else False
+
+	def isPartial( self ):
+		return True if self._isPartial() != 0 else False
+
+	def lastMatchRange( self ):
+		# FIXME: Should be wrapped in a a function
+		o = self._cobject.context.stats.matchOffset or 0
+		r = self._cobject.context.stats.matchLength or 0
+		return (o, o + r)
+
+	def textAround( self, before=3, after=3 ):
+		t    = self.text
+		s,e  = self.lastMatchRange()
+		bt   = t[0:s].rsplit("\n", before + 1)[-before-1:]
+		at   = t[e:].split("\n", after + 1)[:after+1]
+		c    = bt[-1] + t[s:e] + at[0]
+		bc   = len(bt[-1]) * " "
+		cc   = "⤒" + (max(0,e-s)) * "⤒"
+		ac   = max(0,len(at[-1]) - 1) * " "
+		return (
+			"\n│ ".join(bt[:-1]) + \
+			"\n└┐" + c +  \
+			"\n┌┘" + bc + cc + ac + "\n│ " + \
+			"\n│ ".join(at[1:])
+		)
+
+	def describe( self ):
+		if self.isSuccess():
+			return "Parsing successful"
+		else:
+			s,e   = self.lastMatchRange ()
+			t     = self.textAround()
+			lines = self.text[:s].split("\n")
+			line  = len(lines) - 1
+			char  = len(lines[-1])
+			return "Parsing failed at line {0}:{1}, range {2}→{3}:{4}".format(
+				line, char, s, e,
+				"\n".join([_ for _ in t.split("\n")])
+			)
+	def toJSON( self ):
+		return self.match.toJSON()
+
+	def __repr__( self ):
+		return "<{0}(status={2}, line={3}, char={4}, offset={5}, remaining={6}) at {1:02x}>".format(
+			self.__class__.__name__,
+			id(self),
+			self.status, self.line, -1, self.offset, self.remaining() or 0
+		)
 
 	def __del__( self ):
 		# The parsing result is the only one we really need to free
 		# along with the grammar
-		lib.ParsingResult_free(self._cobject)
+		# lib.ParsingResult_free(self._cobject)
+		pass
 
 # -----------------------------------------------------------------------------
 #
@@ -612,12 +600,115 @@ class Grammar(CObject):
 
 	_TYPE = "Grammar*"
 
-	def _new(self, name=None, verbose=True ):
+	def _new(self, name=None, isVerbose=True ):
 		self.name    = name
 		self.symbols = Symbols()
 		g = lib.Grammar_new()
-		g.isVerbose = 1 if verbose else 0
+		g.isVerbose = 1 if isVerbose else 0
 		return g
+
+	# =========================================================================
+	# PARSING
+	# =========================================================================
+
+	def parsePath( self, path ):
+		return ParsingResult.Wrap(lib.Grammar_parsePath(self._cobject, path))
+
+	def parseString( self, text ):
+		return ParsingResult.Wrap(lib.Grammar_parseString(self._cobject, text))
+
+	# =========================================================================
+	# AXIOM AND SKIPPING
+	# =========================================================================
+
+	@property
+	def axiom( self ):
+		return self._cobject.axiom
+
+	@axiom.setter
+	def axiom( self, axiom ):
+		if isinstance(axiom, Reference):
+			axiom = axiom._cobject.element
+			assert axiom
+		assert isinstance(axiom, ParsingElement)
+		self._cobject.axiom = axiom._cobject
+		return self
+
+	@property
+	def skip( self ):
+		return self._cobject.skip
+
+	@skip.setter
+	def skip( self, skip ):
+		assert isinstance(skip, ParsingElement)
+		self._cobject.skip = skip._cobject
+		return self
+
+	# =========================================================================
+	# FACTORY METHODS
+	# =========================================================================
+
+	def word( self, name, word):
+		r = Word(word)
+		r.name = name
+		self.symbols[name] = r
+		return r
+
+	def aword( self, word):
+		return Word(word)
+
+	def token( self, name, token):
+		r = Token(token)
+		r.name = name
+		self.symbols[name] = r
+		return r
+
+	def atoken( self, token):
+		return Token(token)
+
+	def procedure( self, name, callback):
+		r = Procedure(callback)
+		r.name = name
+		self.symbols[name] = r
+		return r
+
+	def aprocedure( self, callback):
+		return Procedure(callback)
+
+	def condition( self, name, callback):
+		r = Condition(callback)
+		r.name = name
+		self.symbols[name] = r
+		return r
+
+	def acondition( self, callback):
+		return Condition(callback)
+
+	def group( self, name, *children):
+		r = Group(*children)
+		r.name = name
+		self.symbols[name] = r
+		return r
+
+	def agroup( self, *children):
+		return Group(*children)
+
+	def rule( self, name, *children):
+		r = Rule(*children)
+		r.name = name
+		self.symbols[name] = r
+		return r
+
+	def arule( self, *children):
+		return Rule(*children)
+
+	def prepare( self ):
+		lib.Grammar_prepare(self._cobject)
+		return self
+
+	# =========================================================================
+	# META / HELPERS
+	# =========================================================================
 
 	def setVerbose( self, verbose=True ):
 		# FIXME: That cast should not be necessary
@@ -641,100 +732,12 @@ class Grammar(CObject):
 			return getattr(self.symbols, id)
 
 	def list( self ):
+		"""Lists the symbols defined in the grammar."""
 		res = []
 		for k in dir(self.symbols):
 			if k.startswith("__"): continue
 			res.append((k, getattr(self.symbols, k)))
 		return res
-
-	def word( self, name, word):
-		r = Word(word)
-		r.setName(name)
-		self.symbols[name] = r
-		return r
-
-	def aword( self, word):
-		return Word(word)
-
-	def token( self, name, token):
-		r = Token(token)
-		r.setName(name)
-		self.symbols[name] = r
-		return r
-
-	def atoken( self, token):
-		return Token(token)
-
-	def procedure( self, name, callback):
-		r = Procedure(callback)
-		r.setName(name)
-		self.symbols[name] = r
-		return r
-
-	def aprocedure( self, callback):
-		return Procedure(callback)
-
-	def condition( self, name, callback):
-		r = Condition(callback)
-		r.setName(name)
-		self.symbols[name] = r
-		return r
-
-	def acondition( self, callback):
-		return Condition(callback)
-
-	def group( self, name, *children):
-		r = Group(*children)
-		r.setName(name)
-		self.symbols[name] = r
-		return r
-
-	def agroup( self, *children):
-		return Group(*children)
-
-	def rule( self, name, *children):
-		r = Rule(*children)
-		r.setName(name)
-		self.symbols[name] = r
-		return r
-
-	def arule( self, *children):
-		return Rule(*children)
-
-	def prepare( self ):
-		lib.Grammar_prepare(self._cobject)
-		return self
-
-	def axiom( self, axiom ):
-		if isinstance(axiom, Reference):
-			axiom = axiom._cobject.element
-			assert axiom
-		assert isinstance(axiom, ParsingElement)
-		self._cobject.axiom = axiom._cobject
-		return self.prepare()
-
-	def skip( self, skip ):
-		assert isinstance(skip, ParsingElement)
-		self._cobject.skip = skip._cobject
-		return self
-
-	def parsePath( self, path ):
-		return ParsingResult.Wrap(lib.Grammar_parseFromPath(self._cobject, path))
-
-	def parseString( self, text ):
-		return ParsingResult.Wrap(lib.Grammar_parseFromString(self._cobject, text))
-
-	def walk( self, callback ):
-		def c(o,s):
-			if    Reference.IsCType(o):
-				o = Reference.Wrap(o)
-			elif  ParsingElement.IsCType(o):
-				o = ParsingElement.Wrap(o)
-			else:
-				o = Match.Wrap(o)
-			return callback(o, s)
-		c = ffi.callback("int(*)(void *, int)", c)
-		return lib.Element__walk(self._cobject.axiom, c, 0)
 
 	def __del__( self ):
 		# The parsing result is the only one we really need to free
@@ -743,11 +746,11 @@ class Grammar(CObject):
 
 # -----------------------------------------------------------------------------
 #
-# ABSTRACT PROCESSOR
+# PROCESSOR
 #
 # -----------------------------------------------------------------------------
 
-class AbstractProcessor:
+class Processor:
 
 	def __init__( self, grammar ):
 		self.symbols = grammar.list() if grammar else []
@@ -762,13 +765,13 @@ class AbstractProcessor:
 			if not s:
 				reporter.error("[!] Name without symbol: %s" % (n))
 				continue
-			self.symbolByName[s.name()] = s
-			if s.id() in self.symbolByID:
+			self.symbolByName[s.name] = s
+			if s.id in self.symbolByID:
 				if s.id() >= 0:
 					raise Exception("Duplicate symbol id: %d, has %s already while trying to assign %s" % (s.id(), self.symbolByID[s.id()].name(), s.name()))
 				else:
 					logging.warn("Unused symbol: %s" % (repr(s)))
-			self.symbolByID[s.id()]     = s
+			self.symbolByID[s.id]     = s
 
 	def _bindHandlers( self ):
 		for k in dir(self):
@@ -778,7 +781,7 @@ class AbstractProcessor:
 				continue
 			assert name in self.symbolByName, "Handler does not match any symbol: {0}, symbols are {1}".format(k, ", ".join(self.symbolByName.keys()))
 			symbol = self.symbolByName[name]
-			self.handlerByID[symbol.id()] = getattr(self, k)
+			self.handlerByID[symbol.id] = getattr(self, k)
 
 	def process( self, match ):
 		# res = [self.walk(_) for _ in match.children()]
@@ -787,28 +790,29 @@ class AbstractProcessor:
 		return self._process(match)
 
 	def _process( self, match ):
-		eid = match.element().id()
-		handler = self.getHandler(eid)
-		# print "[PROCESS]", eid, match.element().name()
-		if handler:
-			kwargs = {}
-			# We only bind the arguments listed
-			varnames = handler.func_code.co_varnames
-			for m in match.children():
-				e = m.element()
-				n = e.name()
-				if n and n in varnames:
-					kwargs[n] = self.process(m)
-			try:
-				return handler(match, **kwargs)
-			except TypeError as e:
-				args = ["match"] + list(kwargs.keys())
-				raise Exception(str(e) + " -- arguments: {0}".format(",".join(args)))
-			except Exception as e:
-				raise e
-		else:
-			# If we don't have a handler, we recurse
-			return self.defaultProcess(match)
+		print ("PROCESS", match)
+		# eid = match.element().id()
+		# handler = self.getHandler(eid)
+		# # print "[PROCESS]", eid, match.element().name()
+		# if handler:
+		# 	kwargs = {}
+		# 	# We only bind the arguments listed
+		# 	varnames = handler.func_code.co_varnames
+		# 	for m in match.children():
+		# 		e = m.element()
+		# 		n = e.name()
+		# 		if n and n in varnames:
+		# 			kwargs[n] = self.process(m)
+		# 	try:
+		# 		return handler(match, **kwargs)
+		# 	except TypeError as e:
+		# 		args = ["match"] + list(kwargs.keys())
+		# 		raise Exception(str(e) + " -- arguments: {0}".format(",".join(args)))
+		# 	except Exception as e:
+		# 		raise e
+		# else:
+		# 	# If we don't have a handler, we recurse
+		# 	return self.defaultProcess(match)
 
 	def getHandler( self, eid ):
 		return self.handlerByID.get(eid)
@@ -831,7 +835,7 @@ class AbstractProcessor:
 			return m
 
 
-class TreeWriter(AbstractProcessor):
+class TreeWriter(Processor):
 	"""A special processor that outputs the named parsing elements
 	registered in the parse tree. It is quite useful for debugging grammars."""
 

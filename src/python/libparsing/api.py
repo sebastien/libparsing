@@ -433,7 +433,6 @@ class Match(CObject):
 		self._value = value
 		return self
 
-
 	# FIXME: Not sure that offset/length are working
 	def range( self ):
 		"""Returns the range (start, end) of the match."""

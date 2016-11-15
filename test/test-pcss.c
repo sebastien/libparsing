@@ -199,9 +199,9 @@ int main (void) {
 	Iterator* iterator = Iterator_new();
 	const char* path = "tests/test-pcss.pcss";
 
-	DEBUG("Opening file: %s", path)
+	printf("Opening file: %s", path);
 	if (!Iterator_open(iterator, path)) {
-		ERROR("Cannot open file: %s", path);
+		printf("Cannot open file: %s", path);
 	} else {
 		ParsingResult* r = Grammar_parseIterator(g, iterator);
 		// Below is a simple test on how to iterate on the file

@@ -6,13 +6,10 @@
 # License           : BSD License
 # -----------------------------------------------------------------------------
 # Creation date     : 2014-12-18
-# Last modification : 2014-12-23
+# Last modification : 2016-11-15
 # -----------------------------------------------------------------------------
 import os, sys, re, fnmatch
 import reporter, texto, templating
-from pygments            import highlight
-from pygments.lexers     import CLexer
-from pygments.formatters import HtmlFormatter
 
 VERSION = "0.0.0"
 LICENSE = "http://ffctn.com/doc/licenses/bsd"
@@ -209,6 +206,9 @@ class Group:
 	def getCode( self, name ):
 		return "\n".join(self.symbols[name].code)
 
+	def __repr__( self ):
+		return "<Group:type={0},name={1},classifier={2},start={3}@{4}>".format(self.type, self.name, self.classifier, self.start, id(self))
+
 class Parser:
 
 	@classmethod
@@ -242,6 +242,7 @@ class Parser:
 		mode    = None
 		current = root = Group(type=TYPE_FILE)
 		result = [current]
+		lines  = list(lines)
 		for i,t,l in lines:
 			if   t == TYPE_SYMBOL:
 				current = Group(
@@ -268,7 +269,7 @@ class Parser:
 				try:
 					first_line  = (_ for _ in group.code if _).next()
 				except StopIteration:
-					reporter.error("Cannot find code for type: {0}".format(group.name))
+					reporter.error("Cannot find code for type: {0} in {1}".format(group, lines[group.start]))
 				match       = SYMBOL_EXTRACTORS[group.classifier].match(first_line)
 				assert match, "Symbol extractor {0} cannot match {1}".format(group.classifier, first_line)
 				group.name = match.groups()[-1]
@@ -276,10 +277,6 @@ class Parser:
 		return result
 
 class Formatter:
-
-	def __init__( self ):
-		self._codeLexer     = CLexer()
-		self._codeFormatter = HtmlFormatter()
 
 	def format( self, library ):
 		index = []
@@ -304,7 +301,6 @@ class Formatter:
 				code = strip([] + group.code)
 				if code:
 					code = "\n".join(code)
-					# code = highlight(code, self._codeLexer, self._codeFormatter)
 					code = "```c\n" + code + "\n```"
 					d.append("\n" + code + "\n")
 			body.append("\n".join(d))

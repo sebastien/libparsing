@@ -222,7 +222,7 @@ void      Iterator_free(Iterator* this);
 // Makes the given iterator open the file at the given path.
 // This will automatically assign a `FileInput` to the iterator
 // as an input source.
-bool Iterator_open( Iterator* this, const char *path );
+bool Iterator_open( Iterator* this, const char* path );
 
 // @method
 // Tells if the iterator has more available data. This means that there is
@@ -503,7 +503,7 @@ typedef struct ParsingElement {
 
 // @operation
 // Tells if the given pointer is a pointer to a ParsingElement.
-bool         ParsingElement_Is(void *);
+bool         ParsingElement_Is(void* this);
 
 // @constructor
 // Creates a new parsing element and adds the given referenced
@@ -519,15 +519,15 @@ ParsingElement* ParsingElement_Ensure(void* referenceOfElement);
 // @method
 // Adds a new reference as child of this parsing element. This will only
 // be effective for composite parsing elements such as `Rule` or `Token`.
-ParsingElement* ParsingElement_add(ParsingElement *this, Reference *child);
+ParsingElement* ParsingElement_add(ParsingElement* this, Reference* child);
 
 // @method
-ParsingElement* ParsingElement_clear(ParsingElement *this);
+ParsingElement* ParsingElement_clear(ParsingElement* this);
 
 // @method
 // Applies the grammar's skip property *once* , returning
 // the resulting change in the parsing offset.
-size_t ParsingElement_skip(ParsingElement *this, ParsingContext* context);
+size_t ParsingElement_skip(ParsingElement* this, ParsingContext* context);
 
 // @method
 // Returns the match for this parsing element for the given iterator's state.
@@ -670,12 +670,12 @@ typedef struct Reference {
 
 // @operation
 // Tells if the given pointer is a pointer to Reference
-bool Reference_Is(void * this);
+bool Reference_Is(void* this);
 
 // @operation
 // Tells if the given pointer is a pointer to Reference with cardinality
 // of `+` or `*`.
-bool Reference_IsMany(void * this);
+bool Reference_IsMany(void* this);
 
 
 // @operation
@@ -1060,7 +1060,7 @@ void Utilities_indent( ParsingElement* this, ParsingContext* context );
 void Utilities_dedent( ParsingElement* this, ParsingContext* context );
 
 // @method
-Match* Utilites_checkIndent( ParsingElement *this, ParsingContext* context );
+Match* Utilites_checkIndent( ParsingElement* this, ParsingContext* context );
 
 /**
  * Syntax Sugar

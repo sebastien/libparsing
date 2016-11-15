@@ -22,6 +22,7 @@ cdef = (
 ) + clib.getCode(
 	("ConditionCallback",    None),
 	("ProcedureCallback",    None),
+	("ContextCallback",      None),
 	("WalkingCallback",      None),
 	("Element*",             O),
 	("Reference*",           O),
