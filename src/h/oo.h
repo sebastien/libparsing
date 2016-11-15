@@ -48,7 +48,7 @@ typedef char  bool;
 #endif
 
 #define __NEW(T,v)                T* v = (T*) malloc(sizeof(T)); assert (v!=NULL);         MEMCHECK_LOG("memcheck:__NEW(%p)", v) MEMCHECK_LOG_END
-#define __FREE(v)                 if (v!=NULL) {MEMCHECK_LOG("memcheck:__FREE(%p)", v);/*(free(v);*/} MEMCHECK_LOG_END
+#define __FREE(v)                 if (v!=NULL) {MEMCHECK_LOG("memcheck:__FREE(%p)", v); free(v);} MEMCHECK_LOG_END
 #define __RESIZE(v,size)          MEMCHECK_LOG("memcheck:__RESIZE(%p,%zu)=", v, size) v=realloc(v,size);  MEMCHECK_LOG("=%p", v) MEMCHECK_LOG_END
 #define __STRING_COPY(v,str)      v = strdup(str) ; assert (v!=NULL); MEMCHECK_LOG("memcheck:__STRING_COPY(%p)", v) MEMCHECK_LOG_END
 #define __ARRAY_NEW(v,T,count)    T* v = (T*) calloc(count, sizeof(T)) ; assert (v!=NULL); MEMCHECK_LOG("memcheck:__ARRAY_NEW(%p, %zu * %zu)", v, sizeof(T), count) MEMCHECK_LOG_END

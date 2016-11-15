@@ -13,7 +13,7 @@
 
 PROJECT        :=parsing
 PYMODULE       :=lib$(PROJECT)
-FEATURES       :=pcre python2
+FEATURES       :=pcre trace
 ALL_FEATURES   :=pcre memcheck debug trace
 
 # === FEATURES ================================================================

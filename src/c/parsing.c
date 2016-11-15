@@ -1264,11 +1264,11 @@ void Token_print(ParsingElement* this) {
 
 
 void TokenMatch_free(Match* match) {
-	TRACE("TokenMatch_free: %p", match)
 	assert (match                != NULL);
 	assert (match->data          != NULL);
 	assert (((ParsingElement*)(match->element))->type == TYPE_TOKEN);
 #ifdef WITH_PCRE
+	TRACE("TokenMatch_free: %p", match)
 	TokenMatch* m = (TokenMatch*)match->data;
 	if (m != NULL ) {
 		for (int j=0 ; j<m->count ; j++) {
@@ -1276,6 +1276,7 @@ void TokenMatch_free(Match* match) {
 		}
 	}
 #endif
+
 }
 
 // ----------------------------------------------------------------------------
@@ -1923,6 +1924,7 @@ int Grammar__registerElement(Element* e, int step, void* grammar) {
 	Reference* r  = (Reference*)e;
 	Grammar*   g  = (Grammar*)grammar;
 	Element*   ge = g->elements[r->id];
+	TRACE("Registering element %d", r->id);
 	if (ge == NULL) {
 		g->elements[r->id] = e;
 		return step;
@@ -1937,25 +1939,44 @@ void Grammar_prepare ( Grammar* this ) {
 	}
 	if (this->axiom!=NULL) {
 		// We would need to free elements if they were already allocated
-		if (this->elements) { free(this->elements) ; this->elements = NULL; }
+		if (this->elements) { __FREE(this->elements) ; this->elements = NULL; }
 		assert(this->elements == NULL);
+
 		TRACE("Grammar_prepare: resetting element IDs %c", ' ')
 		Element_walk(this->axiom, Grammar__resetElementIDs, NULL);
 		if (this->skip != NULL) {
 			Element_walk(this->skip, Grammar__resetElementIDs, NULL);
 		}
+
 		TRACE("Grammar_prepare: assigning new element IDs %c", ' ')
 		int count = Element_walk(this->axiom, Grammar__assignElementIDs, NULL);
 		this->axiomCount = count;
 		if (this->skip != NULL) {
 			this->skipCount = Element__walk(this->skip, Grammar__assignElementIDs, count + 1, NULL) - count;
 		}
+
 		// Now we register the elements
-		__ARRAY_RESIZE(this->elements, Element*, this->skipCount + this->axiomCount);
+		__ARRAY_NEW(elements, Element*, this->skipCount + this->axiomCount);
+		this->elements = elements;
+
 		count = Element_walk(this->axiom, Grammar__registerElement, this);
 		if (this->skip != NULL) {
 			Element__walk(this->skip, Grammar__registerElement, count, this);
 		}
+
+		#ifdef WITH_TRACE
+		int j = this->skipCount + this->axiomCount;
+		TRACE("Grammar_prepare:  skip=%d + axiom=%d = total=%d symbols", this->skipCount, this->axiomCount, j);
+		for (int i=0 ; i < j ; i++) {
+			ParsingElement* element = this->elements[i];
+			if (element == NULL) {
+			} else if (element->type == TYPE_REFERENCE) {
+				TRACE("Grammar_prepare:  Reference    %4d %c %-20s [%4d/%4d]", element->id, element->type, element->name, i, j - 1);
+			} else {
+				TRACE("Grammar_prepare:  Element      %4d %c %-20s [%4d/%4d]", element->id, element->type, element->name, i, j - 1);
+			}
+		}
+		#endif
 	}
 }
 

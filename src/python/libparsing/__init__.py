@@ -821,7 +821,6 @@ class Grammar(CObject):
 		pass
 
 
-
 # -----------------------------------------------------------------------------
 #
 # PROCESSOR
@@ -831,7 +830,7 @@ class Grammar(CObject):
 class Processor:
 
 	def __init__( self, grammar ):
-		self.symbols = grammar.list() if grammar else []
+		self.symbols      = grammar.list() if grammar else []
 		self.symbolByName = {}
 		self.symbolByID   = {}
 		self.handlerByID  = {}

@@ -660,8 +660,8 @@ int TokenMatch_count(Match* match);
 typedef struct Reference {
 	char            type;            // Set to Reference_T, to disambiguate with ParsingElement
 	int             id;              // The ID, assigned by the grammar, as the relative distance to the axiom
-	char            cardinality;     // Either ONE (default), OPTIONAL, MANY or MANY_OPTIONAL
 	const char*     name;            // The name of the reference (optional)
+	char            cardinality;     // Either ONE (default), OPTIONAL, MANY or MANY_OPTIONAL
 	struct ParsingElement* element;  // The reference to the parsing element
 	struct Reference*      next;     // The next child reference in the parsing elements
 } Reference;
