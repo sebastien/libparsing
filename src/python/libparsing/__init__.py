@@ -19,6 +19,9 @@ __doc__ = """
 The CFFI-based Python wrapper for libparsing.
 """
 
+# TODO: Switch to pre-compilation
+# TODO: Use global callbacks http://cffi.readthedocs.io/en/latest/using.html#id3
+
 try:
 	import reporter as logging
 except ImportError:
@@ -547,11 +550,15 @@ class ParsingContext(CObject):
 		return self
 
 	def set( self, key, value ):
-		lib.ParsingContext_set(self._cobject, key, value)
+		assert isinstance(value, int)
+		lib.ParsingContext_setInt(self._cobject, key, value)
 		return value
 
 	def get( self, key ):
-		return lib.ParsingContext_get(self._cobject, key)
+		return lib.ParsingContext_getInt(self._cobject, key)
+
+	def __getitem__( self, offset ):
+		return lib.ParsingContext_charAt(self._cobject, offset)
 
 # -----------------------------------------------------------------------------
 #
@@ -958,8 +965,6 @@ class Processor:
 			assert name in self.symbolByName, "Handler does not match any symbol: {0}, symbols are {1}".format(k, ", ".join(self.symbolByName.keys()))
 			symbol = self.symbolByName[name]
 			self.handlerByID[symbol.id] = getattr(self, k)
-			print ("SYMBOL", symbol.id, "=", name)
-
 
 	def process( self, match ):
 		match = match.match if isinstance(match, ParsingResult) else match
@@ -969,7 +974,6 @@ class Processor:
 		"""Processes a match element."""
 		t = match.type
 		i = match.id
-		print ("PROCESS", match, ":", match.element)
 		r = None
 		if t == TYPE_WORD:
 			r = self._processWord(match)
@@ -989,7 +993,6 @@ class Processor:
 			raise Exception("Unsupported match type: {0} in {1}".format(t, match))
 		h = self.handlerByID.get(i)
 		r = h(MatchResult(r,match)) if h else r
-		print (" -- PROCESSED", match, "AS", r)
 		return r
 
 	def _processWord( self, match ):
@@ -1012,8 +1015,7 @@ class Processor:
 		return list(self._processMatch(_) for _ in match)
 
 	def _processReference( self, match ):
-		ref = Reference.Wrap(match.element)
-		if not ref.isMany():
+		if not lib.Reference_IsMany(match.element):
 			return self._processMatch(match[0])
 		else:
 			return list(self._processMatch(_) for _ in match)

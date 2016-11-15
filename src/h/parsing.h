@@ -685,7 +685,6 @@ bool Reference_Is(void* this);
 // of `+` or `*`.
 bool Reference_IsMany(void* this);
 
-
 // @operation
 // Ensures that the given element (or reference) is a reference.
 Reference* Reference_Ensure(void* elementOrReference);
@@ -713,6 +712,9 @@ bool Reference_hasNext(Reference* this);
 
 // @method
 bool Reference_hasElement(Reference* this);
+
+// @method
+bool Reference_isMany(Reference* this);
 
 // @method
 int Reference__walk( Reference* this, WalkingCallback callback, int step, void* nothing );
@@ -935,8 +937,13 @@ void ParsingContext_pop ( ParsingContext* this );
 void*  ParsingContext_get(ParsingContext*  this, const char* name);
 
 // @method
+int  ParsingContext_getInt(ParsingContext*  this, const char* name);
+
+// @method
 void  ParsingContext_set(ParsingContext*  this, const char* name, void* value);
 
+// @method
+void  ParsingContext_setInt(ParsingContext*  this, const char* name, int value);
 
 // @method
 void ParsingContext_on(ParsingContext* this, ContextCallback callback);

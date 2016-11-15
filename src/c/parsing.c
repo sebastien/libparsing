@@ -844,7 +844,7 @@ bool Reference_Is(void * this) {
 }
 
 bool Reference_IsMany(void * this) {
-	return Reference_Is(this) && (((Reference*)this)->cardinality == CARDINALITY_MANY || ((Reference*)this)->cardinality == CARDINALITY_OPTIONAL);
+	return Reference_Is(this) && (((Reference*)this)->cardinality == CARDINALITY_MANY || ((Reference*)this)->cardinality == CARDINALITY_MANY_OPTIONAL);
 }
 
 Reference* Reference_Ensure(void* elementOrReference) {
@@ -890,6 +890,10 @@ bool Reference_hasElement(Reference* this) {
 
 bool Reference_hasNext(Reference* this) {
 	return this->next != NULL;
+}
+
+bool Reference_isMany(Reference* this) {
+	return this != NULL && (this->cardinality == CARDINALITY_MANY || this->cardinality == CARDINALITY_MANY_OPTIONAL);
 }
 
 Reference* Reference_cardinality(Reference* this, char cardinality) {
@@ -1732,8 +1736,16 @@ void* ParsingContext_get(ParsingContext* this, const char* name) {
 	return ParsingVariable_get(this->variables, name);
 }
 
+int ParsingContext_getInt(ParsingContext* this, const char* name) {
+	return (int)(ParsingVariable_get(this->variables, name));
+}
+
 void ParsingContext_set(ParsingContext*  this, const char* name, void* value) {
 	this->variables = ParsingVariable_set(this->variables, name, value);
+}
+
+void ParsingContext_setInt(ParsingContext*  this, const char* name, int value) {
+	this->variables = ParsingVariable_set(this->variables, name, (void*)(long)value);
 }
 
 void ParsingContext_on(ParsingContext* this, ContextCallback callback) {

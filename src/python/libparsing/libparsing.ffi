@@ -31,6 +31,7 @@ Reference* Reference_cardinality(Reference* this, char cardinality);
 Reference* Reference_name(Reference* this, const char* name);
 bool Reference_hasNext(Reference* this);
 bool Reference_hasElement(Reference* this);
+bool Reference_isMany(Reference* this);
 int Reference__walk( Reference* this, WalkingCallback callback, int step, void* nothing );
 Match* Reference_recognize(Reference* this, ParsingContext* context);
 typedef struct Match {
@@ -107,7 +108,9 @@ void ParsingContext_free( ParsingContext* this );
 void ParsingContext_push ( ParsingContext* this );
 void ParsingContext_pop ( ParsingContext* this );
 void*  ParsingContext_get(ParsingContext*  this, const char* name);
+int  ParsingContext_getInt(ParsingContext*  this, const char* name);
 void  ParsingContext_set(ParsingContext*  this, const char* name, void* value);
+void  ParsingContext_setInt(ParsingContext*  this, const char* name, int value);
 int  ParsingContext_getVariableCount(ParsingContext* this);
 Match* ParsingContext_registerMatch(ParsingContext* this, Element* e, Match* m);
 typedef struct ParsingElement {
