@@ -1,9 +1,8 @@
 #!/usr/bin/env python2.7
 # encoding: utf8
-
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + "/src")
-from  altparsing import Grammar, Token, Word, Rule, Group, Condition, Procedure, Processor, NOTHING
+from  libparsing import Grammar, Token, Word, Rule, Group, Condition, Procedure, Processor, NOTHING
 
 g = Grammar(isVerbose=False)
 s = g.symbols
@@ -50,6 +49,6 @@ EXAMPLES = [
 if __name__ == "__main__":
 	result = g.parseString(EXAMPLES[0])
 	p      = EP(g)
-	p.process(result)
+	print (p.process(result))
 
 # EOF

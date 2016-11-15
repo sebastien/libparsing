@@ -448,7 +448,6 @@ void Match_free(Match* this);
 // @method
 bool Match_isSuccess(Match* this);
 
-
 // @method
 bool Match_hasNext(Match* this);
 
@@ -469,6 +468,15 @@ int Match_getLength(Match* this);
 
 // @method
 int Match_getEndOffset(Match* this);
+
+// @method
+int Match_getElementID(Match* this);
+
+// @method
+char Match_getElementType(Match* this);
+
+// @method
+const char* Match_getElementName(Match* this);
 
 // @method
 // Calls `callback` with `(Match, step, context)` as arguments, doing
@@ -770,7 +778,7 @@ Match*          Procedure_recognize(ParsingElement* this, ParsingContext* contex
 */
 
 // @callback
-typedef Match* (*ConditionCallback)(ParsingElement*, ParsingContext*);
+typedef bool (*ConditionCallback)(ParsingElement*, ParsingContext*);
 
 // @constructor
 ParsingElement* Condition_new(ConditionCallback c);
@@ -1060,7 +1068,7 @@ void Utilities_indent( ParsingElement* this, ParsingContext* context );
 void Utilities_dedent( ParsingElement* this, ParsingContext* context );
 
 // @method
-Match* Utilites_checkIndent( ParsingElement* this, ParsingContext* context );
+bool Utilites_checkIndent( ParsingElement* this, ParsingContext* context );
 
 /**
  * Syntax Sugar
@@ -1203,8 +1211,6 @@ Match* Utilites_checkIndent( ParsingElement* this, ParsingContext* context );
 // Sets the given reference or parsing element's reference to CARDINALITY_MANY_OPTIONAL
 // If a parsing element is given, it will be automatically wrapped in a reference.
 #define MANY_OPTIONAL(v)  Reference_cardinality(Reference_Ensure(v), CARDINALITY_MANY_OPTIONAL)
-
-#include "parsing+python.h"
 
 /*
  * Grammar declaration with macros

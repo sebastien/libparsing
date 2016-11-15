@@ -3,7 +3,7 @@
 # C+Python Project Makefile
 # =========================
 #
-# Updated: 2016-11-10
+# Updated: 2016-11-15
 # Author:  FFunction <ffctn.com>
 #
 # -----------------------------------------------------------------------------#
@@ -14,7 +14,7 @@
 PROJECT        :=parsing
 PYMODULE       :=lib$(PROJECT)
 FEATURES       :=pcre python2
-ALL_FEATURES   :=pcre python2 python3 memcheck debug trace
+ALL_FEATURES   :=pcre memcheck debug trace
 
 # === FEATURES ================================================================
 
@@ -60,9 +60,8 @@ TESTS_PY       =$(wildcard $(TESTS)/test-*.py)
 BUILD_SOURCES_O =$(SOURCES_C:$(SOURCES)/c/%.c=$(BUILD)/%.o)
 BUILD_TESTS_O   =$(TESTS_C:$(TESTS)/%.c=$(BUILD)/%.o)
 BUILD_O         =$(BUILD_SOURCES_O) $(BUILD_TESTS_O)
-BUILD_SO        =$(SOURCES)/python/lib$(PROJECT)/__lib$(PROJECT).so \
-                 $(SOURCES)/python/alt$(PROJECT)/lib$(PROJECT).so
-BUILD_FFI       =$(SOURCES)/python/alt$(PROJECT)/lib$(PROJECT).ffi
+BUILD_SO        =$(SOURCES)/python/lib$(PROJECT)/lib$(PROJECT).so
+BUILD_FFI       =$(SOURCES)/python/lib$(PROJECT)/lib$(PROJECT).ffi
 BUILD_ALL       =$(BUILD_O) $(BUILD_SO) $(BUILD_FFI)
 
 # === DIST FILES ==============================================================
@@ -183,18 +182,14 @@ $(DIST)/test-%: $(BUILD)/test-%.o $(SOURCES_O)
 # PYTHON MODULE
 # =============================================================================
 
-$(SOURCES)/python/lib$(PROJECT)/__lib$(PROJECT).so: $(DIST)/lib$(PROJECT).so
+$(SOURCES)/python/lib$(PROJECT)/lib$(PROJECT).so: $(DIST)/lib$(PROJECT).so
 	@echo "$(GREEN)📝  $@ [PYTHON SO]$(RESET)"
 	@cp $< $@
 
-$(SOURCES)/python/alt$(PROJECT)/lib$(PROJECT).so: $(DIST)/lib$(PROJECT).so
-	@echo "$(GREEN)📝  $@ [PYTHON SO]$(RESET)"
-	@cp $< $@
-
-$(SOURCES)/python/alt$(PROJECT)/libparsing.ffi: $(SOURCES_H)
+$(SOURCES)/python/lib$(PROJECT)/libparsing.ffi: $(SOURCES)/h/$(PROJECT).h
 	@echo "$(GREEN)📝  $@ [FFI]$(RESET)"
 	@mkdir -p `dirname $@`
-	@./bin/ffigen.py $< > $@
+	./bin/ffigen.py $< > $@
 
 # =============================================================================
 # OBJECTS

@@ -488,15 +488,15 @@ void Match_free(Match* this) {
 }
 
 
-int Match_getElementID(Match *this) {
+int Match_getElementID(Match* this) {
 	return this != NULL && this->element != NULL ? ((ParsingElement*)this->element)->id : -1;
 }
 
-char Match_getElementType(Match *this) {
+char Match_getElementType(Match* this) {
 	return this != NULL && this->element != NULL ? ((ParsingElement*)this->element)->type : ' ';
 }
 
-const char* Match_getElementName(Match *this) {
+const char* Match_getElementName(Match* this) {
 	if (this != NULL && this->element != NULL) {return NULL;}
 	if (((ParsingElement*)this->element)->type == TYPE_REFERENCE) {
 		ParsingElement* element = ((Reference*)this->element)->element;
@@ -1498,17 +1498,13 @@ ParsingElement* Condition_new(ConditionCallback c) {
 
 Match*  Condition_recognize(ParsingElement* this, ParsingContext* context) {
 	if (this->config != NULL) {
-		// FIXME: Executing handlers is still quite problematic
-		Match* result = ((ConditionCallback)this->config)(this, context);
-		// Match* result = (Match*)1;
-		// We support special cases where the condition can return a boolean
-		if      (result == (Match*)0) { result = FAILURE; }
-		else if (result == (Match*)1) { result = Match_Success(0, this, context);}
+		bool value    = ((ConditionCallback)this->config)(this, context);
+		Match* result = value == TRUE ? Match_Success(0, this, context) : FAILURE;
 		OUT_STEP_IF(Match_isSuccess(result), "[✓] %s└ Condition " BOLDGREEN "%s" RESET "#%d matched %zu:%zu-%zu[→%d]", context->indent, this->name, this->id, context->iterator->lines, context->iterator->offset - result->length, context->iterator->offset, context->depth)
 		OUT_STEP_IF(!Match_isSuccess(result), " !  %s└ Condition " BOLDRED "%s" RESET "#%d failed at %zu:%zu[→%d]",  context->indent, this->name, this->id, context->iterator->lines, context->iterator->offset, context->depth)
 		return  MATCH_STATS(result);
 	} else {
-		OUT_STEP("[✓] %s└ Condition %s#%d matched by default at %zu", context->indent, this->name, this->id, context->iterator->offset)
+		OUT_STEP("[✓] %s└ Condition %s#%d matched by default at %zu", context->indent, this->name, this->id, context->iterator->offset);
 		Match* result = Match_Success(0, this, context);
 		assert(Match_isSuccess(result));
 		return  MATCH_STATS(result);
@@ -2067,7 +2063,7 @@ void Utilities_dedent( ParsingElement* this, ParsingContext* context ) {
 	//ParsingContext_setVariable("indent", depth - 1,     sizeof(int));
 }
 
-Match* Utilites_checkIndent( ParsingElement *this, ParsingContext* context ) {
+bool Utilites_checkIndent( ParsingElement *this, ParsingContext* context ) {
 	// Variable tabs = ParsingContext_getVariable("tabs", NULL, sizeof(int));
 	// // TokenMatch_group(0)
 	// int depth     = ParsingContext_getVariable("indent", 0, sizeof(int)).asInt;
@@ -2076,7 +2072,7 @@ Match* Utilites_checkIndent( ParsingElement *this, ParsingContext* context ) {
 	// } else {
 	// 	return Match_Success();
 	// }
-	return Match_Success(0, this, context);
+	return TRUE;
 }
 
 // EOF
