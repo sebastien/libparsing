@@ -1802,21 +1802,21 @@ void ParsingStats_setSymbolsCount(ParsingStats* this, size_t t) {
 Match* ParsingStats_registerMatch(ParsingStats* this, Element* e, Match* m) {
 	// We can convert ParsingElements to Reference and vice-versa as they
 	// have the same start sequence (char type, int id).
-	Reference* r = (Reference*)e;
-	if (m!=NULL && Match_isSuccess(m)) {
-		this->successBySymbol[r->id] += 1;
-		if (m->offset >= this->matchOffset) {
-			this->matchOffset = m->offset;
-			this->matchLength = m->length;
-		}
-	} else {
-		this->failureBySymbol[r->id] += 1;
-		// We register the deepest failure
-		if(m != NULL && m->offset >= this->failureOffset) {
-			this->failureOffset  = m->offset;
-			this->failureElement = m->element;
-		}
-	}
+	// Reference* r = (Reference*)e;
+	// if (m!=NULL && Match_isSuccess(m)) {
+	// 	this->successBySymbol[r->id] += 1;
+	// 	if (m->offset >= this->matchOffset) {
+	// 		this->matchOffset = m->offset;
+	// 		this->matchLength = m->length;
+	// 	}
+	// } else {
+	// 	this->failureBySymbol[r->id] += 1;
+	// 	// We register the deepest failure
+	// 	if(m != NULL && m->offset >= this->failureOffset) {
+	// 		this->failureOffset  = m->offset;
+	// 		this->failureElement = m->element;
+	// 	}
+	// }
 	return m;
 }
 

@@ -72,7 +72,7 @@ def grammar():
 	g.skip  = s.WHITESPACE
 	return g
 
-class P1(FastProcessor):
+class P1(Processor):
 
 	def onWORD( self, match ):
 		return match
@@ -112,48 +112,6 @@ class P1(FastProcessor):
 
 	def onList1_NR( self, match ):
 		return match
-
-class P2(Processor):
-
-	def onWORD( self, match ):
-		return match
-
-	def onTOKEN( self, match ):
-		return match
-
-	def onAtom( self, match ):
-		return match
-
-	def onValue( self, match ):
-		return match
-
-	def onList( self, match ):
-		return match
-
-	def onList0_1( self, match ):
-		return match
-
-	def onList0_N( self, match ):
-		return match
-
-	def onList1_1( self, match ):
-		return match
-
-	def onList1_N( self, match ):
-		return match
-
-	def onList0_1R( self, match ):
-		return match
-
-	def onList0_NR( self, match ):
-		return match
-
-	def onList1_1R( self, match ):
-		return match
-
-	def onList1_NR( self, match ):
-		return match
-
 
 def process( value=None, r=None ):
 	return value
@@ -166,9 +124,8 @@ def run():
 		if not r.isSuccess():
 			print ("Parsing failed:", _)
 			break
-		#p = P1(g)
-		p = P2(g)
-		print (p.process(r))
+		p = P1(g)
+		print ("RESULT=", p.process(r))
 
 
 if __name__ == "__main__":
