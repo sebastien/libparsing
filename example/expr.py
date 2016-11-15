@@ -4,21 +4,23 @@ import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + "/src")
 from  libparsing import Grammar, Token, Word, Rule, Group, Condition, Procedure, Processor, NOTHING
 
-g = Grammar(isVerbose=False)
-s = g.symbols
 
-g.token("WS",       "\s+")
-g.token("NUMBER",   "\d+(\.\d+)?")
-g.token("VARIABLE", "\w+")
-g.token("OPERATOR", "[\+\-\*/]")
-g.group("Value",     s.NUMBER, s.VARIABLE)
-g.rule("Suffix",     s.OPERATOR._as("operator"), s.Value._as("value"))
-g.rule("Expression", s.Value, s.Suffix.zeroOrMore())
+def grammar( isVerbose=False ):
+	"""Defines a grammar for simple artihmetic expressions calculation."""
+	g = Grammar(isVerbose=isVerbose)
+	s = g.symbols
+	g.token("WS",       "\s+")
+	g.token("NUMBER",   "\d+(\.\d+)?")
+	g.token("VARIABLE", "\w+")
+	g.token("OPERATOR", "[\+\-\*/]")
+	g.group("Value",     s.NUMBER, s.VARIABLE)
+	g.rule("Suffix",     s.OPERATOR._as("operator"), s.Value._as("value"))
+	g.rule("Expression", s.Value, s.Suffix.zeroOrMore())
+	g.axiom = s.Expression
+	g.skip  = s.WS
+	return g
 
-g.axiom= s.Expression
-g.skip = s.WS
-
-class EP(Processor):
+class Processor(Processor):
 
 	def onNUMBER( self, match ):
 		return int(match.group())
@@ -40,6 +42,7 @@ class EP(Processor):
 		value    = self.process(match[0])
 		suffixes = self.process(match[1])
 		print ("Expression", value, suffixes)
+		return value, suffixes
 
 
 EXAMPLES = [
@@ -47,8 +50,9 @@ EXAMPLES = [
 ]
 
 if __name__ == "__main__":
+	g      = grammar()
+	p      = Processor(g)
 	result = g.parseString(EXAMPLES[0])
-	p      = EP(g)
 	print (p.process(result))
 
 # EOF

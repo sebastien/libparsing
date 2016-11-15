@@ -49,9 +49,7 @@ def grammarIndent( grammar ):
 	g.procedure("INDENT",       indent)
 	g.procedure("DEDENT",       dedent)
 	g.condition("CHECK_INDENT", check_indent)
-	print ("TABS", s.TABS)
-	print ("CHECK_INDENT", s.CHECK_INDENT)
-	g.rule("Indent", s.TABS)
+	g.rule("Indent", s.TABS, s.CHECK_INDENT)
 
 def grammar(verbose=False):
 	g = Grammar(isVerbose = verbose)
@@ -109,7 +107,7 @@ property=value
 
 if __name__ == "__main__":
 	g = grammar(True)
-	#r = g.parseString(EXAMPLE2)
+	r = g.parseString(EXAMPLE2)
 	#print (r.describe())
 	#r.match.toJSON(1)
 

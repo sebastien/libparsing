@@ -95,7 +95,6 @@ class CObject(object):
 
 	def __init__(self, *args, **kwargs):
 		self._cobject = None
-		print (self, args, kwargs)
 		if "wrap" in kwargs:
 			assert len(kwargs) == 1
 			assert len(args  ) == 1
@@ -153,13 +152,8 @@ class ParsingElement(CObject):
 		return self.add(*children)
 
 	def add( self, *children ):
-		print ("ParsingElement.add", self, ":", children)
 		for c in children:
 			assert isinstance(c, ParsingElement) or isinstance(c, Reference)
-			print (" - ADDING", c, "TO", self)
-			print ("   - Reference?", lib.Reference_Is(c._cobject))
-			print ("   - Element?", lib.ParsingElement_Is(c._cobject))
-			print ("   - Type?", c.type)
 			lib.ParsingElement_add(self._cobject, lib.Reference_Ensure(c._cobject))
 		return self
 
@@ -182,7 +176,7 @@ class ParsingElement(CObject):
 		return self
 
 	def __repr__(self):
-		classname = self.__class__.__name__.rsplit(".", 1)[-1],
+		classname = self.__class__.__name__.rsplit(".", 1)[-1]
 		if not self._cobject:
 			return "<%s:Uninitialized>" % (classname)
 		else:
@@ -668,6 +662,7 @@ class Grammar(CObject):
 		self.symbols = Symbols()
 		g = lib.Grammar_new()
 		g.isVerbose = 1 if isVerbose else 0
+		self._prepared = False
 		return g
 
 	# =========================================================================
@@ -675,9 +670,11 @@ class Grammar(CObject):
 	# =========================================================================
 
 	def parsePath( self, path ):
+		self._prepare()
 		return ParsingResult.Wrap(lib.Grammar_parsePath(self._cobject, path))
 
 	def parseString( self, text ):
+		self._prepare()
 		return ParsingResult.Wrap(lib.Grammar_parseString(self._cobject, text))
 
 	# =========================================================================
@@ -690,6 +687,7 @@ class Grammar(CObject):
 
 	@axiom.setter
 	def axiom( self, axiom ):
+		self._prepared = False
 		if isinstance(axiom, Reference):
 			axiom = axiom._cobject.element
 			assert axiom
@@ -703,6 +701,7 @@ class Grammar(CObject):
 
 	@skip.setter
 	def skip( self, skip ):
+		self._prepared = False
 		assert isinstance(skip, ParsingElement)
 		self._cobject.skip = skip._cobject
 		return self
@@ -712,62 +711,70 @@ class Grammar(CObject):
 	# =========================================================================
 
 	def word( self, name, word):
+		self._prepared = False
 		r = Word(word)
 		r.name = name
 		self.symbols[name] = r
 		return r
 
 	def aword( self, word):
+		self._prepared = False
 		return Word(word)
 
 	def token( self, name, token):
+		self._prepared = False
 		r = Token(token)
 		r.name = name
 		self.symbols[name] = r
 		return r
 
 	def atoken( self, token):
+		self._prepared = False
 		return Token(token)
 
 	def procedure( self, name, callback):
+		self._prepared = False
 		r = Procedure(callback)
 		r.name = name
 		self.symbols[name] = r
 		return r
 
 	def aprocedure( self, callback):
+		self._prepared = False
 		return Procedure(callback)
 
 	def condition( self, name, callback):
+		self._prepared = False
 		r = Condition(callback)
 		r.name = name
 		self.symbols[name] = r
 		return r
 
 	def acondition( self, callback):
+		self._prepared = False
 		return Condition(callback)
 
 	def group( self, name, *children):
+		self._prepared = False
 		r = Group(*children)
 		r.name = name
 		self.symbols[name] = r
 		return r
 
 	def agroup( self, *children):
+		self._prepared = False
 		return Group(*children)
 
 	def rule( self, name, *children):
+		self._prepared = False
 		r = Rule(*children)
 		r.name = name
 		self.symbols[name] = r
 		return r
 
 	def arule( self, *children):
+		self._prepared = False
 		return Rule(*children)
-
-	def prepare( self ):
-		lib.Grammar_prepare(self._cobject)
-		return self
 
 	# =========================================================================
 	# META / HELPERS
@@ -802,11 +809,18 @@ class Grammar(CObject):
 			res.append((k, getattr(self.symbols, k)))
 		return res
 
+	def _prepare( self ):
+		if not self._prepared:
+			lib.Grammar_prepare(self._cobject)
+			self._prepared = True
+
 	def __del__( self ):
 		# The parsing result is the only one we really need to free
 		# along with the grammar
 		# lib.Grammar_free(self._cobject)
 		pass
+
+
 
 # -----------------------------------------------------------------------------
 #
@@ -831,7 +845,7 @@ class Processor:
 				continue
 			self.symbolByName[s.name] = s
 			if s.id in self.symbolByID:
-				if s.id() >= 0:
+				if s.id >= 0:
 					raise Exception("Duplicate symbol id: %d, has %s already while trying to assign %s" % (s.id(), self.symbolByID[s.id()].name(), s.name()))
 				else:
 					logging.warn("Unused symbol: %s" % (repr(s)))
@@ -853,7 +867,6 @@ class Processor:
 
 	def _processMatch( self, match ):
 		"""Processes a match element."""
-		print ("PROCESS", match.type)
 		t = match.type
 		if   t == TYPE_WORD:
 			return self._processWord(match)
@@ -892,7 +905,6 @@ class Processor:
 
 	def _processReference( self, match ):
 		ref = Reference.Wrap(match.element)
-		print ("REF", ref)
 		return None
 
 
