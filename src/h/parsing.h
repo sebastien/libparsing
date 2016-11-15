@@ -969,6 +969,9 @@ ParsingResult* ParsingResult_new(Match* match, ParsingContext* context);
 void ParsingResult_free(ParsingResult* this);
 
 // @method
+bool ParsingResult_isSuccess(ParsingResult* this);
+
+// @method
 bool ParsingResult_isFailure(ParsingResult* this);
 
 // @method

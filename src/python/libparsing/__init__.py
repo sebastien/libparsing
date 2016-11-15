@@ -252,7 +252,8 @@ class Condition(ParsingElement):
 	def WrapCallback(cls, callback):
 		# SEE: http://stackoverflow.com/questions/34392109/use-extern-python-style-cffi-callbacks-with-embedded-pypy
 		def c(e,ctx):
-			return callback(ParsingElement.Wrap(e), ParsingContext.Wrap(ctx))
+			res = callback(ParsingElement.Wrap(e), ParsingContext.Wrap(ctx)) if callback else 1
+			return res
 		t = "bool(*)(ParsingElement *, ParsingContext *)"
 		c = ffi.callback(t, c)
 		return c
@@ -369,6 +370,14 @@ class Reference(CObject):
 	def isMany( self ):
 		return self.isZeroOrMore() or self.isOneOrMore()
 
+	def __repr__(self):
+		return "<{0} {1}@{2}→{3}>".format(
+			self.__class__.__name__.rsplit(".", 1)[-1],
+			self.id,
+			self.name,
+			self.element
+		)
+
 # -----------------------------------------------------------------------------
 #
 # MATCH
@@ -431,6 +440,8 @@ class Match(CObject):
 				return i
 		return -1
 
+	def hasChildren( self ):
+		return lib.Match_hasChildren(self._cobject)
 
 	def toJSON( self ):
 		return lib.Match_toJSON(self._cobject, 1)
@@ -479,6 +490,14 @@ class MatchResult(object):
 	def __init__( self, value, match ):
 		self.value = value
 		self.match = match
+
+	@property
+	def name( self ):
+		return self.match.name
+
+	@property
+	def id( self ):
+		return self.match.id
 
 	def group( self, index=0 ):
 		return self[index]
@@ -755,7 +774,8 @@ class Grammar(CObject):
 		self.symbols = Symbols()
 		g = lib.Grammar_new()
 		g.isVerbose = 1 if isVerbose else 0
-		self._prepared = False
+		self._prepared  = False
+		self._anonymous = []
 		return g
 
 	# =========================================================================
@@ -812,7 +832,7 @@ class Grammar(CObject):
 
 	def aword( self, word):
 		self._prepared = False
-		return Word(word)
+		return self._registerAnonymous(Word(word))
 
 	def token( self, name, token):
 		self._prepared = False
@@ -823,7 +843,7 @@ class Grammar(CObject):
 
 	def atoken( self, token):
 		self._prepared = False
-		return Token(token)
+		return self._registerAnonymous(Token(token))
 
 	def procedure( self, name, callback):
 		self._prepared = False
@@ -834,18 +854,18 @@ class Grammar(CObject):
 
 	def aprocedure( self, callback):
 		self._prepared = False
-		return Procedure(callback)
+		return self._registerAnonymous(Procedure(callback))
 
-	def condition( self, name, callback):
+	def condition( self, name, callback=None):
 		self._prepared = False
 		r = Condition(callback)
 		r.name = name
 		self.symbols[name] = r
 		return r
 
-	def acondition( self, callback):
+	def acondition( self, callback=None):
 		self._prepared = False
-		return Condition(callback)
+		return self._registerAnonymous(Condition(callback))
 
 	def group( self, name, *children):
 		self._prepared = False
@@ -856,7 +876,7 @@ class Grammar(CObject):
 
 	def agroup( self, *children):
 		self._prepared = False
-		return Group(*children)
+		return self._registerAnonymous(Group(*children))
 
 	def rule( self, name, *children):
 		self._prepared = False
@@ -867,7 +887,13 @@ class Grammar(CObject):
 
 	def arule( self, *children):
 		self._prepared = False
-		return Rule(*children)
+		return self._registerAnonymous(Rule(*children))
+
+	def _registerAnonymous( self, element ):
+		"""Forces the grammar to keep references to anonymous symbols it
+		created."""
+		self._anonymous.append(element)
+		return element
 
 	# =========================================================================
 	# META / HELPERS
@@ -993,14 +1019,19 @@ class Processor:
 			raise Exception("Unsupported match type: {0} in {1}".format(t, match))
 		h = self.handlerByID.get(i)
 		r = h(MatchResult(r,match)) if h else r
-		return r
+		return r.value if isinstance(r, MatchResult) else r
 
 	def _processWord( self, match ):
 		return ffi.string(lib.Word_word(match.element))
 
 	def _processToken( self, match ):
 		n = lib.TokenMatch_count(match._cobject)
-		return list(ffi.string(lib.TokenMatch_group(match._cobject, i)) for i in range(n))
+		if n == 0:
+			return None
+		elif n == 1:
+			return ffi.string(lib.TokenMatch_group(match._cobject, 0))
+		else:
+			return list(ffi.string(lib.TokenMatch_group(match._cobject, i)) for i in range(n))
 
 	def _processCondition( self, match ):
 		return True
@@ -1009,6 +1040,7 @@ class Processor:
 		return True
 
 	def _processGroup( self, match ):
+		# FIXME: This should probably not be wrapped in a list
 		return self._processMatch(match[0])
 
 	def _processRule( self, match ):
@@ -1016,7 +1048,7 @@ class Processor:
 
 	def _processReference( self, match ):
 		if not lib.Reference_IsMany(match.element):
-			return self._processMatch(match[0])
+			return self._processMatch(match[0]) if match.hasChildren() else None
 		else:
 			return list(self._processMatch(_) for _ in match)
 
