@@ -467,6 +467,7 @@ Match* Match_new(void) {
 // fewer allocs.
 void Match_free(Match* this) {
 	if (this!=NULL && this!=FAILURE) {
+		TRACE("Match_free(%c:%d@%s,%lu-%lu)", ((ParsingElement*)this->element)->type, ((ParsingElement*)this->element)->id, ((ParsingElement*)this->element)->name, this->offset, this->offset + this->length)
 		// We free the children
 		assert(this->children != this);
 		Match_free(this->children);
@@ -1923,6 +1924,7 @@ int Grammar__assignElementIDs(Element* e, int step, void* nothing) {
 int Grammar__registerElement(Element* e, int step, void* grammar) {
 	Reference* r  = (Reference*)e;
 	Grammar*   g  = (Grammar*)grammar;
+	r->id         = r->id;
 	Element*   ge = g->elements[r->id];
 	TRACE("Registering element %d", r->id);
 	if (ge == NULL) {
@@ -1956,7 +1958,7 @@ void Grammar_prepare ( Grammar* this ) {
 		}
 
 		// Now we register the elements
-		__ARRAY_NEW(elements, Element*, this->skipCount + this->axiomCount);
+		__ARRAY_NEW(elements, Element*, this->skipCount + this->axiomCount + 1);
 		this->elements = elements;
 
 		count = Element_walk(this->axiom, Grammar__registerElement, this);
@@ -1965,7 +1967,7 @@ void Grammar_prepare ( Grammar* this ) {
 		}
 
 		#ifdef WITH_TRACE
-		int j = this->skipCount + this->axiomCount;
+		int j = this->skipCount + this->axiomCount + 1;
 		TRACE("Grammar_prepare:  skip=%d + axiom=%d = total=%d symbols", this->skipCount, this->axiomCount, j);
 		for (int i=0 ; i < j ; i++) {
 			ParsingElement* element = this->elements[i];
