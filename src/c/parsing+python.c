@@ -119,12 +119,12 @@ PyObject* Match_processPython( Match* match, PyObject* callbacks ) {
 		// NOTE: This is super important, as otherwise it segfaults
 		gstate = PyGILState_Ensure();
 		PyObject* result = PyObject_CallObject(callback, args);
-		PyGILState_Release(gstate);
 		Py_DECREF(value);
 		Py_DECREF(range);
 		Py_DECREF(args);
 		Py_XDECREF(callback);
 		Py_XDECREF(callbacks);
+		PyGILState_Release(gstate);
 		if (result == NULL) {
 			Match_onPythonError(match);
 			// NOTE: We should return NULL, but it segfaults
