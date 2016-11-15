@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # encoding=utf8 ---------------------------------------------------------------
-# Project           : cdoclib
+# Project           : cparse
 # -----------------------------------------------------------------------------
 # Author            : Sébastien Pierre
 # License           : BSD License
@@ -19,10 +19,10 @@ LICENSE = "http://ffctn.com/doc/licenses/bsd"
 
 # START:DOC
 __doc__ = """
-== cdoclib
+== cparse
 -- A C documentation and FFI generation utility
 
-`cdoclib` extracts structure from specifically formatted C header files,
+`cparse` extracts structure from specifically formatted C header files,
 allowing to generate API documentation & Python CFFI data files.
 
 The format is relatively simple: documentation and API is extracted from
@@ -36,25 +36,24 @@ Usage
 =====
 
 ```
-cdoclib include/header1.h include/header2.h
-cdoclib include/header1.h include/header2.h
-cdoclib include/header1.h include/header2.h  documentation.texto
-cdoclib include/header1.h include/header2.h  documentation.html
-cdoclib include/header1.h include/header2.h  documentation.ffi
+cparse include/header1.h include/header2.h
+cparse include/header1.h include/header2.h
+cparse include/header1.h include/header2.h  documentation.texto
+cparse include/header1.h include/header2.h  documentation.html
+cparse include/header1.h include/header2.h  documentation.ffi
 ```
 
 Outputs
 =======
 
-`.texto`::
-	outputs `texto`-formatted text with the annotated bits of code embedded
+`.ffi`::
+	outputs a subset of the header that should be parseable by Python's CFFI
 
 `.html`::
 	outputs an HTML-formatted document designed ass an API reference
 
-`.ffi`::
-	outputs a subset of the header that should be parseable by Python's CFFI
-
+`.md`::
+	outputs `markdown`-formatted text with the annotated bits of code embedded
 
 Annotation `.h` files
 =====================
@@ -269,7 +268,7 @@ class Parser:
 				try:
 					first_line  = (_ for _ in group.code if _).next()
 				except StopIteration:
-					reporter.error("Cannot find code for type")
+					reporter.error("Cannot find code for type: {0}".format(group.name))
 				match       = SYMBOL_EXTRACTORS[group.classifier].match(first_line)
 				assert match, "Symbol extractor {0} cannot match {1}".format(group.classifier, first_line)
 				group.name = match.groups()[-1]
@@ -320,7 +319,7 @@ def parse( *paths ):
 	return lib
 
 if __name__ == "__main__":
-	args = sys.argv[1:] or ["src/parsing.h"]
+	args = sys.argv[1:]
 	# reporter.install(reporter.StderrReporter)
 	lib  = Library()
 	for p in args:
@@ -330,20 +329,7 @@ if __name__ == "__main__":
 			lib.addGroups(groups)
 	body = Formatter().format(lib)
 	# NOTE: This cannot be replicated as-is
-	base = os.path.expanduser("~/Workspace/FF-Experiments/build")
-	assert os.path.exists(base)
-	CSS  = ("lib/css/base.css", "lib/css/texto.css")
-	JS   = ("lib/js/jquery-2.1.1.js", "lib/js/extend-2.6.5.js", "lib/js/html-5.0.3.js", "lib/js/texto.js")
-	css  = "\n".join(file(os.path.join(base, _)).read() for _ in CSS)
-	js   = "\n".join(file(os.path.join(base, _)).read() for _ in JS)
 	body = body.decode("utf-8")
-	file("README.md","w").write(body)
-	body = os.popen("pandoc --section-divs README.md").read()
-	file("README.html","w").write(templating.Template(HTML_PAGE).apply(dict(
-		css    = css,
-		js     = js,
-		body   = body,
-		groups = [_ for _ in lib.groups if _.type == TYPE_SYMBOL]
-	)))
+	print (body)
 
 # EOF - vim: ts=4 sw=4 noet

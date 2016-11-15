@@ -183,6 +183,11 @@ $(SOURCES)/python/lib$(PROJECT)/__lib$(PROJECT).so: $(DIST)/lib$(PROJECT).so
 	@echo "$(GREEN)📝  $@ [PYTHON SO]$(RESET)"
 	@cp $< $@
 
+$(SOURCES)/python/alt$(PROJECT)/libparsing.ffi: $(SOURCES)/h/$(PROJECT).h
+	@echo "$(GREEN)📝  $@ [FFI]$(RESET)"
+	@mkdir -p `dirname $@`
+	@./bin/ffigen.py $< > $@
+
 # =============================================================================
 # OBJECTS
 # =============================================================================
