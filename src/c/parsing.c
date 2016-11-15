@@ -1926,8 +1926,8 @@ int Grammar__registerElement(Element* e, int step, void* grammar) {
 	Grammar*   g  = (Grammar*)grammar;
 	r->id         = r->id;
 	Element*   ge = g->elements[r->id];
-	TRACE("Registering element %d", r->id);
 	if (ge == NULL) {
+		TRACE("Grammar__registerElement:  %3d %c %s", r->id, r->type, r->name);
 		g->elements[r->id] = e;
 		return step;
 	} else {

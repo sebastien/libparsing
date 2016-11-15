@@ -358,6 +358,9 @@ class Reference(CObject):
 	def isOptional( self ):
 		return self.cardinality() == CARDINALITY_OPTIONAL
 
+	def isMany( self ):
+		return self.isZeroOrMore() or self.isOneOrMore()
+
 # -----------------------------------------------------------------------------
 #
 # MATCH
@@ -888,7 +891,8 @@ class Processor:
 		return ffi.string(lib.Word_word(match.element))
 
 	def _processToken( self, match ):
-		return ("TOKEN", match)
+		n = lib.TokenMatch_count(match._cobject)
+		return tuple(ffi.string(lib.TokenMatch_group(match._cobject, i)) for i in range(n))
 
 	def _processCondition( self, match ):
 		return True
@@ -904,34 +908,10 @@ class Processor:
 
 	def _processReference( self, match ):
 		ref = Reference.Wrap(match.element)
-		return None
-
-
-
-		# eid = match.element().id()
-		# handler = self.getHandler(eid)
-		# # print "[PROCESS]", eid, match.element().name()
-		# if handler:
-		# 	kwargs = {}
-		# 	# We only bind the arguments listed
-		# 	varnames = handler.func_code.co_varnames
-		# 	for m in match.children():
-		# 		e = m.element()
-		# 		n = e.name()
-		# 		if n and n in varnames:
-		# 			kwargs[n] = self.process(m)
-		# 	try:
-		# 		return handler(match, **kwargs)
-		# 	except TypeError as e:
-		# 		args = ["match"] + list(kwargs.keys())
-		# 		raise Exception(str(e) + " -- arguments: {0}".format(",".join(args)))
-		# 	except Exception as e:
-		# 		raise e
-		# else:
-		# 	# If we don't have a handler, we recurse
-		# 	return self.defaultProcess(match)
-
-
+		if not ref.isMany():
+			return self._processMatch(match[0])
+		else:
+			return [self._processMatch(_) for _ in match]
 
 class TreeWriter(Processor):
 	"""A special processor that outputs the named parsing elements
