@@ -1181,6 +1181,8 @@ class Processor(object):
 		return self._defaultHandler(match)
 
 	def _defaultHandler( self, match ):
+		if isinstance(match, ParsingResult):
+			match = match.match
 		if isinstance(match, ReferenceMatch):
 			result = [self.process(_) for _ in match]
 			if result and (match.isOne() or match.isOptional()): result = result[0]

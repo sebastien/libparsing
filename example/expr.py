@@ -1,8 +1,11 @@
-import sys, os, reporter
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + "/src")
-from  libparsing import Grammar, Token, Word, Rule, Group, Condition, Procedure, AbstractProcessor, NOTHING
+#!/usr/bin/env python2.7
+# encoding: utf8
 
-g = Grammar(verbose=False)
+import sys, os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + "/src")
+from  libparsing import Grammar, Token, Word, Rule, Group, Condition, Procedure, Processor, NOTHING
+
+g = Grammar(isVerbose=False)
 s = g.symbols
 
 g.token("WS",       "\s+")
@@ -12,10 +15,11 @@ g.token("OPERATOR", "[\+\-\*/]")
 g.group("Value",     s.NUMBER, s.VARIABLE)
 g.rule("Suffix",     s.OPERATOR._as("operator"), s.Value._as("value"))
 g.rule("Expression", s.Value, s.Suffix.zeroOrMore())
-g.axiom(s.Expression)
-g.skip(s.WS)
 
-class EP(AbstractProcessor):
+g.axiom= s.Expression
+g.skip = s.WS
+
+class EP(Processor):
 
 	def onNUMBER( self, match ):
 		return int(match.group())
@@ -38,9 +42,13 @@ class EP(AbstractProcessor):
 		suffixes = self.process(match[1])
 		print ("Expression", value, suffixes)
 
+
+EXAMPLES = [
+"10 + VAR / 100"
+]
+
 if __name__ == "__main__":
-	reporter.install()
-	result = g.parsePath(__file__.replace(".py", ".txt"))
+	result = g.parseString(EXAMPLE[0])
 	p      = EP(g)
 	p.process(result)
 

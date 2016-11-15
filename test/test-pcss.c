@@ -212,11 +212,10 @@ int main (void) {
 		// }
 		printf("Status %c, read %zu/%zu bytes\n", r->status, r->context->iterator->offset, r->context->iterator->available);
 		// NOTE: The following core dumps
-		// ParsingResult_free(r);
+		ParsingResult_free(r);
 	}
 	Iterator_free(iterator);
-	// NOTE: This core dumps too
-	//Grammar_free(g);
+	Grammar_free(g);
 	printf ("[OK]");
 	return 1;
 }
