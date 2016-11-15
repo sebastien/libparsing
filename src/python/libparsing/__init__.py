@@ -464,10 +464,11 @@ class Match(CObject):
 			raise KeyError
 		else:
 			# FIXME: It would be better to do Match_indexForKey(‥)
-			for i,c in enumerate(self):
-				if c.element.name == index:
-					return c
-			raise KeyError
+			i = self.indexForKey(index)
+			if i >= 0:
+				return self[i]
+			else:
+				raise KeyError
 
 	def __repr__(self):
 		return "<{0} {1}:{2}@{3} {4}-{5}>".format(
@@ -488,6 +489,7 @@ class Match(CObject):
 class MatchResult(object):
 
 	def __init__( self, value, match ):
+		assert not isinstance(value, MatchResult)
 		self.value = value
 		self.match = match
 
@@ -953,6 +955,7 @@ class Grammar(CObject):
 class Processor:
 
 	def __init__( self, grammar=None ):
+		self.depth = 0
 		self.setGrammar(self.ensureGrammar(grammar))
 
 	def ensureGrammar( self, grammar ):
@@ -993,8 +996,12 @@ class Processor:
 			self.handlerByID[symbol.id] = getattr(self, k)
 
 	def process( self, match ):
-		match = match.match if isinstance(match, ParsingResult) else match
-		return self._processMatch(match) if isinstance(match, Match) else match
+		self.depth += 1
+		match  = match.match if isinstance(match, ParsingResult) else match
+		result = self._processMatch(match) if isinstance(match, Match) else match
+		self.depth -= 1
+		return result.value if self.depth == 0 and isinstance(result, MatchResult) else result
+
 
 	def _processMatch( self, match ):
 		"""Processes a match element."""
