@@ -35,22 +35,21 @@ class Processor(Processor):
 		value = self.process(match[0])
 		return value
 
-	def onSuffix( self, match, value, operator  ):
-		return (value, operator)
+	def onSuffix( self, match  ):
+		return (match["value"], match["operator"])
 
 	def onExpression( self, match ):
 		value    = self.process(match[0])
 		suffixes = self.process(match[1])
-		print ("Expression", value, suffixes)
-		return value, suffixes
-
+		return [value] + list(suffixes)
 
 EXAMPLES = [
-"10 + VAR / 100"
+"10 + VAR"
 ]
 
 if __name__ == "__main__":
 	g      = grammar()
+	g.prepare()
 	p      = Processor(g)
 	result = g.parseString(EXAMPLES[0])
 	print (p.process(result))

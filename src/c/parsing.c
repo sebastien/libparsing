@@ -498,10 +498,9 @@ char Match_getElementType(Match* this) {
 }
 
 const char* Match_getElementName(Match* this) {
-	if (this != NULL && this->element != NULL) {return NULL;}
+	if (this == NULL || this->element == NULL) {return NULL;}
 	if (((ParsingElement*)this->element)->type == TYPE_REFERENCE) {
-		ParsingElement* element = ((Reference*)this->element)->element;
-		return element != NULL ? element->name : NULL;
+		return ((Reference*)this->element)->name;
 	} else {
 		ParsingElement* element = (this->element);
 		return element->name;

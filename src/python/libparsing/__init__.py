@@ -95,6 +95,7 @@ class CObject(object):
 
 	def __init__(self, *args, **kwargs):
 		self._cobject = None
+		self._init()
 		if "wrap" in kwargs:
 			assert len(kwargs) == 1
 			assert len(args  ) == 1
@@ -103,6 +104,9 @@ class CObject(object):
 			o = self._new(*args, **kwargs)
 			if o is not None: self._cobject = ffi.cast(self.TYPE(), o)
 			assert self._cobject
+
+	def _init( self ):
+		pass
 
 	def _new( self ):
 		raise NotImplementedError
@@ -397,6 +401,11 @@ class Match(CObject):
 		return lib.Match_getElementType(self._cobject)
 
 	@property
+	def name( self ):
+		name = lib.Match_getElementName(self._cobject)
+		return ffi.string(name) if name else None
+
+	@property
 	def id( self ):
 		return lib.Match_getElementID(self._cobject)
 
@@ -409,19 +418,14 @@ class Match(CObject):
 		o, l = self.offset(), self.length()
 		return o, o + l
 
-	# =========================================================================
-	# METHODS
-	# =========================================================================
+	def slots( self ):
+		return list(_ for _ in self if _.name)
 
-	def group( self, index=0 ):
-		e = ffi.cast("ParsingElement*", self._cobject.element)
-		if e.type == TYPE_GROUP:
-			return self.children()[0]
-		else:
-			return self.children()
-
-	def toJSON( self ):
-		return lib.Match_toJSON(self._cobject)
+	def indexForKey( self, name ):
+		for i,_ in enumerate(self):
+			if _.name == name:
+				return i
+		return -1
 
 	# =========================================================================
 	# SUGAR
@@ -446,14 +450,55 @@ class Match(CObject):
 					return c
 			raise KeyError
 
-	# def __repr__(self):
-	# 	return "<{0} {1}-{2}>" % (
-	# 		self.__class__.__name__.rsplit(".", 1)[-1],
-	# 		self.offset,
-	# 		self.offset + self.length,
-	# 	)
+	def __repr__(self):
+		return "<{0} {1}:{2}@{3} {4}-{5}>".format(
+			self.__class__.__name__.rsplit(".", 1)[-1],
+			self.type,
+			self.id,
+			self.name,
+			self.offset,
+			self.offset + self.length,
+		)
 
+# -----------------------------------------------------------------------------
+#
+# MATCH RESULT
+#
+# -----------------------------------------------------------------------------
 
+class MatchResult(object):
+
+	def __init__( self, value, match ):
+		self.value = value
+		self.match = match
+
+	def group( self, index=0 ):
+		return self[index]
+
+	def __getitem__( self, index ):
+		if type(index) == int:
+			if isinstance(self.value, list) or isinstance(self.value, tuple):
+				if index < 0: index += len(self.value)
+				for i,c in enumerate(self.value):
+					if i == index:
+						return c
+			elif index == 0:
+				return self.value
+			else:
+				raise Exception("MatchResult has non-iterable result: {0}".format(self))
+		else:
+			i = self.match.indexForKey(index)
+			if i == -1:
+				raise Exception("MatchResult does not define slot {1}, options are {2}: {0}".format(self, index, self.match.slots()))
+			else:
+				return self[i]
+
+	def __repr__(self):
+		return "<{0} {1}={2}>".format(
+			self.__class__.__name__.rsplit(".", 1)[-1],
+			self.match,
+			self.value
+		)
 
 # -----------------------------------------------------------------------------
 #
@@ -813,9 +858,13 @@ class Grammar(CObject):
 		return res
 
 	def _prepare( self ):
+		"""Ensures the grammar is prepared."""
 		if not self._prepared:
-			lib.Grammar_prepare(self._cobject)
-			self._prepared = True
+			self.prepare()
+
+	def prepare( self ):
+		lib.Grammar_prepare(self._cobject)
+		self._prepared = True
 
 	def __del__( self ):
 		# The parsing result is the only one we really need to free
@@ -832,7 +881,16 @@ class Grammar(CObject):
 
 class Processor:
 
-	def __init__( self, grammar ):
+	def __init__( self, grammar=None ):
+		self.setGrammar(self.ensureGrammar(grammar))
+
+	def ensureGrammar( self, grammar ):
+		return grammar or self.createGrammar()
+
+	def createGrammar( self ):
+		raise NotImplementedError
+
+	def setGrammar( self, grammar ):
 		self.symbols      = grammar.list() if grammar else []
 		self.symbolByName = {}
 		self.symbolByID   = {}
@@ -841,17 +899,17 @@ class Processor:
 		self._bindHandlers()
 
 	def _bindSymbols( self ):
-		for n, s in self.symbols:
+		for name, s in self.symbols:
 			if not s:
-				reporter.error("[!] Name without symbol: %s" % (n))
+				reporter.error("Name without symbol: %s" % (name))
 				continue
-			self.symbolByName[s.name] = s
+			self.symbolByName[name] = s
 			if s.id in self.symbolByID:
 				if s.id >= 0:
 					raise Exception("Duplicate symbol id: %d, has %s already while trying to assign %s" % (s.id(), self.symbolByID[s.id()].name(), s.name()))
 				else:
 					logging.warn("Unused symbol: %s" % (repr(s)))
-			self.symbolByID[s.id]     = s
+			self.symbolByID[s.id] = s
 
 	def _bindHandlers( self ):
 		for k in dir(self):
@@ -862,6 +920,8 @@ class Processor:
 			assert name in self.symbolByName, "Handler does not match any symbol: {0}, symbols are {1}".format(k, ", ".join(self.symbolByName.keys()))
 			symbol = self.symbolByName[name]
 			self.handlerByID[symbol.id] = getattr(self, k)
+			print ("SYMBOL", symbol.id, "=", name)
+
 
 	def process( self, match ):
 		match = match.match if isinstance(match, ParsingResult) else match
@@ -870,29 +930,36 @@ class Processor:
 	def _processMatch( self, match ):
 		"""Processes a match element."""
 		t = match.type
-		if   t == TYPE_WORD:
-			return self._processWord(match)
+		i = match.id
+		print ("PROCESS", match, ":", match.element)
+		r = None
+		if t == TYPE_WORD:
+			r = self._processWord(match)
 		elif t == TYPE_TOKEN:
-			return self._processToken(match)
+			r = self._processToken(match)
 		elif t == TYPE_CONDITION:
-			return self._processCondition(match)
+			r = self._processCondition(match)
 		elif t == TYPE_PROCEDURE:
-			return self._processProcedure(match)
+			r = self._processProcedure(match)
 		elif t == TYPE_GROUP:
-			return self._processGroup(match)
+			r = self._processGroup(match)
 		elif t == TYPE_RULE:
-			return self._processRule(match)
+			r = self._processRule(match)
 		elif t == TYPE_REFERENCE:
-			return self._processReference(match)
+			r = self._processReference(match)
 		else:
 			raise Exception("Unsupported match type: {0} in {1}".format(t, match))
+		h = self.handlerByID.get(i)
+		r = h(MatchResult(r,match)) if h else r
+		print (" -- PROCESSED", match, "AS", r)
+		return r
 
 	def _processWord( self, match ):
 		return ffi.string(lib.Word_word(match.element))
 
 	def _processToken( self, match ):
 		n = lib.TokenMatch_count(match._cobject)
-		return tuple(ffi.string(lib.TokenMatch_group(match._cobject, i)) for i in range(n))
+		return list(ffi.string(lib.TokenMatch_group(match._cobject, i)) for i in range(n))
 
 	def _processCondition( self, match ):
 		return True
@@ -904,14 +971,14 @@ class Processor:
 		return self._processMatch(match[0])
 
 	def _processRule( self, match ):
-		return [self._processMatch(_) for _ in match]
+		return list(self._processMatch(_) for _ in match)
 
 	def _processReference( self, match ):
 		ref = Reference.Wrap(match.element)
 		if not ref.isMany():
 			return self._processMatch(match[0])
 		else:
-			return [self._processMatch(_) for _ in match]
+			return list(self._processMatch(_) for _ in match)
 
 class TreeWriter(Processor):
 	"""A special processor that outputs the named parsing elements
