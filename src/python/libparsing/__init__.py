@@ -247,15 +247,16 @@ class Condition(ParsingElement):
 
 	@classmethod
 	def WrapCallback(cls, callback):
+		# SEE: http://stackoverflow.com/questions/34392109/use-extern-python-style-cffi-callbacks-with-embedded-pypy
 		def c(e,ctx):
-			callback(e,ctx)
-			return ffi.NULL
+			return callback(ParsingElement.Wrap(e), ParsingContext.Wrap(ctx))
 		t = "bool(*)(ParsingElement *, ParsingContext *)"
 		c = ffi.callback(t, c)
 		return c
 
 	def _new( self, callback ):
-		return lib.Condition_new(self.WrapCallback(callback))
+		self._callback = (self.WrapCallback(callback), callback)
+		return lib.Condition_new(self._callback[0])
 
 # -----------------------------------------------------------------------------
 #
@@ -268,14 +269,14 @@ class Procedure(ParsingElement):
 	@classmethod
 	def WrapCallback(cls, callback):
 		def c(e,ctx):
-			callback(e,ctx)
-			return ffi.NULL
+			return callback(ParsingElement.Wrap(e), ParsingContext.Wrap(ctx))
 		t = "void(*)(ParsingElement *, ParsingContext *)"
 		c = ffi.callback(t, c)
 		return c
 
 	def _new( self, callback ):
-		return lib.Procedure_new(self.WrapCallback(callback))
+		self._callback = (self.WrapCallback(callback), callback)
+		return lib.Procedure_new(self._callback[0])
 
 # -----------------------------------------------------------------------------
 #
@@ -427,6 +428,10 @@ class Match(CObject):
 				return i
 		return -1
 
+
+	def toJSON( self ):
+		return lib.Match_toJSON(self._cobject, 1)
+
 	# =========================================================================
 	# SUGAR
 	# =========================================================================
@@ -514,6 +519,39 @@ class Symbols:
 
 	def __getitem__( self, key ):
 		return getattr(self, key)
+
+# -----------------------------------------------------------------------------
+#
+# PARSING CONTEXT
+#
+# -----------------------------------------------------------------------------
+
+class ParsingContext(CObject):
+
+	_TYPE = "ParsingContext*"
+
+	@property
+	def offset( self ):
+		return lib.ParsingContext_getOffset(self._cobject)
+
+	@property
+	def line( self ):
+		return self._cobject.iterator.lines
+
+	def push( self ):
+		lib.ParsingContext_push(self._cobject)
+		return self
+
+	def pop( self ):
+		lib.ParsingContext_pop(self._cobject)
+		return self
+
+	def set( self, key, value ):
+		lib.ParsingContext_set(self._cobject, key, value)
+		return value
+
+	def get( self, key ):
+		return lib.ParsingContext_get(self._cobject, key)
 
 # -----------------------------------------------------------------------------
 #

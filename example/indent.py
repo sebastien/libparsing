@@ -18,7 +18,6 @@ NAME:
 ```
 """
 
-
 def check_indent(element, context):
 	"""Checks that the last match has the same length as the current indent."""
 	indent = context.get("indent") or 0
