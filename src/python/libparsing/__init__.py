@@ -984,6 +984,14 @@ class Processor:
 		self._handler = None
 		self.strategy = self.LAZY
 		self.setGrammar(self.ensureGrammar(grammar))
+		self._defaults  = dict( (k,getattr(self,v) if hasattr(self,v) else None)  for (k,v) in {
+			TYPE_WORD       : "processWord",
+			TYPE_TOKEN      : "processToken",
+			TYPE_GROUP      : "processGroup",
+			TYPE_RULE       : "processRule",
+			TYPE_CONDITION  : "processCondition",
+			TYPE_PROCEDURE  : "processProcedure",
+		}.items())
 
 	def asEager( self ):
 		self.strategy = self.EAGER
@@ -1083,7 +1091,7 @@ class Processor:
 			r = self._processReference(match)
 		else:
 			raise Exception("Unsupported match type: {0} in {1}".format(t, match))
-		h = self.handlerByID.get(i) if handler else None
+		h = self.handlerByID.get(i) if handler else self._defaults.get(t)
 		r = h(MatchResult(r,match)) if h else r
 		return r.value if isinstance(r, MatchResult) else r
 
