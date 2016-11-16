@@ -23,20 +23,20 @@ def grammar( isVerbose=False ):
 class Processor(Processor):
 
 	def onNUMBER( self, match ):
-		return int(match.group())
+		return int(self.process(match)[0])
 
 	def onVARIABLE( self, match ):
-		return match.group()
+		return self.process(match)[0]
 
 	def onOPERATOR( self, match ):
-		return match.group()
+		return self.process(match)[0]
 
 	def onValue( self, match ):
 		value = self.process(match[0])
 		return value
 
-	def onSuffix( self, match  ):
-		return (match["value"], match["operator"])
+	def onSuffix( self, match, value, operator  ):
+		return (value, operator)
 
 	def onExpression( self, match ):
 		value    = self.process(match[0])
