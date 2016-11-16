@@ -1253,6 +1253,15 @@ const char* TokenMatch_group(Match* match, int index) {
 	return m->groups[index];
 }
 
+
+const char* TokenMatch_count(Match* match) {
+	assert (match                != NULL);
+	assert (match->data          != NULL);
+	assert (((ParsingElement*)(match->element))->type == TYPE_TOKEN);
+	TokenMatch* m = (TokenMatch*)match->data;
+	return m->count;
+}
+
 int TokenMatch_count(Match* match) {
 	assert (match                != NULL);
 	assert (match->data          != NULL);
@@ -1800,6 +1809,7 @@ void ParsingStats_setSymbolsCount(ParsingStats* this, size_t t) {
 }
 
 Match* ParsingStats_registerMatch(ParsingStats* this, Element* e, Match* m) {
+	// FIXME: This is broken!
 	// We can convert ParsingElements to Reference and vice-versa as they
 	// have the same start sequence (char type, int id).
 	// Reference* r = (Reference*)e;

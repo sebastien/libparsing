@@ -11,7 +11,7 @@
 
 from __future__ import print_function
 
-import sys, os, re
+import sys, os, re, inspect
 from   cffi    import FFI
 from   os.path import dirname, join, abspath
 
@@ -182,6 +182,29 @@ class ParsingElement(CObject):
 	def disableFailMemoize( self ):
 		return self
 
+	def slots( self ):
+		child = self._cobject.children
+		res   = []
+		while child:
+			ref = Reference.Wrap(child)
+			name = ref.name
+			if name:
+				res.append(name)
+			child = ref._cobject.next
+		return res
+
+	def indexForKey( self, name ):
+		child = self._cobject.children
+		index = 0
+		while child:
+			ref = Reference.Wrap(child)
+			if ref.name == name:
+				return index
+			else:
+				index += 1
+				child = ref._cobject.next
+		return -1
+
 	def __repr__(self):
 		classname = self.__class__.__name__.rsplit(".", 1)[-1]
 		if not self._cobject:
@@ -214,7 +237,7 @@ class Word(ParsingElement):
 class Token(ParsingElement):
 
 	def _new( self, token):
-		return lib.Token_new(token)
+		return lib.Token_new( token)
 
 # -----------------------------------------------------------------------------
 #
@@ -252,8 +275,7 @@ class Condition(ParsingElement):
 	def WrapCallback(cls, callback):
 		# SEE: http://stackoverflow.com/questions/34392109/use-extern-python-style-cffi-callbacks-with-embedded-pypy
 		def c(e,ctx):
-			res = callback(ParsingElement.Wrap(e), ParsingContext.Wrap(ctx)) if callback else 1
-			return res
+			return callback(ParsingElement.Wrap(e), ParsingContext.Wrap(ctx)) if callback else 1
 		t = "bool(*)(ParsingElement *, ParsingContext *)"
 		c = ffi.callback(t, c)
 		return c
@@ -273,7 +295,7 @@ class Procedure(ParsingElement):
 	@classmethod
 	def WrapCallback(cls, callback):
 		def c(e,ctx):
-			return callback(ParsingElement.Wrap(e), ParsingContext.Wrap(ctx))
+			callback(ParsingElement.Wrap(e), ParsingContext.Wrap(ctx))
 		t = "void(*)(ParsingElement *, ParsingContext *)"
 		c = ffi.callback(t, c)
 		return c
@@ -954,9 +976,22 @@ class Grammar(CObject):
 
 class Processor:
 
+	LAZY  = 0
+	EAGER = 1
+
 	def __init__( self, grammar=None ):
-		self.depth = 0
+		self.depth    = 0
+		self._handler = None
+		self.strategy = self.LAZY
 		self.setGrammar(self.ensureGrammar(grammar))
+
+	def asEager( self ):
+		self.strategy = self.EAGER
+		return self
+
+	def asLazy( self ):
+		self.strategy = self.LAZY
+		return self
 
 	def ensureGrammar( self, grammar ):
 		return grammar or self.createGrammar()
@@ -993,17 +1028,41 @@ class Processor:
 				continue
 			assert name in self.symbolByName, "Handler does not match any symbol: {0}, symbols are {1}".format(k, ", ".join(self.symbolByName.keys()))
 			symbol = self.symbolByName[name]
-			self.handlerByID[symbol.id] = getattr(self, k)
+			self.handlerByID[symbol.id] = self._createHandler( getattr(self, k), symbol )
+
+	def _createHandler( self, handler, symbol ):
+		kwargs = {}
+		# We only bind the arguments listed
+		sig  = inspect.getargspec(handler)
+		params = sig.args[0:-len(sig.defaults)] if sig.defaults else sig.args
+		params  = params[1:] if params[0] == "self" else params
+		slots   = tuple((_, symbol.indexForKey(_)) for _ in params[1:] )
+		missing = tuple(_ for _ in slots if _[1] <  0)
+		valid   = tuple(_ for _ in slots if _[1] >= 0)
+		if missing:
+			raise Exception("Handler {0} for {1} arguments do not match grammar: {2} should be a subset of {3}".format(handler, symbol, missing, symbol.slots()))
+		elif valid:
+			def wrapper( match ):
+				kwargs = dict( (name, self.process(match[index])) for (name,index) in valid)
+				return handler(match, **kwargs)
+			return wrapper
+		else:
+			return handler
 
 	def process( self, match ):
 		self.depth += 1
 		match  = match.match if isinstance(match, ParsingResult) else match
 		result = self._processMatch(match) if isinstance(match, Match) else match
 		self.depth -= 1
-		return result.value if self.depth == 0 and isinstance(result, MatchResult) else result
-
+		return result.value if isinstance(result, MatchResult) else result
 
 	def _processMatch( self, match ):
+		if self.strategy == self.EAGER:
+			return self._processEager(match)
+		else:
+			return self._processLazy(match)
+
+	def _processEager( self, match, handler=True ):
 		"""Processes a match element."""
 		t = match.type
 		i = match.id
@@ -1024,9 +1083,29 @@ class Processor:
 			r = self._processReference(match)
 		else:
 			raise Exception("Unsupported match type: {0} in {1}".format(t, match))
-		h = self.handlerByID.get(i)
+		h = self.handlerByID.get(i) if handler else None
 		r = h(MatchResult(r,match)) if h else r
 		return r.value if isinstance(r, MatchResult) else r
+
+	def _processLazy( self, match ):
+		"""Processes a match element."""
+		t = match.type
+		i = match.id
+		r = None
+		h = self.handlerByID.get(i)
+		if not h or self._handler == h:
+			# If there's no handler defined,then we apply the eager method
+			return self._processEager(match, handler=False)
+		else:
+			# If there is a handler defined
+			ph = self._handler
+			self._handler = h
+			if t == TYPE_WORD or t == TYPE_TOKEN or t == TYPE_CONDITION or t == TYPE_PROCEDURE:
+				res = h(match)
+			else:
+				res = h(match)
+			self._handler = ph
+			return res
 
 	def _processWord( self, match ):
 		return ffi.string(lib.Word_word(match.element))
@@ -1047,15 +1126,17 @@ class Processor:
 		return True
 
 	def _processGroup( self, match ):
-		# FIXME: This should probably not be wrapped in a list
-		return self._processMatch(match[0])
+		# NOTE: We need to wrap this in a list so that proces(match[0]) work
+		# for groups.
+		return [self._processMatch(match[0])]
 
 	def _processRule( self, match ):
 		return list(self._processMatch(_) for _ in match)
 
 	def _processReference( self, match ):
 		if not lib.Reference_IsMany(match.element):
-			return self._processMatch(match[0]) if match.hasChildren() else None
+			res = self._processMatch(match[0]) if match.hasChildren() else None
+			return res
 		else:
 			return list(self._processMatch(_) for _ in match)
 
