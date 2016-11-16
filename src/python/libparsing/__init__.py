@@ -793,7 +793,7 @@ class Grammar(CObject):
 
 	_TYPE = "Grammar*"
 
-	def _new(self, name=None, isVerbose=True ):
+	def _new(self, name=None, isVerbose=False ):
 		self.name    = name
 		self.symbols = Symbols()
 		g = lib.Grammar_new()
@@ -1114,8 +1114,6 @@ class Processor:
 		n = lib.TokenMatch_count(match._cobject)
 		if n == 0:
 			return None
-		elif n == 1:
-			return ffi.string(lib.TokenMatch_group(match._cobject, 0))
 		else:
 			return list(ffi.string(lib.TokenMatch_group(match._cobject, i)) for i in range(n))
 

@@ -59,7 +59,7 @@ class P1(Processor):
 		return ("W", self.process(match))
 
 	def onTOKEN( self, match ):
-		return ("T", self.process(match))
+		return ("T", self.process(match)[0])
 
 	def onAtom( self, match ):
 		return self.process(match[0])
@@ -165,9 +165,12 @@ EXAMPLES = (
 #
 # -----------------------------------------------------------------------------
 
-class TestCollection(unittest.TestCase):
+class TestProcessor(unittest.TestCase):
 
-	def testBoth( self ):
+	def testAll( self ):
+		"""Parses the EXAMPLES, making sure that each line parse AND
+		that both the *lazy* and *eager* strategies return the same
+		results."""
 		g = grammar() ; s = g.symbols
 		n = len(EXAMPLES) / 2
 		for i in range(n):
@@ -181,6 +184,32 @@ class TestCollection(unittest.TestCase):
 			rl = pl.process(r)
 			self.assertEqual(re, result)
 			self.assertEqual(rl, result)
+
+	def testToken( self ):
+		"""Ensures that tokens are properly processed as a list, even
+		if there is only one element."""
+		g = Grammar()
+		s = g.symbols
+		g.token("NUMBER", "-?(0x)?[0-9]+(\.[0-9]+)?")
+		g.axiom = s.NUMBER
+		p = Processor(g)
+		self.assertEqual(p.process(g.parseString("1"   )), ["1"])
+		self.assertEqual(p.process(g.parseString("-1"  )), ["-1"])
+		self.assertEqual(p.process(g.parseString("1.2" )), ["1.2", "", ".2"])
+		self.assertEqual(p.process(g.parseString("-1.2")), ["-1.2", "", ".2"])
+
+	def testGroup( self ):
+		g = Grammar()
+		s = g.symbols
+		g.token("NAME",   "\w+")
+		g.token("NUMBER", "\d+")
+		g.token("SPACES", "\s+")
+		g.group("Group", s.NAME, s.NUMBER)
+		g.axiom = s.Group
+		g.skip  = s.SPACES
+		p = Processor(g)
+		self.assertEqual(p.process(g.parseString("hello"   )), [["hello"]])
+		self.assertEqual(p.process(g.parseString("1"  )),      [["1"]])
 
 if __name__ == "__main__":
 	unittest.main()
