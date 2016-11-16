@@ -88,7 +88,7 @@ class CObject(object):
 
 	@classmethod
 	def Wrap( cls, cobject ):
-		return cls(cobject, wrap=cls.TYPE())
+		return cls(cobject, wrap=cls.TYPE()) if cobject != ffi.NULL else None
 
 	@classmethod
 	def TYPE( cls ):
@@ -450,7 +450,7 @@ class Match(CObject):
 
 	@property
 	def range( self ):
-		o, l = self.offset(), self.length()
+		o, l = self.offset or 0, self.length or 0
 		return o, o + l
 
 	def slots( self ):
@@ -1070,7 +1070,7 @@ class Processor:
 		else:
 			return self._processLazy(match)
 
-	def _processEager( self, match, handler=True ):
+	def _processEager( self, match, handler=True, default=True ):
 		"""Processes a match element."""
 		t = match.type
 		i = match.id
@@ -1091,7 +1091,7 @@ class Processor:
 			r = self._processReference(match)
 		else:
 			raise Exception("Unsupported match type: {0} in {1}".format(t, match))
-		h = self.handlerByID.get(i) if handler else self._defaults.get(t)
+		h = self.handlerByID.get(i) if handler else (self._defaults.get(t) if default else None)
 		r = h(MatchResult(r,match)) if h else r
 		return r.value if isinstance(r, MatchResult) else r
 
@@ -1102,8 +1102,9 @@ class Processor:
 		r = None
 		h = self.handlerByID.get(i)
 		if not h or self._handler == h:
-			# If there's no handler defined,then we apply the eager method
-			return self._processEager(match, handler=False)
+			# If there's no handler defined,then we apply the eager method. We only
+			# use the default handler if there is no current handler matching the element
+			return self._processEager(match, handler=False, default=not h)
 		else:
 			# If there is a handler defined
 			ph = self._handler
@@ -1162,7 +1163,7 @@ class TreeWriter(Processor):
 	def defaultProcess(self, match):
 		named = isinstance(match.element() , ParsingElement) and match.element().name() != "_"
 		if named:
-			self.output.write("{0:04d}|{1}{2}\n".format(self.count, self.indent * "    "  + "|---" , match.element().name()))
+			self.output.write(u"{0:04d}|{1}{2}\n".format(self.count, self.indent * "    "  + "|---" , match.element().name()))
 			self.indent += 1
 		self.count  += 1
 		r = AbstractProcessor.defaultProcess(self, match)
