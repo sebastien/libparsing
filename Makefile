@@ -13,8 +13,8 @@
 
 PROJECT        :=parsing
 PYMODULE       :=lib$(PROJECT)
-FEATURES       :=pcre
-ALL_FEATURES   :=pcre memcheck debug trace
+FEATURES       :=pcre fortify
+ALL_FEATURES   :=pcre memcheck debug trace fortify
 
 # === FEATURES ================================================================
 
@@ -34,6 +34,9 @@ ifneq (,$(findstring debug,$(FEATURES)))
 	CFLAGS+=-Og
 else
 	CFLAGS+=-O3
+endif
+ifneq (,$(findstring fortify,$(FEATURES)))
+	CFLAGS+= -U_FORTIFY_SOURCE -fstack-protector-all
 endif
 
 # === PATHS ===================================================================
@@ -152,7 +155,8 @@ check: $(SOURCES_C) $(SOURCES_H) ## Runs checks on the source code
 
 clean: ## Cleans the build files
 	@find . -name __pycache__ -exec rm -rf '{}' ';' ; true
-	@rm -rf $(DIST) *.egg-info $(BUILD_O) $(PRODUCTS) $(TEST_PRODUCTS); true
+	@echo $(PRODUCTS) $(BUILD_ALL) | xargs -n1 rm 2> /dev/null ; true
+	@test -d $(DIST) && rm -rf $(DIST) ; true
 
 help: ## Displays a description of the different Makefile rules
 	@echo "$(CYAN)★★★ $(PROJECT) makefile ★★★$(RESET)"
