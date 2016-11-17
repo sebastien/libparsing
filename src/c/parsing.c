@@ -1254,14 +1254,6 @@ const char* TokenMatch_group(Match* match, int index) {
 }
 
 
-const char* TokenMatch_count(Match* match) {
-	assert (match                != NULL);
-	assert (match->data          != NULL);
-	assert (((ParsingElement*)(match->element))->type == TYPE_TOKEN);
-	TokenMatch* m = (TokenMatch*)match->data;
-	return m->count;
-}
-
 int TokenMatch_count(Match* match) {
 	assert (match                != NULL);
 	assert (match->data          != NULL);
@@ -1746,7 +1738,7 @@ void* ParsingContext_get(ParsingContext* this, const char* name) {
 }
 
 int ParsingContext_getInt(ParsingContext* this, const char* name) {
-	return (int)(ParsingVariable_get(this->variables, name));
+	return (int)(long)(ParsingVariable_get(this->variables, name));
 }
 
 void ParsingContext_set(ParsingContext*  this, const char* name, void* value) {
