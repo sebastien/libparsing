@@ -648,11 +648,11 @@ class ParsingContext(CObject):
 
 	def set( self, key, value ):
 		assert isinstance(value, int)
-		lib.ParsingContext_setInt(self._cobject, key, value)
+		lib.ParsingContext_setInt(self._cobject, ensure_cstring(key), value)
 		return value
 
 	def get( self, key ):
-		return lib.ParsingContext_getInt(self._cobject, key)
+		return lib.ParsingContext_getInt(self._cobject, ensure_cstring(key))
 
 	def __getitem__( self, offset ):
 		return lib.ParsingContext_charAt(self._cobject, offset)

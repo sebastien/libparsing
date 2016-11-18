@@ -25,8 +25,8 @@ def check_indent(element, context):
 	so     = max(o - indent, 0)
 	eo     = o
 	tabs   = 0
-	for i in xrange(so, eo):
-		if context[i] == "\t":
+	for i in range(so, eo):
+		if context[i] == b"\t":
 			tabs += 1
 	return tabs == indent
 
