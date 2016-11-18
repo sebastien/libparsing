@@ -79,14 +79,40 @@ ID_UNBOUND                = -10
 
 if sys.version_info.major >= 3:
 	def ensure_bytes(v):
+		"""Makes sure that this returns a byte string."""
+		return v.encode("utf8") if isinstance(v,str) else v
+	def ensure_cstring(v):
+		"""Makes sure this returns a string that can be passed to C (a bytes string)"""
 		return v.encode("utf8") if isinstance(v,str) else v
 	def ensure_str(v):
+		"""Ensures the result is a string."""
 		return v.decode("utf8") if isinstance(v,bytes) else v
+	def ensure_unicode(v):
+		"""Ensures the result is an uncicode string(str)"""
+		return ensure_str(v)
+	def ensure_string( v ):
+		"""Ensures the result is the default unicode string type (str)"""
+		return ensure_unicode(v)
+	def is_string( v ):
+		return isinstance(v,str) or isinstance(v,bytes)
 else:
 	def ensure_bytes( v ):
-		return v
+		"""Makes sure that this returns a byte string."""
+		return v.decode("utf8") if isinstance(v,unicode) else v
+	def ensure_cstring(v):
+		"""Makes sure this returns a string that can be passed to C (an str)"""
+		return v.encode("utf8") if isinstance(v,unicode) else v
 	def ensure_str( v ):
-		return v
+		"""Ensures the resulting is a str (Python 2)"""
+		return v.encode("utf8") if isinstance(v,unicode) else v
+	def ensure_unicode( v ):
+		"""Ensures the result is a unicode string."""
+		return v.decode("utf8") if isinstance(v,str) else v
+	def ensure_string( v ):
+		"""Ensures the result is the default unicode string type (unicode)"""
+		return ensure_unicode(v)
+	def is_string( v ):
+		return isinstance(v,str) or isinstance(v,unicode)
 
 # -----------------------------------------------------------------------------
 #
@@ -162,12 +188,7 @@ class ParsingElement(CObject):
 
 	@property
 	def name( self ):
-		return ffi.string(lib.ParsingElement_getName(self._cobject))
-		# if self._name:
-		# 	return self._name
-		# else:
-		# 	self.__name = ensure_str(ffi.string(self._cobject.name))
-		# 	return self.__name
+		return  ensure_str(ffi.string(self._cobject.name))
 
 	@name.setter
 	def name( self, name ):
@@ -849,12 +870,12 @@ class Grammar(CObject):
 
 	def parsePath( self, path ):
 		self._prepare()
-		_path = ensure_bytes(path)
+		_path = ensure_cstring(path)
 		return ParsingResult.Wrap(lib.Grammar_parsePath(self._cobject, _path), path=_path)
 
 	def parseString( self, text ):
 		self._prepare()
-		_text = ensure_bytes(text)
+		_text = ensure_cstring(text)
 		return ParsingResult.Wrap(lib.Grammar_parseString(self._cobject,_text), text=_text)
 
 	# =========================================================================
@@ -893,7 +914,6 @@ class Grammar(CObject):
 	def word( self, name, word):
 		self._prepared = False
 		r = Word(word)
-		r.name = name
 		self.symbols[name] = r
 		return r
 
@@ -904,7 +924,6 @@ class Grammar(CObject):
 	def token( self, name, token):
 		self._prepared = False
 		r = Token(token)
-		r.name = name
 		self.symbols[name] = r
 		return r
 
@@ -915,7 +934,6 @@ class Grammar(CObject):
 	def procedure( self, name, callback):
 		self._prepared = False
 		r = Procedure(callback)
-		r.name = name
 		self.symbols[name] = r
 		return r
 
@@ -926,7 +944,6 @@ class Grammar(CObject):
 	def condition( self, name, callback=None):
 		self._prepared = False
 		r = Condition(callback)
-		r.name = name
 		self.symbols[name] = r
 		return r
 
@@ -937,7 +954,6 @@ class Grammar(CObject):
 	def group( self, name, *children):
 		self._prepared = False
 		r = Group(*children)
-		r.name = name
 		self.symbols[name] = r
 		return r
 
@@ -948,7 +964,6 @@ class Grammar(CObject):
 	def rule( self, name, *children):
 		self._prepared = False
 		r = Rule(*children)
-		r.name = name
 		self.symbols[name] = r
 		return r
 
@@ -1160,14 +1175,14 @@ class Processor:
 			return res
 
 	def _processWord( self, match ):
-		return ensure_str(ffi.string(lib.Word_word(match.element)))
+		return ensure_string(ffi.string(lib.Word_word(match.element)))
 
 	def _processToken( self, match ):
 		n = lib.TokenMatch_count(match._cobject)
 		if n == 0:
 			return None
 		else:
-			return list(ensure_str(ffi.string(lib.TokenMatch_group(match._cobject, i))) for i in range(n))
+			return list(ensure_string(ffi.string(lib.TokenMatch_group(match._cobject, i))) for i in range(n))
 
 	def _processCondition( self, match ):
 		return True
