@@ -29,16 +29,11 @@ extern "C" {
 #include <string.h>
 #include <assert.h>
 #include <sys/types.h>
-#endif
-#ifdef WITH_CFFI
-extern void CFFI_DELIMITER;
-#endif
 #ifdef WITH_PCRE
 #include <pcre.h>
 #endif
-#ifdef WITH_CFFI
-extern void CFFI_DELIMITER;
 #endif
+
 #include "oo.h"
 
 /**

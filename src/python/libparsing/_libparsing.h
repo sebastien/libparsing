@@ -3,6 +3,200 @@
 typedef char bool;
 
 /* PCRE */
+#define PCRE_CASELESS           0x00000001  /* C1       */
+#define PCRE_MULTILINE          0x00000002  /* C1       */
+#define PCRE_DOTALL             0x00000004  /* C1       */
+#define PCRE_EXTENDED           0x00000008  /* C1       */
+#define PCRE_ANCHORED           0x00000010  /* C4 E D   */
+#define PCRE_DOLLAR_ENDONLY     0x00000020  /* C2       */
+#define PCRE_EXTRA              0x00000040  /* C1       */
+#define PCRE_NOTBOL             0x00000080  /*    E D J */
+#define PCRE_NOTEOL             0x00000100  /*    E D J */
+#define PCRE_UNGREEDY           0x00000200  /* C1       */
+#define PCRE_NOTEMPTY           0x00000400  /*    E D J */
+#define PCRE_UTF8               0x00000800  /* C4        )          */
+#define PCRE_UTF16              0x00000800  /* C4        ) Synonyms */
+#define PCRE_UTF32              0x00000800  /* C4        )          */
+#define PCRE_NO_AUTO_CAPTURE    0x00001000  /* C1       */
+#define PCRE_NO_UTF8_CHECK      0x00002000  /* C1 E D J  )          */
+#define PCRE_NO_UTF16_CHECK     0x00002000  /* C1 E D J  ) Synonyms */
+#define PCRE_NO_UTF32_CHECK     0x00002000  /* C1 E D J  )          */
+#define PCRE_AUTO_CALLOUT       0x00004000  /* C1       */
+#define PCRE_PARTIAL_SOFT       0x00008000  /*    E D J  ) Synonyms */
+#define PCRE_PARTIAL            0x00008000  /*    E D J  )          */
+
+/* This pair use the same bit. */
+#define PCRE_NEVER_UTF          0x00010000  /* C1        ) Overlaid */
+#define PCRE_DFA_SHORTEST       0x00010000  /*      D    ) Overlaid */
+
+/* This pair use the same bit. */
+#define PCRE_NO_AUTO_POSSESS    0x00020000  /* C1        ) Overlaid */
+#define PCRE_DFA_RESTART        0x00020000  /*      D    ) Overlaid */
+
+#define PCRE_FIRSTLINE          0x00040000  /* C3       */
+#define PCRE_DUPNAMES           0x00080000  /* C1       */
+#define PCRE_NEWLINE_CR         0x00100000  /* C3 E D   */
+#define PCRE_NEWLINE_LF         0x00200000  /* C3 E D   */
+#define PCRE_NEWLINE_CRLF       0x00300000  /* C3 E D   */
+#define PCRE_NEWLINE_ANY        0x00400000  /* C3 E D   */
+#define PCRE_NEWLINE_ANYCRLF    0x00500000  /* C3 E D   */
+#define PCRE_BSR_ANYCRLF        0x00800000  /* C3 E D   */
+#define PCRE_BSR_UNICODE        0x01000000  /* C3 E D   */
+#define PCRE_JAVASCRIPT_COMPAT  0x02000000  /* C5       */
+#define PCRE_NO_START_OPTIMIZE  0x04000000  /* C2 E D    ) Synonyms */
+#define PCRE_NO_START_OPTIMISE  0x04000000  /* C2 E D    )          */
+#define PCRE_PARTIAL_HARD       0x08000000  /*    E D J */
+#define PCRE_NOTEMPTY_ATSTART   0x10000000  /*    E D J */
+#define PCRE_UCP                0x20000000  /* C3       */
+
+/* Exec-time and get/set-time error codes */
+
+#define PCRE_ERROR_NOMATCH          (-1)
+#define PCRE_ERROR_NULL             (-2)
+#define PCRE_ERROR_BADOPTION        (-3)
+#define PCRE_ERROR_BADMAGIC         (-4)
+#define PCRE_ERROR_UNKNOWN_OPCODE   (-5)
+#define PCRE_ERROR_UNKNOWN_NODE     (-5)  /* For backward compatibility */
+#define PCRE_ERROR_NOMEMORY         (-6)
+#define PCRE_ERROR_NOSUBSTRING      (-7)
+#define PCRE_ERROR_MATCHLIMIT       (-8)
+#define PCRE_ERROR_CALLOUT          (-9)  /* Never used by PCRE itself */
+#define PCRE_ERROR_BADUTF8         (-10)  /* Same for 8/16/32 */
+#define PCRE_ERROR_BADUTF16        (-10)  /* Same for 8/16/32 */
+#define PCRE_ERROR_BADUTF32        (-10)  /* Same for 8/16/32 */
+#define PCRE_ERROR_BADUTF8_OFFSET  (-11)  /* Same for 8/16 */
+#define PCRE_ERROR_BADUTF16_OFFSET (-11)  /* Same for 8/16 */
+#define PCRE_ERROR_PARTIAL         (-12)
+#define PCRE_ERROR_BADPARTIAL      (-13)
+#define PCRE_ERROR_INTERNAL        (-14)
+#define PCRE_ERROR_BADCOUNT        (-15)
+#define PCRE_ERROR_DFA_UITEM       (-16)
+#define PCRE_ERROR_DFA_UCOND       (-17)
+#define PCRE_ERROR_DFA_UMLIMIT     (-18)
+#define PCRE_ERROR_DFA_WSSIZE      (-19)
+#define PCRE_ERROR_DFA_RECURSE     (-20)
+#define PCRE_ERROR_RECURSIONLIMIT  (-21)
+#define PCRE_ERROR_NULLWSLIMIT     (-22)  /* No longer actually used */
+#define PCRE_ERROR_BADNEWLINE      (-23)
+#define PCRE_ERROR_BADOFFSET       (-24)
+#define PCRE_ERROR_SHORTUTF8       (-25)
+#define PCRE_ERROR_SHORTUTF16      (-25)  /* Same for 8/16 */
+#define PCRE_ERROR_RECURSELOOP     (-26)
+#define PCRE_ERROR_JIT_STACKLIMIT  (-27)
+#define PCRE_ERROR_BADMODE         (-28)
+#define PCRE_ERROR_BADENDIANNESS   (-29)
+#define PCRE_ERROR_DFA_BADRESTART  (-30)
+#define PCRE_ERROR_JIT_BADOPTION   (-31)
+#define PCRE_ERROR_BADLENGTH       (-32)
+#define PCRE_ERROR_UNSET           (-33)
+
+/* Specific error codes for UTF-8 validity checks */
+
+#define PCRE_UTF8_ERR0               0
+#define PCRE_UTF8_ERR1               1
+#define PCRE_UTF8_ERR2               2
+#define PCRE_UTF8_ERR3               3
+#define PCRE_UTF8_ERR4               4
+#define PCRE_UTF8_ERR5               5
+#define PCRE_UTF8_ERR6               6
+#define PCRE_UTF8_ERR7               7
+#define PCRE_UTF8_ERR8               8
+#define PCRE_UTF8_ERR9               9
+#define PCRE_UTF8_ERR10             10
+#define PCRE_UTF8_ERR11             11
+#define PCRE_UTF8_ERR12             12
+#define PCRE_UTF8_ERR13             13
+#define PCRE_UTF8_ERR14             14
+#define PCRE_UTF8_ERR15             15
+#define PCRE_UTF8_ERR16             16
+#define PCRE_UTF8_ERR17             17
+#define PCRE_UTF8_ERR18             18
+#define PCRE_UTF8_ERR19             19
+#define PCRE_UTF8_ERR20             20
+#define PCRE_UTF8_ERR21             21
+#define PCRE_UTF8_ERR22             22  /* Unused (was non-character) */
+
+/* Specific error codes for UTF-16 validity checks */
+
+#define PCRE_UTF16_ERR0              0
+#define PCRE_UTF16_ERR1              1
+#define PCRE_UTF16_ERR2              2
+#define PCRE_UTF16_ERR3              3
+#define PCRE_UTF16_ERR4              4  /* Unused (was non-character) */
+
+/* Specific error codes for UTF-32 validity checks */
+
+#define PCRE_UTF32_ERR0              0
+#define PCRE_UTF32_ERR1              1
+#define PCRE_UTF32_ERR2              2  /* Unused (was non-character) */
+#define PCRE_UTF32_ERR3              3
+
+/* Request types for pcre_fullinfo() */
+
+#define PCRE_INFO_OPTIONS            0
+#define PCRE_INFO_SIZE               1
+#define PCRE_INFO_CAPTURECOUNT       2
+#define PCRE_INFO_BACKREFMAX         3
+#define PCRE_INFO_FIRSTBYTE          4
+#define PCRE_INFO_FIRSTCHAR          4  /* For backwards compatibility */
+#define PCRE_INFO_FIRSTTABLE         5
+#define PCRE_INFO_LASTLITERAL        6
+#define PCRE_INFO_NAMEENTRYSIZE      7
+#define PCRE_INFO_NAMECOUNT          8
+#define PCRE_INFO_NAMETABLE          9
+#define PCRE_INFO_STUDYSIZE         10
+#define PCRE_INFO_DEFAULT_TABLES    11
+#define PCRE_INFO_OKPARTIAL         12
+#define PCRE_INFO_JCHANGED          13
+#define PCRE_INFO_HASCRORLF         14
+#define PCRE_INFO_MINLENGTH         15
+#define PCRE_INFO_JIT               16
+#define PCRE_INFO_JITSIZE           17
+#define PCRE_INFO_MAXLOOKBEHIND     18
+#define PCRE_INFO_FIRSTCHARACTER    19
+#define PCRE_INFO_FIRSTCHARACTERFLAGS 20
+#define PCRE_INFO_REQUIREDCHAR      21
+#define PCRE_INFO_REQUIREDCHARFLAGS 22
+#define PCRE_INFO_MATCHLIMIT        23
+#define PCRE_INFO_RECURSIONLIMIT    24
+#define PCRE_INFO_MATCH_EMPTY       25
+
+/* Request types for pcre_config(). Do not re-arrange, in order to remain
+compatible. */
+
+#define PCRE_CONFIG_UTF8                    0
+#define PCRE_CONFIG_NEWLINE                 1
+#define PCRE_CONFIG_LINK_SIZE               2
+#define PCRE_CONFIG_POSIX_MALLOC_THRESHOLD  3
+#define PCRE_CONFIG_MATCH_LIMIT             4
+#define PCRE_CONFIG_STACKRECURSE            5
+#define PCRE_CONFIG_UNICODE_PROPERTIES      6
+#define PCRE_CONFIG_MATCH_LIMIT_RECURSION   7
+#define PCRE_CONFIG_BSR                     8
+#define PCRE_CONFIG_JIT                     9
+#define PCRE_CONFIG_UTF16                  10
+#define PCRE_CONFIG_JITTARGET              11
+#define PCRE_CONFIG_UTF32                  12
+#define PCRE_CONFIG_PARENS_LIMIT           13
+
+/* Request types for pcre_study(). Do not re-arrange, in order to remain
+compatible. */
+
+#define PCRE_STUDY_JIT_COMPILE                0x0001
+#define PCRE_STUDY_JIT_PARTIAL_SOFT_COMPILE   0x0002
+#define PCRE_STUDY_JIT_PARTIAL_HARD_COMPILE   0x0004
+#define PCRE_STUDY_EXTRA_NEEDED               0x0008
+
+/* Bit flags for the pcre[16|32]_extra structure. Do not re-arrange or redefine
+these bits, just add new ones on the end, in order to remain compatible. */
+
+#define PCRE_EXTRA_STUDY_DATA             0x0001
+#define PCRE_EXTRA_MATCH_LIMIT            0x0002
+#define PCRE_EXTRA_CALLOUT_DATA           0x0004
+#define PCRE_EXTRA_TABLES                 0x0008
+#define PCRE_EXTRA_MATCH_LIMIT_RECURSION  0x0010
+#define PCRE_EXTRA_MARK                   0x0020
+#define PCRE_EXTRA_EXECUTABLE_JIT         0x0040
 struct real_pcre;
 typedef struct real_pcre pcre;
 

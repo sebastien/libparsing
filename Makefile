@@ -65,8 +65,11 @@ TESTS_PY       =$(wildcard $(TESTS)/test-*.py)
 BUILD_SOURCES_O =$(SOURCES_C:$(SOURCES)/c/%.c=$(BUILD)/%.o)
 BUILD_TESTS_O   =$(TESTS_C:$(TESTS)/%.c=$(BUILD)/%.o)
 BUILD_O         =$(BUILD_SOURCES_O) $(BUILD_TESTS_O)
-BUILD_SO        =$(SOURCES)/python/lib$(PROJECT)/lib$(PROJECT).so
-BUILD_FFI       =$(SOURCES)/python/lib$(PROJECT)/lib$(PROJECT).ffi
+BUILD_SO        =$(SOURCES)/python/lib$(PROJECT)/lib$(PROJECT).so   \
+                 $(SOURCES)/python/lib$(PROJECT)/_lib$(PROJECT).so  \
+
+BUILD_FFI       =$(SOURCES)/python/lib$(PROJECT)/_lib$(PROJECT).ffi \
+                 $(SOURCES)/python/lib$(PROJECT)/_lib$(PROJECT).c
 BUILD_ALL       =$(BUILD_O) $(BUILD_SO) $(BUILD_FFI)
 
 # === DIST FILES ==============================================================
@@ -188,7 +191,7 @@ $(DIST)/test-%: $(BUILD)/test-%.o $(SOURCES_O)
 # PYTHON MODULE
 # =============================================================================
 
-$(SOURCES)/python/lib$(PROJECT)/_lib$(PROJECT).so: $(DIST)/lib$(PROJECT).so
+$(SOURCES)/python/lib$(PROJECT)/lib$(PROJECT).so: $(DIST)/lib$(PROJECT).so
 	@echo "$(GREEN)📝  $@ [PYTHON SO]$(RESET)"
 	@cp $< $@
 
@@ -200,8 +203,8 @@ $(SOURCES)/python/lib$(PROJECT)/_libparsing.ffi: $(SOURCES)/h/$(PROJECT).h
 $(SOURCES)/python/lib$(PROJECT)/_libparsing.c: $(SOURCES_C) $(SOURCES_H)
 	$(CC) $(CFLAGS) -E -DWITH_CFFI $(SOURCES_C) | egrep -v '^#' > $@
 
-$(SOURCES)/python/lib$(PROJECT)/_libparsing.so: $(SOURCES_C) $(SOURCES_H)
-	$(PYTHON) bin/make-python-ext
+$(SOURCES)/python/lib$(PROJECT)/_libparsing.so: $(SOURCES_C) $(SOURCES_H) $(BUILD_FFI)
+	$(PYTHON) bin/make-python-ext $@
 
 # =============================================================================
 # OBJECTS
