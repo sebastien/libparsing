@@ -95,6 +95,16 @@ else:
 # -----------------------------------------------------------------------------
 
 class CObject(object):
+	"""A wrapper to create an OO API on top of native C API using ctypes. A
+	few things to keep in mind:
+
+	- Values passed to C need to be explicitely referenced, otherwise they
+	  will be garbage collected, sometimes even before they're passed
+	  to the C API (it's the case with string).
+
+	- In Python3, `str` need to be `bytes`.
+
+	"""
 
 	_TYPE = None
 
@@ -152,11 +162,17 @@ class ParsingElement(CObject):
 
 	@property
 	def name( self ):
-		return ffi.string(self._cobject.name)
+		return ffi.string(lib.ParsingElement_getName(self._cobject))
+		# if self._name:
+		# 	return self._name
+		# else:
+		# 	self.__name = ensure_str(ffi.string(self._cobject.name))
+		# 	return self.__name
 
 	@name.setter
 	def name( self, name ):
-		lib.ParsingElement_name(self._cobject, ensure_bytes(name))
+		self._name = ensure_bytes(name)
+		lib.ParsingElement_name(self._cobject, self._name)
 		return self
 
 	@property
@@ -177,7 +193,8 @@ class ParsingElement(CObject):
 		return self
 
 	def _as( self, name ):
-		return Reference(self)._as(name)
+		self._name = ensure_bytes(name)
+		return Reference(self)._as(self._name)
 
 	def optional( self ):
 		return Reference(self).optional()
@@ -220,12 +237,12 @@ class ParsingElement(CObject):
 	def __repr__(self):
 		classname = self.__class__.__name__.rsplit(".", 1)[-1]
 		if not self._cobject:
-			return "<%s:Uninitialized>" % (classname)
+			return "<{0}:Uninitialized>".format(classname)
 		else:
-			return "<%s:%s[%s]#%d>" % (
+			return "<{0} {1}@{2}#{3}>".format(
 				classname,
-				self.type,
-				self.name,
+				ensure_str(self.type),
+				ensure_str(self.name),
 				self.id
 			)
 
@@ -238,7 +255,8 @@ class ParsingElement(CObject):
 class Word(ParsingElement):
 
 	def _new( self, word):
-		return lib.Word_new(ensure_bytes(word))
+		self._word = ensure_bytes(word)
+		return lib.Word_new(self._word)
 
 # -----------------------------------------------------------------------------
 #
@@ -249,7 +267,8 @@ class Word(ParsingElement):
 class Token(ParsingElement):
 
 	def _new( self, token):
-		return lib.Token_new(ensure_bytes(token))
+		self._token = ensure_bytes(token)
+		return lib.Token_new(self._token)
 
 # -----------------------------------------------------------------------------
 #
@@ -332,6 +351,7 @@ class Reference(CObject):
 		assert isinstance(element, ParsingElement)
 		assert element._cobject
 		r = lib.Reference_FromElement(element._cobject)
+		self._element = element
 		assert r.element == element._cobject, "Reference element should be {0}, got {1}".format(element._cobject, r.element)
 		return r
 
@@ -341,7 +361,7 @@ class Reference(CObject):
 
 	@property
 	def name( self ):
-		return ffi.string(self._cobject.name) if self._cobject.name != ffi.NULL else None
+		return ensure_str(ffi.string(self._cobject.name)) if self._cobject.name != ffi.NULL else None
 
 	@property
 	def id( self ):
@@ -360,7 +380,8 @@ class Reference(CObject):
 	# =========================================================================
 
 	def _as( self, name ):
-		lib.Reference_name(self._cobject, ensure_bytes(name))
+		self._name = ensure_bytes(name)
+		lib.Reference_name(self._cobject, self._name)
 		return self
 
 	def one( self ):
@@ -408,7 +429,7 @@ class Reference(CObject):
 		return "<{0} {1}@{2}→{3}>".format(
 			self.__class__.__name__.rsplit(".", 1)[-1],
 			self.id,
-			self.name,
+			ensure_str(self.name),
 			self.element
 		)
 
@@ -450,7 +471,7 @@ class Match(CObject):
 	@property
 	def name( self ):
 		name = lib.Match_getElementName(self._cobject)
-		return ffi.string(name) if name else None
+		return ensure_str(ffi.string(name)) if name else None
 
 	@property
 	def id( self ):
@@ -507,9 +528,9 @@ class Match(CObject):
 	def __repr__(self):
 		return "<{0} {1}:{2}@{3} {4}-{5}>".format(
 			self.__class__.__name__.rsplit(".", 1)[-1],
-			self.type,
+			ensure_str(self.type),
 			self.id,
-			self.name,
+			ensure_str(self.name),
 			self.offset,
 			self.offset + self.length,
 		)
@@ -625,6 +646,14 @@ class ParsingResult(CObject):
 
 	_TYPE = "ParsingResult*"
 
+	@classmethod
+	def Wrap( cls, cobject, text=None, path=None ):
+		res = super(ParsingResult, cls).Wrap(cobject)
+		if res:
+			res._text = text
+			res._path = path
+		return res
+
 	@property
 	def status( self ):
 		return self._cobject.status
@@ -655,7 +684,7 @@ class ParsingResult(CObject):
 
 	@property
 	def text( self ):
-		return ffi.string(self._cobject.context.iterator.buffer)
+		return ensure_str(ffi.string(self._cobject.context.iterator.buffer))
 
 	# =========================================================================
 	# METHODS
@@ -820,11 +849,13 @@ class Grammar(CObject):
 
 	def parsePath( self, path ):
 		self._prepare()
-		return ParsingResult.Wrap(lib.Grammar_parsePath(self._cobject, ensure_bytes(path)))
+		_path = ensure_bytes(path)
+		return ParsingResult.Wrap(lib.Grammar_parsePath(self._cobject, _path), path=_path)
 
 	def parseString( self, text ):
 		self._prepare()
-		return ParsingReult.Wrap(lib.Grammar_parseString(self._cobject, ensure_bytes(text)))
+		_text = ensure_bytes(text)
+		return ParsingResult.Wrap(lib.Grammar_parseString(self._cobject,_text), text=_text)
 
 	# =========================================================================
 	# AXIOM AND SKIPPING
@@ -1129,14 +1160,14 @@ class Processor:
 			return res
 
 	def _processWord( self, match ):
-		return ffi.string(lib.Word_word(match.element))
+		return ensure_str(ffi.string(lib.Word_word(match.element)))
 
 	def _processToken( self, match ):
 		n = lib.TokenMatch_count(match._cobject)
 		if n == 0:
 			return None
 		else:
-			return list(ffi.string(lib.TokenMatch_group(match._cobject, i)) for i in range(n))
+			return list(ensure_str(ffi.string(lib.TokenMatch_group(match._cobject, i))) for i in range(n))
 
 	def _processCondition( self, match ):
 		return True

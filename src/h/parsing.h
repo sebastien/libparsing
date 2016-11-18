@@ -38,7 +38,7 @@ extern "C" {
  * ## C & Python Parsing Elements Grammar Library
  *
  * ```
- * Version :  0.7.0
+ * Version :  0.8.6
  * URL     :  http://github.com/sebastien/parsing
  * README  :  https://cdn.rawgit.com/sebastien/libparsing/master/README.html
  * ```
@@ -46,14 +46,14 @@ extern "C" {
  * [START:INTRO]
  *
  * `libparsing` is a parsing element grammar (PEG) library written in C with
- * Python bindings. It offers decent performance while allowing for a
+ * *Python bindings*. It offers good performance while allowing for a
  * lot of flexibility. It is mainly intended to be used to create programming
  * languages and software engineering tools.
  *
  * As opposed to more traditional parsing techniques, the grammar is not compiled
- * but constructed using an API that allows dynamic update of the grammar.
+ * but constructed using an API that allows for the dynamic update of the grammar.
  *
- * The parser does not do any tokeninzation, the instead input stream is
+ * The parser does not do any tokeninzation, instead, an input stream is
  * consumed and parsing elements are dynamically asked to match the next
  * element of it. Once parsing elements match, the resulting matched input is
  * processed and an action is triggered.
@@ -142,6 +142,24 @@ extern "C" {
  *
  * C API
  * =====
+ *
+ * Memory management
+ * -----------------
+ *
+ * It is always good to specify how memory is managed at the API level. The
+ * C API manages the memory in the following way:
+ *
+ * - Any string given to the API is *copied* (`Word_new`, `ParsingElement_name`, etc),
+ *   except the text string given to `Grammar_parseString`.
+ *
+ * - `ParsingElements` are freed by the `Grammar_free`
+ *
+ * - `Match`, `ParsingContext` and `Iterator` are freed by the `ParsingResult`
+ *
+ * What it means is that you need to ensure that:
+ *
+ * 1) You free any `ParsingResult` that you obtained
+ * 2) You free the grammar *last* (parsing result matches reference elements)
  *
  * Input data
  * ----------
@@ -501,7 +519,7 @@ void Match_toJSON(Match* this, int fd);
 typedef struct ParsingElement {
 	char           type;       // Type is used du differentiate ParsingElement from Reference
 	int            id;         // The ID, assigned by the grammar, as the relative distance to the axiom
-	const char*    name;       // The parsing element's name, for debugging
+	char*          name;       // The parsing element's name
 	void*          config;     // The configuration of the parsing element
 	struct Reference*     children;   // The parsing element's children, if any
 	struct Match*         (*recognize) (struct ParsingElement*, ParsingContext*);
@@ -551,6 +569,9 @@ Match* ParsingElement_process( ParsingElement* this, Match* match );
 // @method
 // Transparently sets the name of the element
 ParsingElement* ParsingElement_name( ParsingElement* this, const char* name );
+
+// @method
+const char* ParsingElement_getName( ParsingElement* this );
 
 /**
  * ### Word
@@ -660,7 +681,7 @@ int TokenMatch_count(Match* match);
 typedef struct Reference {
 	char            type;            // Set to Reference_T, to disambiguate with ParsingElement
 	int             id;              // The ID, assigned by the grammar, as the relative distance to the axiom
-	const char*     name;            // The name of the reference (optional)
+	char*           name;            // The name of the reference (optional)
 	char            cardinality;     // Either ONE (default), OPTIONAL, MANY or MANY_OPTIONAL
 	struct ParsingElement* element;  // The reference to the parsing element
 	struct Reference*      next;     // The next child reference in the parsing elements

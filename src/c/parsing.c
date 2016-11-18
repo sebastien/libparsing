@@ -707,7 +707,7 @@ ParsingElement* ParsingElement_new(Reference* children[]) {
 	__NEW(ParsingElement, this);
 	this->type      = TYPE_ELEMENT;
 	this->id        = ID_UNBOUND;
-	this->name      = "_";
+	this->name      = NULL;
 	this->config    = NULL;
 	this->children  = NULL;
 	this->recognize = NULL;
@@ -727,6 +727,7 @@ ParsingElement* ParsingElement_new(Reference* children[]) {
 
 void ParsingElement_free(ParsingElement* this) {
 	// TRACE("ParsingElement_free: %p", this)
+	if (this == NULL) {return;}
 	Reference* child = this->children;
 	while (child != NULL) {
 		Reference* next = child->next;
@@ -734,6 +735,7 @@ void ParsingElement_free(ParsingElement* this) {
 		Reference_free(child);
 		child = next;
 	}
+	__FREE(this->name);
 	__FREE(this);
 }
 
@@ -785,8 +787,13 @@ size_t ParsingElement_skip( ParsingElement* this, ParsingContext* context) {
 
 ParsingElement* ParsingElement_name( ParsingElement* this, const char* name ) {
 	if (this == NULL) {return this;}
-	this->name = name;
+	__FREE(this->name);
+	__STRING_COPY(this->name, name);
 	return this;
+}
+
+const char* ParsingElement_getName( ParsingElement* this ) {
+	return this == NULL ? NULL : (const char*)this->name;
 }
 
 int ParsingElement__walk( ParsingElement* this, WalkingCallback callback, int step, void* context ) {
@@ -868,7 +875,7 @@ Reference* Reference_new(void) {
 	this->type        = TYPE_REFERENCE;
 	this->id          = ID_UNBOUND;
 	this->cardinality = CARDINALITY_ONE;
-	this->name        = "_";
+	this->name        = NULL;
 	this->element     = NULL;
 	this->next        = NULL;
 	assert(!Reference_hasElement(this));
@@ -881,6 +888,7 @@ void Reference_free(Reference* this) {
 	// TRACE("Reference_free: %p", this)
 	// NOTE: We do not free the referenced element nor the next reference.
 	// That would be the job of the grammar.
+	if (this != NULL) {__FREE(this->name);}
 	__FREE(this)
 }
 
@@ -904,7 +912,8 @@ Reference* Reference_cardinality(Reference* this, char cardinality) {
 
 Reference* Reference_name(Reference* this, const char* name) {
 	assert(this!=NULL);
-	this->name        = name;
+	__FREE(this->name);
+	__STRING_COPY(this->name, name);
 	return this;
 }
 
