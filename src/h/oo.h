@@ -31,7 +31,7 @@
  * __NEW(Array_Int,a) ; a->push(1);
  * ```
 */
-typedef char  bool;
+typedef char bool;
 #define TRUE  1
 #define FALSE 0
 

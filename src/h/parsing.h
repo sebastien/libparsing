@@ -20,6 +20,7 @@ extern "C" {
 #define _XOPEN_SOURCE 700
 #endif
 
+#ifndef WITH_CFFI
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
@@ -28,8 +29,15 @@ extern "C" {
 #include <string.h>
 #include <assert.h>
 #include <sys/types.h>
+#endif
+#ifdef WITH_CFFI
+extern void CFFI_DELIMITER;
+#endif
 #ifdef WITH_PCRE
 #include <pcre.h>
+#endif
+#ifdef WITH_CFFI
+extern void CFFI_DELIMITER;
 #endif
 #include "oo.h"
 
@@ -445,10 +453,6 @@ extern Match FAILURE_S;
 
 // @shared FAILURE
 extern Match* FAILURE;
-
-// @operation
-// Creates new empty (successful) match
-Match* Match_Empty(Element* element, ParsingContext* context);
 
 // @operation
 // Creates a new successful match of the given length

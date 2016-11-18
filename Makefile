@@ -25,10 +25,12 @@ endif
 ifneq (,$(findstring python2,$(FEATURES)))
 	LIBS +=python2
 	CFLAGS+=-DWITH_PYTHON
+	PYTHON=python2
 endif
 ifneq (,$(findstring python3,$(FEATURES)))
 	LIBS +=python3
 	CFLAGS+=-DWITH_PYTHON
+	PYTHON=python3
 endif
 ifneq (,$(findstring debug,$(FEATURES)))
 	CFLAGS+=-Og
@@ -186,14 +188,20 @@ $(DIST)/test-%: $(BUILD)/test-%.o $(SOURCES_O)
 # PYTHON MODULE
 # =============================================================================
 
-$(SOURCES)/python/lib$(PROJECT)/lib$(PROJECT).so: $(DIST)/lib$(PROJECT).so
+$(SOURCES)/python/lib$(PROJECT)/_lib$(PROJECT).so: $(DIST)/lib$(PROJECT).so
 	@echo "$(GREEN)📝  $@ [PYTHON SO]$(RESET)"
 	@cp $< $@
 
-$(SOURCES)/python/lib$(PROJECT)/libparsing.ffi: $(SOURCES)/h/$(PROJECT).h
+$(SOURCES)/python/lib$(PROJECT)/_libparsing.ffi: $(SOURCES)/h/$(PROJECT).h
 	@echo "$(GREEN)📝  $@ [FFI]$(RESET)"
 	@mkdir -p `dirname $@`
 	./bin/ffigen.py $< > $@
+
+$(SOURCES)/python/lib$(PROJECT)/_libparsing.c: $(SOURCES_C) $(SOURCES_H)
+	$(CC) $(CFLAGS) -E -DWITH_CFFI $(SOURCES_C) | egrep -v '^#' > $@
+
+$(SOURCES)/python/lib$(PROJECT)/_libparsing.so: $(SOURCES_C) $(SOURCES_H)
+	$(PYTHON) bin/make-python-ext
 
 # =============================================================================
 # OBJECTS
