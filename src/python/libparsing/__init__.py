@@ -56,25 +56,37 @@ for p in LIB_PATHS:
 		break
 assert lib, "libparsing: Cannot find libparsing.so in any of {0}".format(", ".join(LIB_PATHS))
 
-CARDINALITY_OPTIONAL      = '?'
-CARDINALITY_ONE           = '1'
-CARDINALITY_MANY_OPTIONAL = '*'
-CARDINALITY_MANY          = '+'
-TYPE_WORD                 = 'W'
-TYPE_TOKEN                = 'T'
-TYPE_GROUP                = 'G'
-TYPE_RULE                 = 'R'
-TYPE_CONDITION            = 'c'
-TYPE_PROCEDURE            = 'p'
-TYPE_REFERENCE            = '#'
-STATUS_INIT               = '-'
-STATUS_PROCESSING         = '~'
-STATUS_MATCHED            = 'Y'
-STATUS_FAILED             = 'X'
-STATUS_INPUT_ENDED        = '.'
-STATUS_ENDED              = 'E'
+CARDINALITY_OPTIONAL      = b'?'
+CARDINALITY_ONE           = b'1'
+CARDINALITY_MANY_OPTIONAL = b'*'
+CARDINALITY_MANY          = b'+'
+TYPE_WORD                 = b'W'
+TYPE_TOKEN                = b'T'
+TYPE_GROUP                = b'G'
+TYPE_RULE                 = b'R'
+TYPE_CONDITION            = b'c'
+TYPE_PROCEDURE            = b'p'
+TYPE_REFERENCE            = b'#'
+STATUS_INIT               = b'-'
+STATUS_PROCESSING         = b'~'
+STATUS_MATCHED            = b'Y'
+STATUS_FAILED             = b'X'
+STATUS_INPUT_ENDED        = b'.'
+STATUS_ENDED              = b'E'
 ID_BINDING                = -1
 ID_UNBOUND                = -10
+
+
+if sys.version_info.major >= 3:
+	def ensure_bytes(v):
+		return v.encode("utf8") if isinstance(v,str) else v
+	def ensure_str(v):
+		return v.decode("utf8") if isinstance(v,bytes) else v
+else:
+	def ensure_bytes( v ):
+		return v
+	def ensure_str( v ):
+		return v
 
 # -----------------------------------------------------------------------------
 #
@@ -144,7 +156,7 @@ class ParsingElement(CObject):
 
 	@name.setter
 	def name( self, name ):
-		lib.ParsingElement_name(self._cobject, name)
+		lib.ParsingElement_name(self._cobject, ensure_bytes(name))
 		return self
 
 	@property
@@ -226,7 +238,7 @@ class ParsingElement(CObject):
 class Word(ParsingElement):
 
 	def _new( self, word):
-		return lib.Word_new(word)
+		return lib.Word_new(ensure_bytes(word))
 
 # -----------------------------------------------------------------------------
 #
@@ -237,7 +249,7 @@ class Word(ParsingElement):
 class Token(ParsingElement):
 
 	def _new( self, token):
-		return lib.Token_new( token)
+		return lib.Token_new(ensure_bytes(token))
 
 # -----------------------------------------------------------------------------
 #
@@ -348,7 +360,7 @@ class Reference(CObject):
 	# =========================================================================
 
 	def _as( self, name ):
-		lib.Reference_name(self._cobject, name)
+		lib.Reference_name(self._cobject, ensure_bytes(name))
 		return self
 
 	def one( self ):
@@ -669,7 +681,7 @@ class ParsingResult(CObject):
 		return (o, o + r)
 
 	def textAround( self, before=3, after=3 ):
-		t    = self.text
+		t    = ensure_str(self.text)
 		s,e  = self.lastMatchRange()
 		bt   = t[0:s].rsplit("\n", before + 1)[-before-1:]
 		at   = t[e:].split("\n", after + 1)[:after+1]
@@ -808,11 +820,11 @@ class Grammar(CObject):
 
 	def parsePath( self, path ):
 		self._prepare()
-		return ParsingResult.Wrap(lib.Grammar_parsePath(self._cobject, path))
+		return ParsingResult.Wrap(lib.Grammar_parsePath(self._cobject, ensure_bytes(path)))
 
 	def parseString( self, text ):
 		self._prepare()
-		return ParsingResult.Wrap(lib.Grammar_parseString(self._cobject, text))
+		return ParsingReult.Wrap(lib.Grammar_parseString(self._cobject, ensure_bytes(text)))
 
 	# =========================================================================
 	# AXIOM AND SKIPPING
@@ -1170,6 +1182,32 @@ class TreeWriter(Processor):
 		if named:
 			self.indent -= 1
 		return r
+
+class Indentation(object):
+
+	VALUES = {
+		" "  : 1,
+		"\t" : 4,
+	}
+
+	def __init__( self, allows="\t ", step=1, values=None):
+		self.allows = allows
+		self.values = values
+		self.step   = step
+
+	def withTabs( self ):
+		self.allows = "\t"
+		self.values = {"\t":1}
+		self.step   = 1
+
+	def indent( self, element, context ):
+		pass
+
+	def dedent( self, element, context ):
+		pass
+
+	def checkIndent( self, element, context ):
+		pass
 
 def __init__():
 	pass
