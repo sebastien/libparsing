@@ -1493,7 +1493,7 @@ Match*  Procedure_recognize(ParsingElement* this, ParsingContext* context) {
 		// FIXME: Executing handlers is still quite problematic
 		((ProcedureCallback)(this->config))(this, context);
 	}
-	OUT_STEP_IF(strcmp(this->name, "_") != 0, "[✓] %sProcedure " BOLDGREEN "%s" RESET "#%d executed at %zu", context->indent, this->name, this->id, context->iterator->offset)
+	OUT_STEP_IF(this->name, "[✓] %sProcedure " BOLDGREEN "%s" RESET "#%d executed at %zu", context->indent, this->name, this->id, context->iterator->offset)
 	return MATCH_STATS(Match_Success(0, this, context));
 }
 
