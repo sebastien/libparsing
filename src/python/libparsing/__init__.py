@@ -82,7 +82,6 @@ STATUS_ENDED              = b'E'
 ID_BINDING                = -1
 ID_UNBOUND                = -10
 
-
 if sys.version_info.major >= 3:
 	def ensure_bytes(v):
 		"""Makes sure that this returns a byte string."""
@@ -136,13 +135,33 @@ class CObject(object):
 
 	- In Python3, `str` need to be `bytes`.
 
+	The CObject offers a *recycling* facility. If the `_RECYCLABLE` class
+	attribute is set, the cbjects will be appended to the `_RECYCLER` class
+	stack on `__del__`, and the instance can be reused by calling
+	`Reuse(pointer)`.
 	"""
 
-	_TYPE = None
+	_TYPE       = None
+	_RECYCLER   = None
+	_RECYCLABLE = False
 
 	@classmethod
 	def Wrap( cls, cobject ):
 		return cls(cobject, wrap=cls.TYPE()) if cobject != ffi.NULL else None
+
+	@classmethod
+	def Recycle( cls, wrapped ):
+		if cls._RECYCLER is None: cls._RECYCLER = []
+		wrapped._cobject = None
+		cls._RECYCLER.append(wrapped)
+
+	@classmethod
+	def Reuse( cls, cobject ):
+		if cls._RECYCLER is None or len(cls._RECYCLER) == 0:
+			return None
+		else:
+			o = cls._RECYCLER.pop()
+			return o._repurpose(ffi.cast(cls.TYPE(), cobject))
 
 	@classmethod
 	def TYPE( cls ):
@@ -157,6 +176,8 @@ class CObject(object):
 			assert len(kwargs) == 1
 			assert len(args  ) == 1
 			self._wrap(ffi.cast(kwargs["wrap"], args[0]))
+		elif "empty" in kwargs:
+			pass
 		else:
 			o = self._new(*args, **kwargs)
 			if o is not None: self._cobject = ffi.cast(self.TYPE(), o)
@@ -168,12 +189,20 @@ class CObject(object):
 	def _new( self ):
 		raise NotImplementedError
 
+	def _repurpose( self, cobject ):
+		assert cobject
+		return self._wrap(cobject)
+
 	def _wrap( self, cobject ):
 		assert self._cobject == None
 		#assert isinstance(cobject, FFI.CData), "%s: Trying to wrap non CData value: %s" % (self.__class__.__name__, cobject)
 		assert cobject != ffi.NULL, "%s: Trying to wrap NULL value: %s" % (self.__class__.__name__, cobject)
 		self._cobject = cobject
 		return self
+
+	def __del__( self ):
+		if self.__class__._RECYCLABLE:
+			self.__class__.Recycle(self)
 
 # -----------------------------------------------------------------------------
 #
@@ -468,13 +497,13 @@ class Reference(CObject):
 
 class Match(CObject):
 
-	_TYPE = "Match*"
+	_TYPE       = "Match*"
+	_RECYCLABLE = True
 
 	@classmethod
 	def Wrap( cls, cobject ):
 		assert cobject.element != ffi.NULL, "Match C object does not have an element: %s %d+%d" % (cobject.status, cobject.offset, cobject.length)
-		e = ffi.cast("ParsingElement*", cobject.element)
-		return Match(cobject, wrap=cls._TYPE)
+		return cls.Reuse(cobject) or Match(cobject, wrap=cls._TYPE)
 
 	def _new( self, o ):
 		return ffi.cast("Match*", o)
@@ -553,14 +582,20 @@ class Match(CObject):
 				raise KeyError
 
 	def __repr__(self):
-		return "<{0} {1}:{2}@{3} {4}-{5}>".format(
-			self.__class__.__name__.rsplit(".", 1)[-1],
-			ensure_str(self.type),
-			self.id,
-			ensure_str(self.name),
-			self.offset,
-			self.offset + self.length,
-		)
+		if not self._cobject:
+			return "<{0} NULL {1}>".format(
+				self.__class__.__name__.rsplit(".", 1)[-1],
+				id(self)
+			)
+		else:
+			return "<{0} {1}:{2}@{3} {4}-{5}>".format(
+				self.__class__.__name__.rsplit(".", 1)[-1],
+				ensure_str(self.type),
+				self.id,
+				ensure_str(self.name),
+				self.offset,
+				self.offset + self.length,
+			)
 
 # -----------------------------------------------------------------------------
 #
