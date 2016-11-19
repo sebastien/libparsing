@@ -27,7 +27,7 @@ try:
 except ImportError:
 	import logging
 
-VERSION            = "0.8.5"
+VERSION            = "0.8.6"
 LICENSE            = "http://ffctn.com/doc/licenses/bsd"
 PACKAGE_PATH       = dirname(abspath(__file__))
 
@@ -37,18 +37,20 @@ PACKAGE_PATH       = dirname(abspath(__file__))
 #
 # -----------------------------------------------------------------------------
 
-ffi            = FFI()
+ffi            = None
 lib            = None
 LIBPARSING_FFI = join(PACKAGE_PATH, "_libparsing.ffi") if os.path.exists(join(PACKAGE_PATH, "_libparsing.ffi")) else None
 LIBPARSING_EXT = join(PACKAGE_PATH, "_libparsing.so")  if os.path.exists(join(PACKAGE_PATH, "_libparsing.so"))  else None
 LIBPARSING_SO  = join(PACKAGE_PATH, "libparsing.so")   if os.path.exists(join(PACKAGE_PATH, "libparsing.so"))   else None
 
-if False and LIBPARSING_EXT:
-	print ("LOADING EXT", LIBPARSING_EXT)
-	from ._libparsing import lib
+if LIBPARSING_EXT:
+	# Using the EXT instead of the SO (ie. API vs ABI mode) improves performance
+	# by ~25%, but the extension needs to be compiled specifically for the python
+	# version.
+	from ._libparsing import lib, ffi
 elif LIBPARSING_SO:
-	print ("LOADING SO", LIBPARSING_SO)
 	assert os.path.exists(LIBPARSING_FFI), "libparsing: Missing FFI interface file {0}".format(FFI_PATH)
+	ffi = FFI()
 	with open(LIBPARSING_FFI, "r") as f: ffi.cdef(f.read())
 	lib = ffi.dlopen(LIBPARSING_SO)
 assert lib, "libparsing: Cannot find libparsing.so or _libparsing.so in package {0}".format(PACKAGE_PATH)
@@ -168,7 +170,7 @@ class CObject(object):
 
 	def _wrap( self, cobject ):
 		assert self._cobject == None
-		assert isinstance(cobject, FFI.CData), "%s: Trying to wrap non CData value: %s" % (self.__class__.__name__, cobject)
+		#assert isinstance(cobject, FFI.CData), "%s: Trying to wrap non CData value: %s" % (self.__class__.__name__, cobject)
 		assert cobject != ffi.NULL, "%s: Trying to wrap NULL value: %s" % (self.__class__.__name__, cobject)
 		self._cobject = cobject
 		return self
