@@ -50,9 +50,9 @@ setup(
 	packages    = ["libparsing"],
 	data_files  = [
 		("libparsing", (
-			"src/python/_libparsing.c",
-			"src/python/_libparsing.h",
-			"src/python/_libparsing.ffi"
+			"src/python/libparsing/_libparsing.c",
+			"src/python/libparsing/_libparsing.h",
+			"src/python/libparsing/_libparsing.ffi"
 		))
 	],
 	# SEE: http://cffi.readthedocs.io/en/latest/cdef.html?highlight=setup.py
