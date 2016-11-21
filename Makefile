@@ -204,7 +204,7 @@ $(SOURCES)/python/lib$(PROJECT)/_libparsing.c: $(SOURCES_C) $(SOURCES_H)
 	$(CC) $(CFLAGS) -E -DWITH_CFFI $(SOURCES_C) | egrep -v '^#' > $@
 
 $(SOURCES)/python/lib$(PROJECT)/_libparsing.so: $(SOURCES_C) $(SOURCES_H) $(BUILD_FFI)
-	$(PYTHON) bin/make-python-ext $@
+	$(PYTHON) bin/libparsing_build.py $@
 
 # =============================================================================
 # OBJECTS

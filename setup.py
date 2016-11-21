@@ -9,24 +9,16 @@ try:
 	from setuptools import setup, Extension
 except ImportError:
 	from distutils.core import setup, Extension
-import os, tempfile
+import sys, os, tempfile
 
-grep = lambda f,e:(l for l in open(f).readlines() if l.startswith(e)).next()
+# We make sure `build_libparsing` is within the path
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abpath(__file__), "bin")))
+import libparsing_build
 
-# FIXME: This is not built properly
-# SEE: https://docs.python.org/2/distutils/apiref.html#distutils.core.Extension
-libparsing = Extension("libparsing",
-	define_macros       = [("PYTHON", "1")],
-	include_dirs        = ["/usr/local/include", "src", "src/h"],
-	extra_compile_args =  ["-DWITH_PCRE"],
-	libraries           = ["pcre"],
-	library_dirs        = ["/usr/local/lib"],
-	sources             = ["src/c/parsing.c"]
-)
 
 LONG_DESCRIPTION = "\n".join(_[2:].strip() for _ in open("src/h/parsing.h").read().split("[START:INTRO]",1)[1].split("[END:INTRO]")[0].split("\n"))
-
-# If pandoc is installed, we translate the documentation to RST
+# If pandoc is installed, we translate the documentation to RST. This is really
+# only useful for publishing, not for building.
 if os.popen("which pandoc").read():
 	p = tempfile.mktemp()
 	with open(p,"w") as f: f.write(LONG_DESCRIPTION)
@@ -51,20 +43,24 @@ setup(
 		'Topic :: Software Development :: Build Tools',
 		'License :: OSI Approved :: BSD License',
 		'Programming Language :: Python :: 2',
-		'Programming Language :: Python :: 2.6',
 		'Programming Language :: Python :: 2.7',
-		# 'Programming Language :: Python :: 3',
-		# 'Programming Language :: Python :: 3.2',
-		# 'Programming Language :: Python :: 3.3',
-		# 'Programming Language :: Python :: 3.4',
+		'Programming Language :: Python :: 3',
+		'Programming Language :: Python :: 3.4',
 	],
 	package_dir = {"":"src/python"},
-	#package_data = {"libparsing":"build/*/libparsing.so"},
 	packages    = ["libparsing"],
 	data_files  = [
-		("libparsing", ("src/c/parsing.c", "src/h/parsing.h", "src/h/oo.h"))
+		("libparsing", (
+			"src/python/_libparsing.c",
+			"src/python/_libparsing.h",
+			"src/python/_libparsing.ffi"
+		))
 	],
-	ext_modules = [libparsing],
+	# SEE: http://cffi.readthedocs.io/en/latest/cdef.html?highlight=setup.py
+	ext_modules = [libparsing_build.ffibuilder.distutils_extension()],
+	setup_requires=["cffi>=1.0.0"],
+	cffi_modules=["package/libparsing_build.py:ffibuilder"],
+	install_requires=["cffi>=1.0.0"],
 )
 
 # EOF
