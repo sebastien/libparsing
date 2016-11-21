@@ -53,12 +53,12 @@ setup(
 	packages    = ["libparsing"],
 	package_dir = {"libparsing":"src/python/libparsing"},
 	package_data ={
-		"libparsing":(
+		"libparsing":[
 			"_libparsing.c",
 			"_libparsing.h",
 			"_libparsing.ffi",
 			"_build.py",
-		)
+		]
 	},
 	# SEE: http://cffi.readthedocs.io/en/latest/cdef.html?highlight=setup.py
 	setup_requires=["cffi>=1.0.0"],
