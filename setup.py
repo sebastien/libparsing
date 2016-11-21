@@ -14,7 +14,7 @@ import sys, os, tempfile
 # We make sure `build_libparsing` is within the path
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "bin"))
 
-VERSION            = "0.8.9"
+VERSION            = "0.8.10"
 if os.path.exists("src/h/parsing.h"):
 	LONG_DESCRIPTION = "\n".join(_[2:].strip() for _ in open("src/h/parsing.h").read().split("[START:INTRO]",1)[1].split("[END:INTRO]")[0].split("\n"))
 else:
