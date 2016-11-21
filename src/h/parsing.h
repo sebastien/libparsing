@@ -10,7 +10,7 @@
 
 #ifndef __PARSING_H__
 #define __PARSING_H__
-#define __PARSING_VERSION__ "0.8.7"
+#define __PARSING_VERSION__ "0.8.7a"
 #ifdef __cplusplus
 extern "C" {
 #endif

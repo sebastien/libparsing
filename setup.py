@@ -15,7 +15,10 @@ import sys, os, tempfile
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "bin"))
 
 
-LONG_DESCRIPTION = "\n".join(_[2:].strip() for _ in open("src/h/parsing.h").read().split("[START:INTRO]",1)[1].split("[END:INTRO]")[0].split("\n")) if os.path.exists("src/h/parsing.h") else ""
+if os.path.exists("src/h/parsing.h"):
+	LONG_DESCRIPTION = "\n".join(_[2:].strip() for _ in open("src/h/parsing.h").read().split("[START:INTRO]",1)[1].split("[END:INTRO]")[0].split("\n"))
+else:
+	LONG_DESCRIPTION = ""
 # If pandoc is installed, we translate the documentation to RST. This is really
 # only useful for publishing, not for building.
 if LONG_DESCRIPTION and os.popen("which pandoc").read():
