@@ -1,10 +1,10 @@
 import cffi, glob, re
 from os.path import join, dirname, abspath
 
-BASE       = dirname(dirname(abspath(__file__)))
-H_SOURCE   = open(join(BASE,"src/python/libparsing/_libparsing.h")).read()
-C_SOURCE   = open(join(BASE,"src/python/libparsing/_libparsing.c")).read()
-FFI_SOURCE = open(join(BASE,"src/python/libparsing/_libparsing.ffi")).read()
+BASE       = dirname(abspath(__file__))
+H_SOURCE   = open(join(BASE,"_libparsing.h")).read()
+C_SOURCE   = open(join(BASE,"_libparsing.c")).read()
+FFI_SOURCE = open(join(BASE,"_libparsing.ffi")).read()
 
 ffibuilder = cffi.FFI()
 # In order to avoid _libparsing.so: undefined symbol: PyInt_FromLong
@@ -21,10 +21,12 @@ ffibuilder.embedding_init_code("""
         print("adding %d and %d" % (p.x, p.y))
         return p.x + p.y
 """)
+
+ffibuilder.compile(target="_libparsing.*", verbose=False, tmpdir=join(BASE,"build"))
+
 if __name__ == "__main__":
 	import sys, shutil
 	args = sys.argv[1:]
-	ffibuilder.compile(target="_libparsing.*", verbose=False, tmpdir=join(BASE,"build"))
 	if args:
 		shutil.copy("build/_libparsing.so", args[0])
 

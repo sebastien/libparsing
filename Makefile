@@ -146,6 +146,7 @@ ffi: $(SOURCES)/alt$(PROJECT)/$(PROJECT).ffi ## Re-generates the FFI interface
 
 update-python-version: $(SOURCES)/h/parsing.h
 	sed -i 's/VERSION \+= *"[^"]\+"/VERSION            = "$(VERSION)"/' $(SOURCES)/python/$(PYMODULE)/__init__.py 
+	sed -i 's/VERSION \+= *"[^"]\+"/VERSION            = "$(VERSION)"/' setup.py
 
 check: $(SOURCES_C) $(SOURCES_H) ## Runs checks on the source code
 	@# SEE: http://sourceforge.net/p/cppcheck/wiki/ListOfChecks/
@@ -204,7 +205,7 @@ $(SOURCES)/python/lib$(PROJECT)/_libparsing.c: $(SOURCES_C) $(SOURCES_H)
 	$(CC) $(CFLAGS) -E -DWITH_CFFI $(SOURCES_C) | egrep -v '^#' > $@
 
 $(SOURCES)/python/lib$(PROJECT)/_libparsing.so: $(SOURCES_C) $(SOURCES_H) $(BUILD_FFI)
-	$(PYTHON) bin/libparsing_build.py $@
+	$(PYTHON) $(SOURCES)python/lib$(PROJECT)/_build.py $@
 
 # =============================================================================
 # OBJECTS

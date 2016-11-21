@@ -14,11 +14,12 @@ import sys, os, tempfile
 # We make sure `build_libparsing` is within the path
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "bin"))
 
-
+VERSION            = "0.8.8"
 if os.path.exists("src/h/parsing.h"):
 	LONG_DESCRIPTION = "\n".join(_[2:].strip() for _ in open("src/h/parsing.h").read().split("[START:INTRO]",1)[1].split("[END:INTRO]")[0].split("\n"))
 else:
 	LONG_DESCRIPTION = ""
+
 # If pandoc is installed, we translate the documentation to RST. This is really
 # only useful for publishing, not for building.
 if LONG_DESCRIPTION and os.popen("which pandoc").read():
@@ -29,7 +30,7 @@ if LONG_DESCRIPTION and os.popen("which pandoc").read():
 
 setup(
 	name             = "libparsing",
-	version          = [l.split('"')[1] for l in open("src/h/parsing.h").readlines() if l.startswith("#define __PARSING_VERSION__")][0],
+	version          = VERSION,
 	url              = "https://github.com/sebastien/libparsing",
 	# download_url     = "",
 	author           = 'Sébastien Pierre',
@@ -49,18 +50,19 @@ setup(
 		'Programming Language :: Python :: 3',
 		'Programming Language :: Python :: 3.4',
 	],
-	package_dir = {"":"src/python"},
 	packages    = ["libparsing"],
-	data_files  = [
-		("libparsing", (
-			"src/python/libparsing/_libparsing.c",
-			"src/python/libparsing/_libparsing.h",
-			"src/python/libparsing/_libparsing.ffi"
-		))
-	],
+	package_dir = {"libparsing":"src/python/libparsing"},
+	package_data ={
+		"libparsing":(
+			"_libparsing.c",
+			"_libparsing.h",
+			"_libparsing.ffi",
+			"_build.py",
+		)
+	},
 	# SEE: http://cffi.readthedocs.io/en/latest/cdef.html?highlight=setup.py
 	setup_requires=["cffi>=1.0.0"],
-	cffi_modules=["bin/libparsing_build.py:ffibuilder"],
+	cffi_modules=["src/python/libparsing/_build.py:ffibuilder"],
 	install_requires=["cffi>=1.0.0"],
 )
 
