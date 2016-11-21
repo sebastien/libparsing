@@ -12,8 +12,7 @@ except ImportError:
 import sys, os, tempfile
 
 # We make sure `build_libparsing` is within the path
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abpath(__file__), "bin")))
-import libparsing_build
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "bin"))
 
 
 LONG_DESCRIPTION = "\n".join(_[2:].strip() for _ in open("src/h/parsing.h").read().split("[START:INTRO]",1)[1].split("[END:INTRO]")[0].split("\n"))
@@ -57,9 +56,8 @@ setup(
 		))
 	],
 	# SEE: http://cffi.readthedocs.io/en/latest/cdef.html?highlight=setup.py
-	ext_modules = [libparsing_build.ffibuilder.distutils_extension()],
 	setup_requires=["cffi>=1.0.0"],
-	cffi_modules=["package/libparsing_build.py:ffibuilder"],
+	cffi_modules=["bin/libparsing_build.py:ffibuilder"],
 	install_requires=["cffi>=1.0.0"],
 )
 
