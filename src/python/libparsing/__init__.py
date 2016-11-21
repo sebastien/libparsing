@@ -6,12 +6,12 @@
 # License           : BSD License
 # -----------------------------------------------------------------------------
 # Creation date     : 18-Dec-2014
-# Last modification : 18-Nov-2016
+# Last modification : 21-Nov-2016
 # -----------------------------------------------------------------------------
 
 from __future__ import print_function
 
-import sys, os, re, inspect
+import sys, os, re, glob, inspect
 from   cffi    import FFI
 from   os.path import dirname, join, abspath
 
@@ -27,7 +27,7 @@ try:
 except ImportError:
 	import logging
 
-VERSION            = "0.8.11"
+VERSION            = "0.8.12"
 LICENSE            = "http://ffctn.com/doc/licenses/bsd"
 PACKAGE_PATH       = dirname(abspath(__file__))
 
@@ -40,8 +40,18 @@ PACKAGE_PATH       = dirname(abspath(__file__))
 ffi            = None
 lib            = None
 LIBPARSING_FFI = join(PACKAGE_PATH, "_libparsing.ffi") if os.path.exists(join(PACKAGE_PATH, "_libparsing.ffi")) else None
-LIBPARSING_EXT = join(PACKAGE_PATH, "_libparsing.so")  if os.path.exists(join(PACKAGE_PATH, "_libparsing.so"))  else None
-LIBPARSING_SO  = join(PACKAGE_PATH, "libparsing.so")   if os.path.exists(join(PACKAGE_PATH, "libparsing.so"))   else None
+LIBPARSING_EXT = None
+LIBPARSING_SO  = None
+
+# We need to support different extensions and different prefixes. CFFI
+# will build extensions as " _libparsing.cpython-35m-x86_64-linux-gnu.so"
+# on Linux.
+LIBRARY_EXTS   = ("so", "dylib", "dll")
+for p in os.listdir(PACKAGE_PATH):
+	if p.startswith("_libparsing.") and p.rsplit(".",1)[-1] in LIBRARY_EXTS:
+		LIBPARSING_EXT = os.path.join(PACKAGE_PATH, p)
+	if p.startswith("libparsing.") and p.rsplit(".",1)[-1] in LIBRARY_EXTS:
+		LIBPARSING_SO  = os.path.join(PACKAGE_PATH, p)
 
 if LIBPARSING_EXT:
 	# Using the EXT instead of the SO (ie. API vs ABI mode) improves performance
@@ -49,11 +59,11 @@ if LIBPARSING_EXT:
 	# version.
 	from ._libparsing import lib, ffi
 elif LIBPARSING_SO:
-	assert os.path.exists(LIBPARSING_FFI), "libparsing: Missing FFI interface file {0}".format(FFI_PATH)
+	assert os.path.exists(LIBPARSING_FFI), "libparsing: Missing FFI interface file {0}".format(LIBPARSING_FFI)
 	ffi = FFI()
 	with open(LIBPARSING_FFI, "r") as f: ffi.cdef(f.read())
 	lib = ffi.dlopen(LIBPARSING_SO)
-assert lib, "libparsing: Cannot find libparsing.so or _libparsing.so in package {0}".format(PACKAGE_PATH)
+assert lib, "libparsing: Cannot find libparsing.{{so,dll,dylib}} or _libparsing[.*].{{so,dll,dylib}} in package {0}".format(PACKAGE_PATH)
 
 # -----------------------------------------------------------------------------
 #

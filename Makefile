@@ -130,7 +130,7 @@ info: ## Displays information about the project
 	@echo libparsing: $(VERSION)
 
 dist: $(PRODUCT) $(DIST_FILES) ## Creates source and binary Python distributions
-	$(PYTHON) setup.py check clean sdist bdist_wheel
+	$(PYTHON) setup.py check clean sdist bdist
 
 release: $(PRODUCT) update-python-version $(SOURCES)/python/lib$(PROJECT)/_lib$(PROJECT).so
 	@echo "$(CYAN)📦  dist: $(RESET)"
@@ -138,7 +138,7 @@ release: $(PRODUCT) update-python-version $(SOURCES)/python/lib$(PROJECT)/_lib$(
 	git commit -a -m "Release $(VERSION)" ; true
 	git tag $(VERSION) ; true
 	git push --all ; true
-	$(PYTHON) setup.py sdist bdist_wheel register upload
+	$(PYTHON) setup.py sdist bdist register upload
 
 tests: $(TEST_PRODUCTS)
 
