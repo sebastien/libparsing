@@ -124,12 +124,12 @@ extern "C" {
  * To install the Python parsing module:
  *
  * ```shell
- * easy_install libparsing    # From Setuptools
+ * easy_install libparsing     # From Setuptools
  * pip install  libparsing     # From PIP
  * ```
  *
- * Note that for the above to work, you'll need a C compiler and libpcre-dev.
- * On Ubuntu, do `sudo apt install build-essential libprcre-dev`.
+ * Note that for the above to work, you'll need a C,  `libpcre-dev` and `ffi-dev` packages installed..
+ * On Ubuntu, do `sudo apt install build-essential libprcre-dev ffi-dev`.
  *
  * To compile the C parsing module:
  *
@@ -140,8 +140,7 @@ extern "C" {
  * make install               # You can set PREFIX
  * ```
  *
- * `libparsing` works with GCC4 and Clang and is written following the `c11`
- * standard.
+ * `libparsing` works with GCC4 and Clang.
  *
  * C API
  * =====

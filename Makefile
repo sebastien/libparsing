@@ -144,8 +144,8 @@ tests: $(TEST_PRODUCTS)
 
 ffi: $(SOURCES)/alt$(PROJECT)/$(PROJECT).ffi ## Re-generates the FFI interface
 
-update-python-version: $(SOURCES)parsing.h
-	sed -i 's/VERSION \+= *"[^"]\+"/VERSION            = "$(VERSION)"/' $(SOURCES)python/$(PYMODULE)/__init__.py 
+update-python-version: $(SOURCES)/h/parsing.h
+	sed -i 's/VERSION \+= *"[^"]\+"/VERSION            = "$(VERSION)"/' $(SOURCES)/python/$(PYMODULE)/__init__.py 
 
 check: $(SOURCES_C) $(SOURCES_H) ## Runs checks on the source code
 	@# SEE: http://sourceforge.net/p/cppcheck/wiki/ListOfChecks/
