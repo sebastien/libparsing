@@ -6,7 +6,7 @@
 # License           : BSD License
 # -----------------------------------------------------------------------------
 # Creation date     : 18-Dec-2014
-# Last modification : 21-Nov-2016
+# Last modification : 28-Nov-2016
 # -----------------------------------------------------------------------------
 
 from __future__ import print_function
@@ -176,7 +176,7 @@ class CObject(object):
 	@classmethod
 	def TYPE( cls ):
 		if not cls._TYPE:
-			cls._TYPE = cls.__name__.rsplit(".")[-1] + "*"
+			cls._TYPE = ffi.typeof(cls.__name__.rsplit(".")[-1] + "*")
 		return cls._TYPE
 
 	def __init__(self, *args, **kwargs):
@@ -507,7 +507,7 @@ class Reference(CObject):
 
 class Match(CObject):
 
-	_TYPE       = "Match*"
+	_TYPE       = ffi.typeof("Match*")
 	_RECYCLABLE = True
 
 	@classmethod
@@ -516,7 +516,7 @@ class Match(CObject):
 		return cls.Reuse(cobject) or Match(cobject, wrap=cls._TYPE)
 
 	def _new( self, o ):
-		return ffi.cast("Match*", o)
+		return ffi.cast(self._TYPE, o)
 
 	# =========================================================================
 	# ACCESSORS
@@ -602,7 +602,7 @@ class Match(CObject):
 				self.__class__.__name__.rsplit(".", 1)[-1],
 				ensure_str(self.type),
 				self.id,
-				ensure_str(self.name),
+				ensure_str(self.name) or "_",
 				self.offset,
 				self.offset + self.length,
 			)
@@ -679,7 +679,7 @@ class Symbols:
 
 class ParsingContext(CObject):
 
-	_TYPE = "ParsingContext*"
+	_TYPE = ffi.typeof("ParsingContext*")
 
 	@property
 	def offset( self ):
@@ -716,7 +716,7 @@ class ParsingContext(CObject):
 
 class ParsingResult(CObject):
 
-	_TYPE = "ParsingResult*"
+	_TYPE = ffi.typeof("ParsingResult*")
 
 	@classmethod
 	def Wrap( cls, cobject, text=None, path=None ):
@@ -904,7 +904,7 @@ class ParsingStats(CObject):
 
 class Grammar(CObject):
 
-	_TYPE = "Grammar*"
+	_TYPE = ffi.typeof("Grammar*")
 
 	def _new(self, name=None, isVerbose=False ):
 		self.name    = name
@@ -965,6 +965,7 @@ class Grammar(CObject):
 	def word( self, name, word):
 		self._prepared = False
 		r = Word(word)
+		r.name = name
 		self.symbols[name] = r
 		return r
 
@@ -975,6 +976,7 @@ class Grammar(CObject):
 	def token( self, name, token):
 		self._prepared = False
 		r = Token(token)
+		r.name = name
 		self.symbols[name] = r
 		return r
 
@@ -985,6 +987,7 @@ class Grammar(CObject):
 	def procedure( self, name, callback):
 		self._prepared = False
 		r = Procedure(callback)
+		r.name = name
 		self.symbols[name] = r
 		return r
 
@@ -995,6 +998,7 @@ class Grammar(CObject):
 	def condition( self, name, callback=None):
 		self._prepared = False
 		r = Condition(callback)
+		r.name = name
 		self.symbols[name] = r
 		return r
 
@@ -1005,6 +1009,7 @@ class Grammar(CObject):
 	def group( self, name, *children):
 		self._prepared = False
 		r = Group(*children)
+		r.name = name
 		self.symbols[name] = r
 		return r
 
@@ -1015,6 +1020,7 @@ class Grammar(CObject):
 	def rule( self, name, *children):
 		self._prepared = False
 		r = Rule(*children)
+		r.name = name
 		self.symbols[name] = r
 		return r
 

@@ -615,7 +615,7 @@ typedef struct Processor {
 
 
 
-Processor* Processor_new( );
+Processor* Processor_new(void);
 
 
 void Processor_free(Processor* this);
@@ -1090,11 +1090,23 @@ void Match_free(Match* this) {
 
 
 int Match_getElementID(Match* this) {
- return this != NULL && this->element != NULL ? ((ParsingElement*)this->element)->id : -1;
+ if (this == NULL || this->element == NULL) {return -1;}
+ if (((ParsingElement*)this->element)->type == '#') {
+  return ((Reference*)this->element)->id;
+ } else {
+  ParsingElement* element = (this->element);
+  return element->id;
+ }
 }
 
 char Match_getElementType(Match* this) {
- return this != NULL && this->element != NULL ? ((ParsingElement*)this->element)->type : ' ';
+ if (this == NULL || this->element == NULL) {return ' ';}
+ if (((ParsingElement*)this->element)->type == '#') {
+  return ((Reference*)this->element)->type;
+ } else {
+  ParsingElement* element = (this->element);
+  return element->type;
+ }
 }
 
 const char* Match_getElementName(Match* this) {

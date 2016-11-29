@@ -1074,7 +1074,7 @@ typedef struct Processor {
 
 
 // @constructor
-Processor* Processor_new( );
+Processor* Processor_new(void);
 
 // @method
 void Processor_free(Processor* this);
