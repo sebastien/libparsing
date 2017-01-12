@@ -735,6 +735,10 @@ class ParsingResult(CObject):
 		return Match.Wrap(self._cobject.match)
 
 	@property
+	def lastMatch( self ):
+		return Match.Wrap(self._cobject.context.lastMatch) if self._cobject.context.lastMatch else None
+
+	@property
 	def stats( self ):
 		return ParsingStats.Wrap(self._cobject.context.stats)
 
@@ -776,10 +780,13 @@ class ParsingResult(CObject):
 	# =========================================================================
 
 	def lastMatchRange( self ):
-		# FIXME: Should be wrapped in a a function
-		o = self._cobject.context.stats.matchOffset or 0
-		r = self._cobject.context.stats.matchLength or 0
-		return (o, o + r)
+		match = self.lastMatch
+		if match:
+			o = match.offset
+			l = match.length
+			return (o, o + l)
+		else:
+			return (-1,-1)
 
 	def textAround( self, before=3, after=3 ):
 		t    = ensure_str(self.text)
@@ -814,7 +821,7 @@ class ParsingResult(CObject):
 	def toJSON( self ):
 		return self.match.toJSON()
 
-	def XXX__repr__( self ):
+	def __repr__( self ):
 		return "<{0}(status={2}, line={3}, char={4}, offset={5}, remaining={6}) at {1:02x}>".format(
 			self.__class__.__name__,
 			id(self),
@@ -1167,7 +1174,7 @@ class Processor:
 		elif valid:
 			def wrapper( match ):
 				kwargs = dict( (name, self.process(match[index])) for (name,index) in valid)
-				return handler(match, **kwargs)
+				return self.postProcess(match, handler(match, **kwargs))
 			return wrapper
 		else:
 			return handler
@@ -1178,6 +1185,9 @@ class Processor:
 		result = self._processMatch(match) if isinstance(match, Match) else match
 		self.depth -= 1
 		return result.value if isinstance(result, MatchResult) else result
+
+	def postProcess( self, match, result ):
+		return result
 
 	def _processMatch( self, match ):
 		if self.strategy == self.EAGER:

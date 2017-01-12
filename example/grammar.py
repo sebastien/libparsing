@@ -4,6 +4,15 @@ __doc__ = """
 Defines a grammar that can parse grammar definitions and generate both
 a grammar and a processor to output the result of the grammar. This is a fairly
 complete example of how to use libparsing from a Python perspective.
+
+The grammar language in question is as follows:
+
+- A rule starts with an _identifier_, followed by `::=` and then
+  its definition ending with a semicolon `;`
+
+- Any action for the rule is inserted before the semicolon and
+  prefixed by `→` (or `->` if you can't type the arrow).
+
 """
 
 LISP_GRAMMAR = """
@@ -16,8 +25,9 @@ List    := '(' Value* ')'         → cons #N ..#1;
 Value   := List | Atom            → #0;
 Comment := ";[^\n]*\n"            → skip;
 Code    := (Comment|Value)*       → #0;
-atom    = Code  ;
-skip    = SPACE ;
+__axiom__  = Code  ;
+__skip__   = SPACE ;
+
 """
 
 def grammar(isVerbose=False):

@@ -64,6 +64,10 @@ bool Iterator_moveTo ( Iterator* this, size_t offset );
 
 
 
+bool Iterator_backtrack ( Iterator* this, size_t offset, size_t lines );
+
+
+
 char Iterator_charAt ( Iterator* this, size_t offset );
 
 
@@ -141,6 +145,7 @@ typedef struct Match {
  char status;
  size_t offset;
  size_t length;
+ size_t line;
  Element* element;
  void* data;
  struct Match* next;
@@ -640,6 +645,7 @@ void Utilities_dedent( ParsingElement* this, ParsingContext* context );
 
 bool Utilites_checkIndent( ParsingElement* this, ParsingContext* context );
 iterated_t EOL = '\n';
+
 Match FAILURE_S = {
  .status = 'F',
  .length = 0,
@@ -792,6 +798,13 @@ size_t Iterator_remaining( Iterator* this ) {
 }
 
 bool Iterator_moveTo ( Iterator* this, size_t offset ) {
+ return this->move(this, offset - this->offset );
+}
+
+bool Iterator_backtrack ( Iterator* this, size_t offset, size_t lines ) {
+ assert(offset <= this->offset);
+ assert(lines <= this->lines);
+ this->lines = lines;
  return this->move(this, offset - this->offset );
 }
 
@@ -1045,6 +1058,8 @@ Match* Match_Success(size_t length, Element* element, ParsingContext* context) {
  this->element = element;
  this->offset = context->iterator->offset;
  this->length = length;
+
+ this->line = context->iterator->lines;
  return this;
 }
 
@@ -1055,6 +1070,7 @@ Match* Match_new(void) {
  this->element = NULL;
  this->length = 0;
  this->offset = 0;
+ this->line = 0;
  this->data = NULL;
  this->children = NULL;
  this->next = NULL;
@@ -1375,7 +1391,7 @@ Match* ParsingElement_process( ParsingElement* this, Match* match ) {
 }
 
 size_t ParsingElement_skip( ParsingElement* this, ParsingContext* context) {
- if (this == NULL || context == NULL || context->flags & 1) {return 0;}
+ if (this == NULL || context == NULL || context->grammar->skip == NULL || context->flags & 1) {return 0;}
  context->flags = context->flags | 1;
  ParsingElement* skip = context->grammar->skip;
  size_t offset = context->iterator->offset;
@@ -1505,6 +1521,7 @@ bool Reference_hasNext(Reference* this) {
 }
 
 bool Reference_isMany(Reference* this) {
+
  return this != NULL && (this->cardinality == '+' || this->cardinality == '*');
 }
 
@@ -1543,6 +1560,7 @@ Match* Reference_recognize(Reference* this, ParsingContext* context) {
  int count = 0;
  int offset = context->iterator->offset;
  int match_end_offset = offset;
+ size_t match_end_lines = context->iterator->lines;
 
 
 
@@ -1568,6 +1586,8 @@ Match* Reference_recognize(Reference* this, ParsingContext* context) {
 
   if (Match_isSuccess(match)) {
    match_end_offset = Match_getEndOffset(match);
+
+   match_end_lines = context->iterator->lines;
    if (count == 0) {
 
 
@@ -1609,7 +1629,8 @@ Match* Reference_recognize(Reference* this, ParsingContext* context) {
 
 
  if (context->iterator->offset != match_end_offset) {
-  Iterator_moveTo(context->iterator, match_end_offset);
+
+  Iterator_backtrack(context->iterator, match_end_offset, match_end_lines);
  }
 
  ;;
@@ -1916,6 +1937,7 @@ Match* Group_recognize(ParsingElement* this, ParsingContext* context){
  if(context->grammar->isVerbose && !(context->flags & 1)){fprintf(stdout, "??? %s┌── Group " "\033[1m\033[33m" "%s" "\033[0m" ":#%d at %zu:%zu[→%d]", context->indent, this->name, this->id, context->iterator->lines, context->iterator->offset, context->depth);fprintf(stdout, "\n");;};
  Match* result = NULL;
  size_t offset = context->iterator->offset;
+ size_t lines = context->iterator->lines;
  int step = 0;
 
 
@@ -1948,7 +1970,7 @@ Match* Group_recognize(ParsingElement* this, ParsingContext* context){
 
   if(context->grammar->isVerbose && !(context->flags & 1)){fprintf(stdout, " !  %s╘═⇒ Group " "\033[1m\033[31m" "%s" "\033[0m" "#%d[%d] failed at %zu:%zu-%zu[→%d]", context->indent, this->name, this->id, step, context->iterator->lines, context->iterator->offset, offset, context->depth);fprintf(stdout, "\n");;}
   if (context->iterator->offset != offset ) {
-   Iterator_moveTo(context->iterator, offset);
+   Iterator_backtrack(context->iterator, offset, lines);
    assert( context->iterator->offset == offset );
   }
   return ParsingContext_registerMatch(context, this, FAILURE);
@@ -1972,6 +1994,7 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
  int step = 0;
  const char* step_name = NULL;
  size_t offset = context->iterator->offset;
+ size_t lines = context->iterator->lines;
  Reference* child = this->children;
 
  if(context->grammar->isVerbose && !(context->flags & 1)){fprintf(stdout, "??? %s┌── Rule:" "\033[1m\033[33m" "%s" "\033[0m" " at %zu:%zu[→%d]", context->indent, this->name, context->iterator->lines, context->iterator->offset, context->depth);fprintf(stdout, "\n");;};
@@ -2062,7 +2085,7 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 
 
   if (offset != context->iterator->offset) {
-   Iterator_moveTo(context->iterator, offset);
+   Iterator_backtrack(context->iterator, offset, lines);
    assert( context->iterator->offset == offset );
   }
  }
@@ -2300,6 +2323,7 @@ ParsingContext* ParsingContext_new( Grammar* g, Iterator* iterator ) {
 }
 
 void ParsingContext_free( ParsingContext* this ) {
+
  if (this!=NULL) {
   ParsingVariable_freeAll(this->variables);
   ParsingStats_free(this->stats);
@@ -2368,7 +2392,9 @@ size_t ParsingContext_getOffset(ParsingContext* this) {
 
 Match* ParsingContext_registerMatch(ParsingContext* this, Element* e, Match* m) {
  ParsingStats_registerMatch(this->stats, e, m);
- this->lastMatch = m;
+ if (Match_isSuccess(m)) {
+  this->lastMatch = m;
+ }
  return m;
 }
 

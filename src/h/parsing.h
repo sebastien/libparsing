@@ -260,6 +260,10 @@ size_t Iterator_remaining( Iterator* this );
 bool Iterator_moveTo ( Iterator* this, size_t offset );
 
 // @method
+// Backtracks the iterator to the given offset, setting the line counter
+bool Iterator_backtrack ( Iterator* this, size_t offset, size_t lines );
+
+// @method
 // Gets the character at the given offset
 char Iterator_charAt ( Iterator* this, size_t offset );
 
@@ -386,6 +390,7 @@ typedef struct Match {
 	char            status;     // The status of the match (see STATUS_XXX)
 	size_t          offset;     // The offset of `iterated_t` matched
 	size_t          length;     // The number of `iterated_t` matched
+	size_t          line;       // The line number for the match
 	Element*        element;
 	void*           data;      // The matched data (usually a subset of the input stream)
 	struct Match*   next;      // A pointer to the next  match (see `References`)

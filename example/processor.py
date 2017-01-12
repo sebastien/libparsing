@@ -16,7 +16,6 @@ def grammar(verbose=False):
 	g.token("NUMBER",      "-?\d+(\.\d+)")
 	g.token("NAME",        "[\w_][\w\d-]*")
 
-
 	g.group("Litteral",  s.STRING, s.NUMBER, s.NAME)
 	g.group("Value")
 	g.rule ("List",      s.LP, s.Value.zeroOrMore()._as("content"), s.RP)

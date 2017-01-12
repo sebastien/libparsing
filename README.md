@@ -85,11 +85,11 @@ To install the Python parsing module:
 
 ```shell
 easy_install libparsing    # From Setuptools
-pip install  libparsing     # From PIP
+pip install  libparsing    # From PIP
 ```
 
-Note that for the above to work, you'll need a C compiler and libpcre-dev.
-On Ubuntu, do `sudo apt install build-essential libprcre-dev`.
+Note that for the above to work, you'll need a C compiler `libffi-dev`  and `libpcre-dev`.
+On Ubuntu, do `sudo apt install build-essential libffi-dev libprcre-dev`.
 
 To compile the C parsing module:
 
