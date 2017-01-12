@@ -1730,6 +1730,7 @@ ParsingContext* ParsingContext_new( Grammar* g, Iterator* iterator ) {
 	this->callback  = NULL;
 	this->indent    = INDENT + (INDENT_MAX * INDENT_WIDTH);
 	this->flags     = 0;
+	this->lastMatch = NULL;
 	return this;
 }
 
@@ -1803,8 +1804,13 @@ size_t ParsingContext_getOffset(ParsingContext* this) {
 
 Match* ParsingContext_registerMatch(ParsingContext* this, Element* e, Match* m) {
 	ParsingStats_registerMatch(this->stats, e, m);
+	// NOTE: We make sure to only register the deepest match, as the grammar
+	// is likely to backtack and yield a partial match, erasing where the error
+	// actually lies.
 	if (Match_isSuccess(m)) {
-		this->lastMatch = m;
+		if (this->lastMatch == NULL || this->lastMatch->offset <= m->offset ) {
+			this->lastMatch = m;
+		}
 	}
 	return m;
 }

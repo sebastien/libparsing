@@ -2319,6 +2319,7 @@ ParsingContext* ParsingContext_new( Grammar* g, Iterator* iterator ) {
  this->callback = NULL;
  this->indent = INDENT + (40 * 2);
  this->flags = 0;
+ this->lastMatch = NULL;
  return this;
 }
 
@@ -2392,8 +2393,13 @@ size_t ParsingContext_getOffset(ParsingContext* this) {
 
 Match* ParsingContext_registerMatch(ParsingContext* this, Element* e, Match* m) {
  ParsingStats_registerMatch(this->stats, e, m);
+
+
+
  if (Match_isSuccess(m)) {
-  this->lastMatch = m;
+  if (this->lastMatch == NULL || this->lastMatch->offset <= m->offset ) {
+   this->lastMatch = m;
+  }
  }
  return m;
 }

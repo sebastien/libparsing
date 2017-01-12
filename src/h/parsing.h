@@ -919,7 +919,7 @@ typedef struct ParsingContext {
 	struct ParsingOffset*   current;      // The current parsing offset
 	struct ParsingStats*    stats;
 	struct ParsingVariable* variables;
-	struct Match*           lastMatch;
+	struct Match*           lastMatch;    // The last deepest successful match, useful for displaying error
 	ContextCallback         callback;
 	int                     depth;
 	const char*             indent;

@@ -531,6 +531,10 @@ class Match(CObject):
 		return self._cobject.offset
 
 	@property
+	def line( self ):
+		return self._cobject.line
+
+	@property
 	def type( self ):
 		return lib.Match_getElementType(self._cobject)
 
@@ -719,11 +723,12 @@ class ParsingResult(CObject):
 	_TYPE = ffi.typeof("ParsingResult*")
 
 	@classmethod
-	def Wrap( cls, cobject, text=None, path=None ):
+	def Wrap( cls, cobject, text=None, path=None, grammar=None ):
 		res = super(ParsingResult, cls).Wrap(cobject)
 		if res:
 			res._text = text
 			res._path = path
+			res._grammar = grammar
 		return res
 
 	@property
@@ -788,33 +793,74 @@ class ParsingResult(CObject):
 		else:
 			return (-1,-1)
 
-	def textAround( self, before=3, after=3 ):
+	def getContext( self, start=None, end=None, before=3, after=3 ):
+		"""Returns a triple `(before:[Line], current:Line, after:[Line])`
+		around the start/end offsets"""
+		if start is None or end is None:
+			start, end = self.lastMatchRange()
+		s    = start
+		e    = end
 		t    = ensure_str(self.text)
-		s,e  = self.lastMatchRange()
 		bt   = t[0:s].rsplit("\n", before + 1)[-before-1:]
 		at   = t[e:].split("\n", after + 1)[:after+1]
 		c    = bt[-1] + t[s:e] + at[0]
-		bc   = len(bt[-1]) * " "
-		cc   = "⤒" + (max(0,e-s)) * "⤒"
-		ac   = max(0,len(at[-1]) - 1) * " "
-		return (
-			"\n│ ".join(bt[:-1]) + \
-			"\n└┐" + c +  \
-			"\n┌┘" + bc + cc + ac + "\n│ " + \
-			"\n│ ".join(at[1:])
+		return dict(
+			before=bt[:-1],
+			line=c,
+			after=at[1:],
+			start=start,
+			end=end,
+			lineBefore=bt[-1],
+			lineMatch=t[s:e],
+			lineAfter=at[0],
+			lineOffset=len(bt[-1]),
+			lineLength=max(0,e-s),
 		)
 
-	def describe( self ):
+	def _asSpaces( self, line, char=" " ):
+		r = []
+		for c in line:
+			r.append(c if c in "\t" else char)
+		return "".join(r)
+
+	def formatContext( self, context ):
+		red    = '[0m[01;31m'
+		yellow = '[0m[01;33m'
+		orange = '[0m[00;33m'
+		reset  = '[0m[00;00m'
+		before = "\n│ " + "\n│ ".join(context["before"])
+		after  = "\n│ " + "\n│ ".join(context["after"])
+		line   = "\n└┐" + yellow + context["line"] + reset
+		error  = "\n┌┘" + (
+			orange +
+			self._asSpaces(context["lineBefore"], "▸")     +
+			red +
+			self._asSpaces(context["lineMatch"],  "▲") +
+			reset +
+			self._asSpaces(context["lineAfter"])
+		)
+		return "".join([before,line,error,after])
+
+	def describe( self, context=3, color=True ):
+		"""Returns a nicely formatted description of the error"""
 		if self.isSuccess():
 			return "Parsing successful"
 		else:
+			# m     = self.lastMatch
+			# s,e   = self.lastMatchRange ()
+			# l     = m.line
+			# print ("LAST MATCH {0} line={1}, start={2}-{3}".format(m,l,s,e))
 			s,e   = self.lastMatchRange ()
-			t     = self.textAround()
+			m     = self.lastMatch
+			l     = m.line
+			t     = self.formatContext(self.getContext(before=context, after=context))
 			lines = self.text[:s].split("\n")
 			line  = len(lines) - 1
 			char  = len(lines[-1])
-			return "Parsing failed at line {0}:{1}, range {2}→{3}:{4}".format(
+			sym   = self._grammar.symbol(m.id)
+			return "Parsing failed at line {0} character {1}, offset {2}→{3}, symbol {4}:{5}".format(
 				line, char, s, e,
+				sym,
 				"\n".join([_ for _ in t.split("\n")])
 			)
 
@@ -929,12 +975,12 @@ class Grammar(CObject):
 	def parsePath( self, path ):
 		self._prepare()
 		_path = ensure_cstring(path)
-		return ParsingResult.Wrap(lib.Grammar_parsePath(self._cobject, _path), path=_path)
+		return ParsingResult.Wrap(lib.Grammar_parsePath(self._cobject, _path), path=_path, grammar=self)
 
 	def parseString( self, text ):
 		self._prepare()
 		_text = ensure_cstring(text)
-		return ParsingResult.Wrap(lib.Grammar_parseString(self._cobject,_text), text=_text)
+		return ParsingResult.Wrap(lib.Grammar_parseString(self._cobject,_text), text=_text, grammar=self)
 
 	# =========================================================================
 	# AXIOM AND SKIPPING
