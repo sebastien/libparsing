@@ -818,9 +818,9 @@ void Iterator_free( Iterator* this ) {
 
 
  if (this->freeBuffer) {
-  if (this->buffer!=NULL) {; free(this->buffer); } ;
+  if (this->buffer!=NULL) {; } ;
  }
- if (this!=NULL) {; free(this); } ;
+ if (this!=NULL) {; } ;
 }
 
 
@@ -894,7 +894,7 @@ FileInput* FileInput_new(const char* path ) {
  this->file = fopen(path, "r");
  if (this->file==NULL) {
   fprintf(stderr, "ERR ");fprintf(stderr, "Cannot open file: %s", path);fprintf(stderr, "\n");;
-  if (this!=NULL) {; free(this); } ;
+  if (this!=NULL) {; } ;
   return NULL;
  } else {
   return this;
@@ -1042,7 +1042,7 @@ void Grammar_freeElements(Grammar* this) {
 }
 
 void Grammar_free(Grammar* this) {
- if (this!=NULL) {; free(this); } ;
+ if (this!=NULL) {; } ;
 }
 
 
@@ -1100,7 +1100,7 @@ void Match_free(Match* this) {
    }
   }
 
-  if (this!=NULL) {; free(this); } ;
+  if (this!=NULL) {; } ;
  }
 }
 
@@ -1355,8 +1355,8 @@ void ParsingElement_free(ParsingElement* this) {
   Reference_free(child);
   child = next;
  }
- if (this->name!=NULL) {; free(this->name); } ;
- if (this!=NULL) {; free(this); } ;
+ if (this->name!=NULL) {; } ;
+ if (this!=NULL) {; } ;
 }
 
 ParsingElement* ParsingElement_add(ParsingElement* this, Reference* child) {
@@ -1407,7 +1407,7 @@ size_t ParsingElement_skip( ParsingElement* this, ParsingContext* context) {
 
 ParsingElement* ParsingElement_name( ParsingElement* this, const char* name ) {
  if (this == NULL) {return this;}
- if (this->name!=NULL) {; free(this->name); } ;
+ if (this->name!=NULL) {; } ;
  this->name = strdup(name) ; assert (this->name!=NULL); ;
  return this;
 }
@@ -1508,8 +1508,8 @@ void Reference_free(Reference* this) {
 
 
 
- if (this != NULL) {if (this->name!=NULL) {; free(this->name); } ;}
- if (this!=NULL) {; free(this); }
+ if (this != NULL) {if (this->name!=NULL) {; } ;}
+ if (this!=NULL) {; }
 }
 
 bool Reference_hasElement(Reference* this) {
@@ -1533,7 +1533,7 @@ Reference* Reference_cardinality(Reference* this, char cardinality) {
 
 Reference* Reference_name(Reference* this, const char* name) {
  assert(this!=NULL);
- if (this->name!=NULL) {; free(this->name); } ;
+ if (this->name!=NULL) {; } ;
  this->name = strdup(name) ; assert (this->name!=NULL); ;
  return this;
 }
@@ -1710,9 +1710,9 @@ void Word_free(ParsingElement* this) {
  if (config != NULL) {
 
   free((void*)config->word);
-  if (config!=NULL) {; free(config); } ;
+  if (config!=NULL) {; } ;
  }
- if (this!=NULL) {; free(this); } ;
+ if (this!=NULL) {; } ;
 }
 
 
@@ -1767,16 +1767,16 @@ ParsingElement* Token_new(const char* expr) {
  config->regexp = pcre_compile(config->expr, PCRE_UTF8, &pcre_error, &pcre_error_offset, NULL);
  if (pcre_error != NULL) {
   fprintf(stderr, "ERR ");fprintf(stderr, "Token: cannot compile regular expression `%s` at %d: %s", config->expr, pcre_error_offset, pcre_error);fprintf(stderr, "\n");;
-  if (config!=NULL) {; free(config); } ;
-  if (this!=NULL) {; free(this); } ;
+  if (config!=NULL) {; } ;
+  if (this!=NULL) {; } ;
   return NULL;
  }
 
  config->extra = pcre_study(config->regexp, PCRE_STUDY_JIT_COMPILE, &pcre_error);
  if (pcre_error != NULL) {
   fprintf(stderr, "ERR ");fprintf(stderr, "Token: cannot optimize regular expression `%s` at %d: %s", config->expr, pcre_error_offset, pcre_error);fprintf(stderr, "\n");;
-  if (config!=NULL) {; free(config); } ;
-  if (this!=NULL) {; free(this); } ;
+  if (config!=NULL) {; } ;
+  if (this!=NULL) {; } ;
   return NULL;
  }
 
@@ -1795,10 +1795,10 @@ void Token_free(ParsingElement* this) {
   if (config->regexp != NULL) {}
   if (config->extra != NULL) {pcre_free_study(config->extra);}
 
-  if (config->expr!=NULL) {; free(config->expr); } ;
-  if (config!=NULL) {; free(config); } ;
+  if (config->expr!=NULL) {; } ;
+  if (config!=NULL) {; } ;
  }
- if (this!=NULL) {; free(this); } ;
+ if (this!=NULL) {; } ;
 }
 
 const char* Token_expr(ParsingElement* this) {
@@ -2164,7 +2164,7 @@ ParsingStep* ParsingStep_new( ParsingElement* element ) {
 }
 
 void ParsingStep_free( ParsingStep* this ) {
- if (this!=NULL) {; free(this); } ;
+ if (this!=NULL) {; } ;
 }
 
 
@@ -2189,7 +2189,7 @@ void ParsingOffset_free( ParsingOffset* this ) {
   ParsingStep_free(step);
   step = previous;
  }
- if (this!=NULL) {; free(this); } ;
+ if (this!=NULL) {; } ;
 }
 
 
@@ -2209,8 +2209,8 @@ ParsingVariable* ParsingVariable_new(int depth, const char* key, void* value) {
 
 void ParsingVariable_free(ParsingVariable* this) {
  if (this!=NULL) {
-  if (this->key!=NULL) {; free(this->key); } ;
-  if (this!=NULL) {; free(this); } ;
+  if (this->key!=NULL) {; } ;
+  if (this!=NULL) {; } ;
  }
 }
 
@@ -2328,7 +2328,7 @@ void ParsingContext_free( ParsingContext* this ) {
  if (this!=NULL) {
   ParsingVariable_freeAll(this->variables);
   ParsingStats_free(this->stats);
-  if (this!=NULL) {; free(this); } ;
+  if (this!=NULL) {; } ;
  }
 }
 
@@ -2396,10 +2396,11 @@ Match* ParsingContext_registerMatch(ParsingContext* this, Element* e, Match* m) 
 
 
 
- if (Match_isSuccess(m)) {
-  if (this->lastMatch == NULL || this->lastMatch->offset <= m->offset ) {
-   this->lastMatch = m;
-  }
+ if (Match_isSuccess(m)
+ && (this->lastMatch == NULL || ((this->lastMatch->offset + this->lastMatch->length) < (m->offset + m->length)))
+ && m->length > 0
+ ) {
+  this->lastMatch = m;
  }
  return m;
 }
@@ -2425,10 +2426,10 @@ ParsingStats* ParsingStats_new(void) {
 
 void ParsingStats_free(ParsingStats* this) {
  if (this != NULL) {
-  if (this->successBySymbol!=NULL) {; free(this->successBySymbol); } ;
-  if (this->failureBySymbol!=NULL) {; free(this->failureBySymbol); } ;
+  if (this->successBySymbol!=NULL) {; } ;
+  if (this->failureBySymbol!=NULL) {; } ;
  }
- if (this!=NULL) {; free(this); } ;
+ if (this!=NULL) {; } ;
 }
 
 void ParsingStats_setSymbolsCount(ParsingStats* this, size_t t) {
@@ -2500,7 +2501,7 @@ void ParsingResult_free(ParsingResult* this) {
   Match_free(this->match);
   ParsingContext_free(this->context);
  }
- if (this!=NULL) {; free(this); } ;
+ if (this!=NULL) {; } ;
 }
 
 
@@ -2573,7 +2574,7 @@ void Grammar_prepare ( Grammar* this ) {
  }
  if (this->axiom!=NULL) {
 
-  if (this->elements) { if (this->elements!=NULL) {; free(this->elements); } ; this->elements = NULL; }
+  if (this->elements) { if (this->elements!=NULL) {; } ; this->elements = NULL; }
   assert(this->elements == NULL);
 
   ;
@@ -2650,7 +2651,7 @@ Processor* Processor_new() {
 }
 
 void Processor_free(Processor* this) {
- if (this!=NULL) {; free(this); } ;
+ if (this!=NULL) {; } ;
 }
 
 void Processor_register (Processor* this, int symbolID, ProcessorCallback callback ) {

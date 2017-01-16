@@ -1806,11 +1806,12 @@ Match* ParsingContext_registerMatch(ParsingContext* this, Element* e, Match* m) 
 	ParsingStats_registerMatch(this->stats, e, m);
 	// NOTE: We make sure to only register the deepest match, as the grammar
 	// is likely to backtack and yield a partial match, erasing where the error
-	// actually lies.
-	if (Match_isSuccess(m)) {
-		if (this->lastMatch == NULL || this->lastMatch->offset <= m->offset ) {
-			this->lastMatch = m;
-		}
+	// actually lies. We skip empty matches.
+	if (Match_isSuccess(m)
+	&& (this->lastMatch == NULL || ((this->lastMatch->offset + this->lastMatch->length) < (m->offset + m->length)))
+	&& m->length > 0
+	) {
+		this->lastMatch = m;
 	}
 	return m;
 }

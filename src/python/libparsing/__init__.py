@@ -791,7 +791,7 @@ class ParsingResult(CObject):
 			l = match.length
 			return (o, o + l)
 		else:
-			return (-1,-1)
+			return (self.textOffset, self.textOffset)
 
 	def getContext( self, start=None, end=None, before=3, after=3 ):
 		"""Returns a triple `(before:[Line], current:Line, after:[Line])`
@@ -850,14 +850,13 @@ class ParsingResult(CObject):
 			# s,e   = self.lastMatchRange ()
 			# l     = m.line
 			# print ("LAST MATCH {0} line={1}, start={2}-{3}".format(m,l,s,e))
-			s,e   = self.lastMatchRange ()
 			m     = self.lastMatch
-			l     = m.line
+			s,e   = self.lastMatchRange ()
 			t     = self.formatContext(self.getContext(before=context, after=context))
 			lines = self.text[:s].split("\n")
 			line  = len(lines) - 1
 			char  = len(lines[-1])
-			sym   = self._grammar.symbol(m.id)
+			sym   = self._grammar.symbol(m.id) if m else "-"
 			return "Parsing failed at line {0} character {1}, offset {2}→{3}, symbol {4}:{5}".format(
 				line, char, s, e,
 				sym,
@@ -1147,9 +1146,10 @@ class Processor:
 	LAZY  = 0
 	EAGER = 1
 
-	def __init__( self, grammar=None ):
+	def __init__( self, grammar=None, strict=True ):
 		self.depth    = 0
 		self._handler = None
+		self.isStrict = strict
 		self.strategy = self.LAZY
 		self.setGrammar(self.ensureGrammar(grammar))
 		self._defaults  = dict( (k,getattr(self,v) if hasattr(self,v) else None)  for (k,v) in {
@@ -1192,7 +1192,7 @@ class Processor:
 			if s.id in self.symbolByID:
 				if s.id >= 0:
 					raise Exception("Duplicate symbol id: %d, has %s already while trying to assign %s" % (s.id(), self.symbolByID[s.id()].name(), s.name()))
-				else:
+				elif self.isStrict:
 					logging.warn("Unused symbol: %s" % (repr(s)))
 			self.symbolByID[s.id] = s
 
@@ -1202,9 +1202,10 @@ class Processor:
 			name = k[2:]
 			if not name:
 				continue
-			assert name in self.symbolByName, "Handler does not match any symbol: {0}, symbols are {1}".format(k, ", ".join(self.symbolByName.keys()))
-			symbol = self.symbolByName[name]
-			self.handlerByID[symbol.id] = self._createHandler( getattr(self, k), symbol )
+			assert not self.isStrict or name in self.symbolByName, "Handler does not match any symbol: {0}, symbols are {1}".format(k, ", ".join(self.symbolByName.keys()))
+			symbol = self.symbolByName.get(name)
+			if symbol:
+				self.handlerByID[symbol.id] = self._createHandler( getattr(self, k), symbol )
 
 	def _createHandler( self, handler, symbol ):
 		kwargs = {}
