@@ -9,6 +9,7 @@
 // ----------------------------------------------------------------------------
 
 #include "parsing.h"
+#include "gc.h"
 #include "oo.h"
 
 #define MATCH_STATS(m) ParsingContext_registerMatch(context, this, m)
@@ -449,12 +450,16 @@ void Grammar_free(Grammar* this) {
 Match* Match_Success(size_t length, Element* element, ParsingContext* context) {
 	NEW(Match,this);
 	assert( element != NULL );
-	this->status  = STATUS_MATCHED;
-	this->element = element;
-	this->offset  = context->iterator->offset;
-	this->length  = length;
+	this->status   = STATUS_MATCHED;
+	this->offset   = context->iterator->offset;
+	this->length   = length;
 	// FIXME: This should be the original line offset
-	this->line    = context->iterator->lines;
+	this->line     = context->iterator->lines;
+	this->element  = element;
+	this->data     = NULL;
+	this->next     = NULL;
+	this->children = NULL;
+	this->parent   = NULL;
 	return this;
 }
 
@@ -462,13 +467,13 @@ Match* Match_new(void) {
 	__NEW(Match,this);
 	// DEBUG("Allocating match: %p", this);
 	this->status    = STATUS_INIT;
-	this->element   = NULL;
-	this->length    = 0;
 	this->offset    = 0;
+	this->length    = 0;
 	this->line      = 0;
+	this->element   = NULL;
 	this->data      = NULL;
-	this->children  = NULL;
 	this->next      = NULL;
+	this->children  = NULL;
 	this->parent    = NULL;
 	this->result    = NULL;
 	return this;
@@ -1211,7 +1216,7 @@ const char* Token_expr(ParsingElement* this) {
 Match* Token_recognize(ParsingElement* this, ParsingContext* context) {
 	assert(this->config);
 	if(this->config == NULL) {return FAILURE;}
-	Match* result           = NULL;
+	Match* result = NULL;
 #ifdef WITH_PCRE
 	TokenConfig* config = (TokenConfig*)this->config;
 	// NOTE: This has to be a multiple of 3, according to `man pcre_exec`

@@ -499,6 +499,12 @@ class Reference(CObject):
 			self.element
 		)
 
+	def __del__( self ):
+		super(Reference, self).__del__()
+		# References are managed by the grammar, you should not create
+		# them directly, so we don't need to free them either.
+		pass
+
 # -----------------------------------------------------------------------------
 #
 # MATCH
@@ -611,6 +617,12 @@ class Match(CObject):
 				self.offset + self.length,
 			)
 
+	def __del__( self ):
+		super(Match, self).__del__()
+		# Matches are managed by ParsingResult, so we don't need to
+		# free  them.
+		pass
+
 # -----------------------------------------------------------------------------
 #
 # MATCH RESULT
@@ -712,6 +724,12 @@ class ParsingContext(CObject):
 	def __getitem__( self, offset ):
 		return lib.ParsingContext_charAt(self._cobject, offset)
 
+	def __del__( self ):
+		super(ParsingContext, self).__del__()
+		# Parsing contexts are owned by parsing results, so we don't need
+		# to free them
+		pass
+
 # -----------------------------------------------------------------------------
 #
 # PARSING RESULT
@@ -723,12 +741,15 @@ class ParsingResult(CObject):
 	_TYPE = ffi.typeof("ParsingResult*")
 
 	@classmethod
-	def Wrap( cls, cobject, text=None, path=None, grammar=None ):
+	def Wrap( cls, cobject, text=None, path=None, grammar=None, context=None ):
 		res = super(ParsingResult, cls).Wrap(cobject)
+		# NOTE: We keep refernces to the text, path, grammar and context,
+		# in order for them not to be garbage-collected too early.
 		if res:
-			res._text = text
-			res._path = path
+			res._text    = text
+			res._path    = path
 			res._grammar = grammar
+			res._context = context
 		return res
 
 	@property
@@ -874,10 +895,10 @@ class ParsingResult(CObject):
 		)
 
 	def __del__( self ):
+		super(ParsingResult, self).__del__()
 		# The parsing result is the only one we really need to free
 		# along with the grammar
-		# lib.ParsingResult_free(self._cobject)
-		pass
+		lib.ParsingResult_free(self._cobject)
 
 # -----------------------------------------------------------------------------
 #
@@ -974,12 +995,12 @@ class Grammar(CObject):
 	def parsePath( self, path ):
 		self._prepare()
 		_path = ensure_cstring(path)
-		return ParsingResult.Wrap(lib.Grammar_parsePath(self._cobject, _path), path=_path, grammar=self)
+		return ParsingResult.Wrap(lib.Grammar_parsePath(self._cobject, _path), path=(path, _path), grammar=self)
 
 	def parseString( self, text ):
 		self._prepare()
 		_text = ensure_cstring(text)
-		return ParsingResult.Wrap(lib.Grammar_parseString(self._cobject,_text), text=_text, grammar=self)
+		return ParsingResult.Wrap(lib.Grammar_parseString(self._cobject,_text), text=(text, _text), grammar=self)
 
 	# =========================================================================
 	# AXIOM AND SKIPPING
@@ -1129,10 +1150,10 @@ class Grammar(CObject):
 		self._prepared = True
 
 	def __del__( self ):
+		super(Grammar, self).__del__()
 		# The parsing result is the only one we really need to free
 		# along with the grammar
-		# lib.Grammar_free(self._cobject)
-		pass
+		lib.Grammar_free(self._cobject)
 
 
 # -----------------------------------------------------------------------------

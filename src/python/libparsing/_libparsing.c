@@ -735,7 +735,7 @@ Iterator* Iterator_FromString(const char* text) {
 }
 
 Iterator* Iterator_new( void ) {
- Iterator* this = (Iterator*) malloc(sizeof(Iterator)); assert (this!=NULL); ;
+ Iterator* this = (Iterator*) gc_new(sizeof(Iterator)); assert (this!=NULL); ;
  this->status = '-';
  this->separator = EOL;
  this->buffer = NULL;
@@ -763,7 +763,7 @@ bool Iterator_open( Iterator* this, const char *path ) {
   assert(this->buffer == NULL);
 
   this->capacity = sizeof(iterated_t) * 64000 * 2;
-  iterated_t* new_buffer = (iterated_t*) calloc(this->capacity + 1, sizeof(iterated_t)) ; assert (new_buffer!=NULL);
+  iterated_t* new_buffer = (iterated_t*) gc_calloc(this->capacity + 1, sizeof(iterated_t)) ; assert (new_buffer!=NULL);
   this->buffer = new_buffer;
   assert(this->buffer != NULL);
   this->current = (iterated_t*)this->buffer;
@@ -818,9 +818,9 @@ void Iterator_free( Iterator* this ) {
 
 
  if (this->freeBuffer) {
-  if (this->buffer!=NULL) {; } ;
+  if (this->buffer!=NULL) {; gc_free(this->buffer); } ;
  }
- if (this!=NULL) {; } ;
+ if (this!=NULL) {; gc_free(this); } ;
 }
 
 
@@ -887,14 +887,14 @@ bool String_move ( Iterator* this, int n ) {
 
 
 FileInput* FileInput_new(const char* path ) {
- FileInput* this = (FileInput*) malloc(sizeof(FileInput)); assert (this!=NULL); ;
+ FileInput* this = (FileInput*) gc_new(sizeof(FileInput)); assert (this!=NULL); ;
  assert(this != NULL);
 
  this->path = path;
  this->file = fopen(path, "r");
  if (this->file==NULL) {
   fprintf(stderr, "ERR ");fprintf(stderr, "Cannot open file: %s", path);fprintf(stderr, "\n");;
-  if (this!=NULL) {; } ;
+  if (this!=NULL) {; gc_free(this); } ;
   return NULL;
  } else {
   return this;
@@ -931,7 +931,7 @@ size_t FileInput_preload( Iterator* this ) {
   ;
 
 
-  this->buffer=realloc(this->buffer,this->capacity + 1); ;
+  this->buffer=gc_realloc(this->buffer,this->capacity + 1); ;
   assert(this->buffer != NULL);
 
   this->current = this->buffer + delta;
@@ -1006,7 +1006,7 @@ bool FileInput_move ( Iterator* this, int n ) {
 
 
 Grammar* Grammar_new(void) {
- Grammar* this = (Grammar*) malloc(sizeof(Grammar)); assert (this!=NULL); ;
+ Grammar* this = (Grammar*) gc_new(sizeof(Grammar)); assert (this!=NULL); ;
  this->axiom = NULL;
  this->skip = NULL;
  this->axiomCount = 0;
@@ -1042,7 +1042,7 @@ void Grammar_freeElements(Grammar* this) {
 }
 
 void Grammar_free(Grammar* this) {
- if (this!=NULL) {; } ;
+ if (this!=NULL) {; gc_free(this); } ;
 }
 
 
@@ -1055,25 +1055,29 @@ Match* Match_Success(size_t length, Element* element, ParsingContext* context) {
  Match* this = Match_new();
  assert( element != NULL );
  this->status = 'M';
- this->element = element;
  this->offset = context->iterator->offset;
  this->length = length;
 
  this->line = context->iterator->lines;
+ this->element = element;
+ this->data = NULL;
+ this->next = NULL;
+ this->children = NULL;
+ this->parent = NULL;
  return this;
 }
 
 Match* Match_new(void) {
- Match* this = (Match*) malloc(sizeof(Match)); assert (this!=NULL); ;
+ Match* this = (Match*) gc_new(sizeof(Match)); assert (this!=NULL); ;
 
  this->status = '-';
- this->element = NULL;
- this->length = 0;
  this->offset = 0;
+ this->length = 0;
  this->line = 0;
+ this->element = NULL;
  this->data = NULL;
- this->children = NULL;
  this->next = NULL;
+ this->children = NULL;
  this->parent = NULL;
  this->result = NULL;
  return this;
@@ -1100,7 +1104,7 @@ void Match_free(Match* this) {
    }
   }
 
-  if (this!=NULL) {; } ;
+  if (this!=NULL) {; gc_free(this); } ;
  }
 }
 
@@ -1324,7 +1328,7 @@ ParsingElement* ParsingElement_Ensure(void* elementOrReference) {
 }
 
 ParsingElement* ParsingElement_new(Reference* children[]) {
- ParsingElement* this = (ParsingElement*) malloc(sizeof(ParsingElement)); assert (this!=NULL); ;
+ ParsingElement* this = (ParsingElement*) gc_new(sizeof(ParsingElement)); assert (this!=NULL); ;
  this->type = 'E';
  this->id = -10;
  this->name = NULL;
@@ -1355,8 +1359,8 @@ void ParsingElement_free(ParsingElement* this) {
   Reference_free(child);
   child = next;
  }
- if (this->name!=NULL) {; } ;
- if (this!=NULL) {; } ;
+ if (this->name!=NULL) {; gc_free(this->name); } ;
+ if (this!=NULL) {; gc_free(this); } ;
 }
 
 ParsingElement* ParsingElement_add(ParsingElement* this, Reference* child) {
@@ -1407,8 +1411,8 @@ size_t ParsingElement_skip( ParsingElement* this, ParsingContext* context) {
 
 ParsingElement* ParsingElement_name( ParsingElement* this, const char* name ) {
  if (this == NULL) {return this;}
- if (this->name!=NULL) {; } ;
- this->name = strdup(name) ; assert (this->name!=NULL); ;
+ if (this->name!=NULL) {; gc_free(this->name); } ;
+ this->name = gc_strdup(name) ; assert (this->name!=NULL); ;
  return this;
 }
 
@@ -1491,7 +1495,7 @@ Reference* Reference_FromElement(ParsingElement* element){
 }
 
 Reference* Reference_new(void) {
- Reference* this = (Reference*) malloc(sizeof(Reference)); assert (this!=NULL); ;
+ Reference* this = (Reference*) gc_new(sizeof(Reference)); assert (this!=NULL); ;
  this->type = '#';
  this->id = -10;
  this->cardinality = '1';
@@ -1508,8 +1512,8 @@ void Reference_free(Reference* this) {
 
 
 
- if (this != NULL) {if (this->name!=NULL) {; } ;}
- if (this!=NULL) {; }
+ if (this != NULL) {if (this->name!=NULL) {; gc_free(this->name); } ;}
+ if (this!=NULL) {; gc_free(this); }
 }
 
 bool Reference_hasElement(Reference* this) {
@@ -1533,8 +1537,8 @@ Reference* Reference_cardinality(Reference* this, char cardinality) {
 
 Reference* Reference_name(Reference* this, const char* name) {
  assert(this!=NULL);
- if (this->name!=NULL) {; } ;
- this->name = strdup(name) ; assert (this->name!=NULL); ;
+ if (this->name!=NULL) {; gc_free(this->name); } ;
+ this->name = gc_strdup(name) ; assert (this->name!=NULL); ;
  return this;
 }
 
@@ -1686,7 +1690,7 @@ Match* Reference_recognize(Reference* this, ParsingContext* context) {
 
 
 ParsingElement* Word_new(const char* word) {
- WordConfig* config = (WordConfig*) malloc(sizeof(WordConfig)); assert (config!=NULL); ;
+ WordConfig* config = (WordConfig*) gc_new(sizeof(WordConfig)); assert (config!=NULL); ;
  ParsingElement* this = ParsingElement_new(NULL);
  this->type = 'W';
  this->recognize = Word_recognize;
@@ -1695,7 +1699,7 @@ ParsingElement* Word_new(const char* word) {
 
 
 
- config->word = strdup(word) ; assert (config->word!=NULL); ;
+ config->word = gc_strdup(word) ; assert (config->word!=NULL); ;
  assert(config->length>0);
  this->config = config;
  assert(this->config != NULL);
@@ -1710,9 +1714,9 @@ void Word_free(ParsingElement* this) {
  if (config != NULL) {
 
   free((void*)config->word);
-  if (config!=NULL) {; } ;
+  if (config!=NULL) {; gc_free(config); } ;
  }
- if (this!=NULL) {; } ;
+ if (this!=NULL) {; gc_free(this); } ;
 }
 
 
@@ -1752,7 +1756,7 @@ void Word_print(ParsingElement* this) {
 
 
 ParsingElement* Token_new(const char* expr) {
- TokenConfig* config = (TokenConfig*) malloc(sizeof(TokenConfig)); assert (config!=NULL); ;
+ TokenConfig* config = (TokenConfig*) gc_new(sizeof(TokenConfig)); assert (config!=NULL); ;
  ParsingElement* this = ParsingElement_new(NULL);
  this->type = 'T';
  this->recognize = Token_recognize;
@@ -1760,23 +1764,23 @@ ParsingElement* Token_new(const char* expr) {
 
 
 
- config->expr = strdup(expr) ; assert (config->expr!=NULL); ;
+ config->expr = gc_strdup(expr) ; assert (config->expr!=NULL); ;
 
  const char* pcre_error;
  int pcre_error_offset = -1;
  config->regexp = pcre_compile(config->expr, PCRE_UTF8, &pcre_error, &pcre_error_offset, NULL);
  if (pcre_error != NULL) {
   fprintf(stderr, "ERR ");fprintf(stderr, "Token: cannot compile regular expression `%s` at %d: %s", config->expr, pcre_error_offset, pcre_error);fprintf(stderr, "\n");;
-  if (config!=NULL) {; } ;
-  if (this!=NULL) {; } ;
+  if (config!=NULL) {; gc_free(config); } ;
+  if (this!=NULL) {; gc_free(this); } ;
   return NULL;
  }
 
  config->extra = pcre_study(config->regexp, PCRE_STUDY_JIT_COMPILE, &pcre_error);
  if (pcre_error != NULL) {
   fprintf(stderr, "ERR ");fprintf(stderr, "Token: cannot optimize regular expression `%s` at %d: %s", config->expr, pcre_error_offset, pcre_error);fprintf(stderr, "\n");;
-  if (config!=NULL) {; } ;
-  if (this!=NULL) {; } ;
+  if (config!=NULL) {; gc_free(config); } ;
+  if (this!=NULL) {; gc_free(this); } ;
   return NULL;
  }
 
@@ -1795,10 +1799,10 @@ void Token_free(ParsingElement* this) {
   if (config->regexp != NULL) {}
   if (config->extra != NULL) {pcre_free_study(config->extra);}
 
-  if (config->expr!=NULL) {; } ;
-  if (config!=NULL) {; } ;
+  if (config->expr!=NULL) {; gc_free(config->expr); } ;
+  if (config!=NULL) {; gc_free(config); } ;
  }
- if (this!=NULL) {; } ;
+ if (this!=NULL) {; gc_free(this); } ;
 }
 
 const char* Token_expr(ParsingElement* this) {
@@ -1854,7 +1858,7 @@ Match* Token_recognize(ParsingElement* this, ParsingContext* context) {
   if(context->grammar->isVerbose && !(context->flags & 1)){fprintf(stdout, "[✓] %s└ Token " "\033[1m\033[32m" "%s" "\033[0m" "#%d:" "\033[36m" "`%s`" "\033[0m" " matched " "\033[1m\033[32m" "%zu:%zu-%zu" "\033[0m", context->indent, this->name, this->id, config->expr, context->iterator->lines, context->iterator->offset, context->iterator->offset + result->length);fprintf(stdout, "\n");;};
 
 
-  TokenMatch* data = (TokenMatch*) malloc(sizeof(TokenMatch)); assert (data!=NULL); ;
+  TokenMatch* data = (TokenMatch*) gc_new(sizeof(TokenMatch)); assert (data!=NULL); ;
   data->count = r;
   data->groups = (const char**)malloc(sizeof(const char*) * r);
 
@@ -2152,7 +2156,7 @@ Match* Condition_recognize(ParsingElement* this, ParsingContext* context) {
 
 
 ParsingStep* ParsingStep_new( ParsingElement* element ) {
- ParsingStep* this = (ParsingStep*) malloc(sizeof(ParsingStep)); assert (this!=NULL); ;
+ ParsingStep* this = (ParsingStep*) gc_new(sizeof(ParsingStep)); assert (this!=NULL); ;
  assert(element != NULL);
  this->element = element;
  this->step = 0;
@@ -2164,7 +2168,7 @@ ParsingStep* ParsingStep_new( ParsingElement* element ) {
 }
 
 void ParsingStep_free( ParsingStep* this ) {
- if (this!=NULL) {; } ;
+ if (this!=NULL) {; gc_free(this); } ;
 }
 
 
@@ -2174,7 +2178,7 @@ void ParsingStep_free( ParsingStep* this ) {
 
 
 ParsingOffset* ParsingOffset_new( size_t offset ) {
- ParsingOffset* this = (ParsingOffset*) malloc(sizeof(ParsingOffset)); assert (this!=NULL); ;
+ ParsingOffset* this = (ParsingOffset*) gc_new(sizeof(ParsingOffset)); assert (this!=NULL); ;
  this->offset = offset;
  this->last = (ParsingStep*)NULL;
  this->next = (ParsingOffset*)NULL;
@@ -2189,7 +2193,7 @@ void ParsingOffset_free( ParsingOffset* this ) {
   ParsingStep_free(step);
   step = previous;
  }
- if (this!=NULL) {; } ;
+ if (this!=NULL) {; gc_free(this); } ;
 }
 
 
@@ -2199,9 +2203,9 @@ void ParsingOffset_free( ParsingOffset* this ) {
 
 
 ParsingVariable* ParsingVariable_new(int depth, const char* key, void* value) {
- ParsingVariable* this = (ParsingVariable*) malloc(sizeof(ParsingVariable)); assert (this!=NULL); ;
+ ParsingVariable* this = (ParsingVariable*) gc_new(sizeof(ParsingVariable)); assert (this!=NULL); ;
  this->depth = depth;
- this->key = strdup(key) ; assert (this->key!=NULL); ;
+ this->key = gc_strdup(key) ; assert (this->key!=NULL); ;
  this->value = value;
  this->previous = NULL;
  return this;
@@ -2209,8 +2213,8 @@ ParsingVariable* ParsingVariable_new(int depth, const char* key, void* value) {
 
 void ParsingVariable_free(ParsingVariable* this) {
  if (this!=NULL) {
-  if (this->key!=NULL) {; } ;
-  if (this!=NULL) {; } ;
+  if (this->key!=NULL) {; gc_free(this->key); } ;
+  if (this!=NULL) {; gc_free(this); } ;
  }
 }
 
@@ -2305,7 +2309,7 @@ int ParsingVariable_count(ParsingVariable* this) {
 
 
 ParsingContext* ParsingContext_new( Grammar* g, Iterator* iterator ) {
- ParsingContext* this = (ParsingContext*) malloc(sizeof(ParsingContext)); assert (this!=NULL); ;
+ ParsingContext* this = (ParsingContext*) gc_new(sizeof(ParsingContext)); assert (this!=NULL); ;
  this->grammar = g;
  this->iterator = iterator;
  this->stats = ParsingStats_new();
@@ -2328,7 +2332,7 @@ void ParsingContext_free( ParsingContext* this ) {
  if (this!=NULL) {
   ParsingVariable_freeAll(this->variables);
   ParsingStats_free(this->stats);
-  if (this!=NULL) {; } ;
+  if (this!=NULL) {; gc_free(this); } ;
  }
 }
 
@@ -2412,7 +2416,7 @@ Match* ParsingContext_registerMatch(ParsingContext* this, Element* e, Match* m) 
 
 
 ParsingStats* ParsingStats_new(void) {
- ParsingStats* this = (ParsingStats*) malloc(sizeof(ParsingStats)); assert (this!=NULL); ;
+ ParsingStats* this = (ParsingStats*) gc_new(sizeof(ParsingStats)); assert (this!=NULL); ;
  this->bytesRead = 0;
  this->parseTime = 0;
  this->successBySymbol = NULL;
@@ -2426,15 +2430,15 @@ ParsingStats* ParsingStats_new(void) {
 
 void ParsingStats_free(ParsingStats* this) {
  if (this != NULL) {
-  if (this->successBySymbol!=NULL) {; } ;
-  if (this->failureBySymbol!=NULL) {; } ;
+  if (this->successBySymbol!=NULL) {; gc_free(this->successBySymbol); } ;
+  if (this->failureBySymbol!=NULL) {; gc_free(this->failureBySymbol); } ;
  }
- if (this!=NULL) {; } ;
+ if (this!=NULL) {; gc_free(this); } ;
 }
 
 void ParsingStats_setSymbolsCount(ParsingStats* this, size_t t) {
- this->successBySymbol=realloc(this->successBySymbol,t * sizeof(size_t)); ;
- this->failureBySymbol=realloc(this->failureBySymbol,t * sizeof(size_t)); ;
+ this->successBySymbol=gc_realloc(this->successBySymbol,t * sizeof(size_t)); ;
+ this->failureBySymbol=gc_realloc(this->failureBySymbol,t * sizeof(size_t)); ;
  this->symbolsCount = t;
 }
 
@@ -2449,7 +2453,7 @@ Match* ParsingStats_registerMatch(ParsingStats* this, Element* e, Match* m) {
 
 
 ParsingResult* ParsingResult_new(Match* match, ParsingContext* context) {
- ParsingResult* this = (ParsingResult*) malloc(sizeof(ParsingResult)); assert (this!=NULL); ;
+ ParsingResult* this = (ParsingResult*) gc_new(sizeof(ParsingResult)); assert (this!=NULL); ;
  assert(match != NULL);
  assert(context != NULL);
  assert(context->iterator != NULL);
@@ -2501,7 +2505,7 @@ void ParsingResult_free(ParsingResult* this) {
   Match_free(this->match);
   ParsingContext_free(this->context);
  }
- if (this!=NULL) {; } ;
+ if (this!=NULL) {; gc_free(this); } ;
 }
 
 
@@ -2574,7 +2578,7 @@ void Grammar_prepare ( Grammar* this ) {
  }
  if (this->axiom!=NULL) {
 
-  if (this->elements) { if (this->elements!=NULL) {; } ; this->elements = NULL; }
+  if (this->elements) { if (this->elements!=NULL) {; gc_free(this->elements); } ; this->elements = NULL; }
   assert(this->elements == NULL);
 
   ;
@@ -2591,7 +2595,7 @@ void Grammar_prepare ( Grammar* this ) {
   }
 
 
-  Element** elements = (Element**) calloc(this->skipCount + this->axiomCount + 1, sizeof(Element*)) ; assert (elements!=NULL); ;
+  Element** elements = (Element**) gc_calloc(this->skipCount + this->axiomCount + 1, sizeof(Element*)) ; assert (elements!=NULL); ;
   this->elements = elements;
 
   count = Element_walk(this->axiom, Grammar__registerElement, this);
@@ -2642,23 +2646,23 @@ ParsingResult* Grammar_parseString( Grammar* this, const char* text ) {
 
 
 Processor* Processor_new() {
- Processor* this = (Processor*) malloc(sizeof(Processor)); assert (this!=NULL); ;
+ Processor* this = (Processor*) gc_new(sizeof(Processor)); assert (this!=NULL); ;
  this->callbacksCount = 100;
- ProcessorCallback* callbacks = (ProcessorCallback*) calloc((size_t)this->callbacksCount, sizeof(ProcessorCallback)) ; assert (callbacks!=NULL); ;
+ ProcessorCallback* callbacks = (ProcessorCallback*) gc_calloc((size_t)this->callbacksCount, sizeof(ProcessorCallback)) ; assert (callbacks!=NULL); ;
  this->callbacks = callbacks;
  this->fallback = NULL;
  return this;
 }
 
 void Processor_free(Processor* this) {
- if (this!=NULL) {; } ;
+ if (this!=NULL) {; gc_free(this); } ;
 }
 
 void Processor_register (Processor* this, int symbolID, ProcessorCallback callback ) {
  if (this->callbacksCount < (symbolID + 1)) {
   int cur_count = this->callbacksCount;
   int new_count = symbolID + 100;
-  this->callbacks=realloc(this->callbacks,new_count * sizeof(ProcessorCallback)); ;
+  this->callbacks=gc_realloc(this->callbacks,new_count * sizeof(ProcessorCallback)); ;
   this->callbacksCount = new_count;
 
   while (cur_count < new_count) {

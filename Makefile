@@ -13,7 +13,7 @@
 
 PROJECT        :=parsing
 PYMODULE       :=lib$(PROJECT) 
-FEATURES       :=pcre fortify
+FEATURES       :=pcre fortify gc
 ALL_FEATURES   :=pcre memcheck debug trace fortify
 
 # === FEATURES ================================================================
