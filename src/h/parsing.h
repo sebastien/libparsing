@@ -504,6 +504,9 @@ int Match_getEndOffset(Match* this);
 int Match_getElementID(Match* this);
 
 // @method
+// Returns the element of this match's parsing element. Note that
+// this will be different from `this->element->type` when `this->element`
+// is a reference.
 char Match_getElementType(Match* this);
 
 // @method

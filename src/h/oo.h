@@ -158,6 +158,8 @@
 #define ASSERT(v,msg,...) /* */
 #endif
 
+#define OUTPUT printf
+
 // todo: ERROR, WARNING, INFO, DEBUG
 // todo: COUNTER(name, delta)
 // todo: RECYCLE(value,pool), GENERATE(value,pool)

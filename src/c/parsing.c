@@ -508,7 +508,6 @@ Match* Match_new(void) {
 // TODO: We might want to recycle the objects for better performance and
 // fewer allocs.
 void Match_free(Match* this) {
-	printf("Match_free\n");
 	if (this!=NULL && this!=FAILURE) {
 		TRACE("Match_free(%c:%d@%s,%lu-%lu)", ((ParsingElement*)this->element)->type, ((ParsingElement*)this->element)->id, ((ParsingElement*)this->element)->name, this->offset, this->offset + this->length)
 
@@ -522,7 +521,6 @@ void Match_free(Match* this) {
 
 		// If the match is from a parsing element
 		if (ParsingElement_Is(this->element)) {
-			printf("Match_free: From ELEMENT\n");
 			ParsingElement* element = ((ParsingElement*)this->element);
 			assert(ParsingElement_Is(this->element));
 			// and the parsing element declared a free match function, we
@@ -532,9 +530,8 @@ void Match_free(Match* this) {
 			}
 		} else {
 			assert(Reference_Is(this->element));
-			printf("Match_free: From REFERENCE:%d\n", this->element->id);
 			ParsingElement* element = ((Reference*)this->element)->element;
-			assert(ParsingElement_Is(this->element));
+			assert(ParsingElement_Is(element));
 			if (element->freeMatch) {
 				element->freeMatch(this);
 			}
@@ -559,7 +556,7 @@ int Match_getElementID(Match* this) {
 char Match_getElementType(Match* this) {
 	if (this == NULL || this->element == NULL) {return ' ';}
 	if (((ParsingElement*)this->element)->type == TYPE_REFERENCE) {
-		return ((Reference*)this->element)->type;
+		return ((Reference*)this->element)->element->type;
 	} else {
 		ParsingElement* element = ParsingElement_Ensure(this->element);
 		return element->type;
@@ -645,8 +642,8 @@ int Match_countChildren(Match* this) {
 // JSON FORMATTING
 // ============================================================================
 //
-#define JSONV(format,...) printf(format, __VA_ARGS__)
-#define JSON(format)      printf(format)
+#define JSONV(format,...) OUTPUT(format, __VA_ARGS__)
+#define JSON(format)      OUTPUT(format)
 
 void Match__childrenToJSON(Match* match, int fd) {
 	int count = 0 ;
@@ -1210,7 +1207,7 @@ const char* WordMatch_group(Match* match) {
 
 void Word_print(ParsingElement* this) {
 	WordConfig* config = (WordConfig*)this->config;
-	printf("Word:%c:%s#%d<%s>\n", this->type, this->name != NULL ? this->name : ANONYMOUS, this->id, config->word);
+	OUTPUT("Word:%c:%s#%d<%s>\n", this->type, this->name != NULL ? this->name : ANONYMOUS, this->id, config->word);
 }
 
 // ----------------------------------------------------------------------------
@@ -1319,13 +1316,14 @@ Match* Token_recognize(ParsingElement* this, ParsingContext* context) {
 			r = vector_length / 3;
 		}
 		// FIXME: Make sure it is the length and not the end offset
-		result           = Match_Success(vector[1], this, context);
+		result = Match_Success(vector[1], this, context);
 		OUT_STEP("[✓] %s└ Token " BOLDGREEN "%s" RESET "#%d:" CYAN "`%s`" RESET " matched " BOLDGREEN "%zu:%zu-%zu" RESET, context->indent, this->name, this->id, config->expr, context->iterator->lines, context->iterator->offset, context->iterator->offset + result->length);
 
 		// We create the token match
 		__NEW(TokenMatch, data);
 		data->count    = r;
-		data->groups   = (const char**)malloc(sizeof(const char*) * r);
+		__ARRAY_NEW(groups, const char*, r);
+		data->groups   = groups;
 		// NOTE: We do this here, but it's probably better to do it later
 		// once the token is recognized, although this poses the problem
 		// of preserving the input.
@@ -1344,7 +1342,6 @@ Match* Token_recognize(ParsingElement* this, ParsingContext* context) {
 #endif
 	return MATCH_STATS(result);
 }
-
 
 const char* TokenMatch_group(Match* match, int index) {
 	assert (match                != NULL);
@@ -1367,23 +1364,26 @@ int TokenMatch_count(Match* match) {
 
 void Token_print(ParsingElement* this) {
 	TokenConfig* config = (TokenConfig*)this->config;
-	printf("Token:%c:%s#%d<%s>\n", this->type, this->name != NULL ? this->name : ANONYMOUS, this->id, config->expr);
+	OUTPUT("Token:%c:%s#%d<%s>\n", this->type, this->name != NULL ? this->name : ANONYMOUS, this->id, config->expr);
 }
 
 
 void TokenMatch_free(Match* match) {
 	assert (match                != NULL);
-	assert (match->data          != NULL);
-	assert (((ParsingElement*)(match->element))->type == TYPE_TOKEN);
+	assert (Match_getElementType(match) == TYPE_TOKEN);
 #ifdef WITH_PCRE
 	TRACE("TokenMatch_free: %p", match)
-	TokenMatch* m = (TokenMatch*)match->data;
-	if (m != NULL ) {
-		for (int j=0 ; j<m->count ; j++) {
-			pcre_free_substring(m->groups[j]);
+	if (match->data != NULL) {
+		TokenMatch* m = (TokenMatch*)match->data;
+		if (m != NULL ) {
+			for (int j=0 ; j<m->count ; j++) {
+				pcre_free_substring(m->groups[j]);
+			}
 		}
+		__FREE(m->groups);
 	}
 #endif
+	__FREE(match->data);
 
 }
 
@@ -1801,10 +1801,11 @@ ParsingContext* ParsingContext_new( Grammar* g, Iterator* iterator ) {
 }
 
 void ParsingContext_free( ParsingContext* this ) {
-	// NOTE: We don't need to free the last match
+	// NOTE: We don't need to free the last match, or the grammar;
 	if (this!=NULL) {
 		ParsingVariable_freeAll(this->variables);
 		ParsingStats_free(this->stats);
+		Iterator_free(this->iterator);
 		__FREE(this);
 	}
 }
