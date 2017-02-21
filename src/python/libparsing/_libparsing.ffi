@@ -36,8 +36,8 @@ int Reference__walk( Reference* this, WalkingCallback callback, int step, void* 
 Match* Reference_recognize(Reference* this, ParsingContext* context);
 typedef struct Match {
 	char            status;     // The status of the match (see STATUS_XXX)
-	size_t          offset;     // The offset of `iterated_t` matched
-	size_t          length;     // The number of `iterated_t` matched
+	size_t          offset;     // The offset of `char` matched
+	size_t          length;     // The number of `char` matched
 	size_t          line;       // The line number for the match
 	Element*        element;
 	void*           data;      // The matched data (usually a subset of the input stream)
@@ -67,9 +67,9 @@ void Match__toJSON(Match* match, int fd);
 void Match_toJSON(Match* this, int fd);
 typedef struct Iterator {
 	char           status;    // The status of the iterator, one of STATUS_{INIT|PROCESSING|INPUT_ENDED|ENDED}
-	char*          buffer;    // The buffer to the read data, note how it is a (char*) and not an `iterated_t`
-	iterated_t*    current;   // The pointer current offset within the buffer
-	iterated_t     separator; // The character for line separator, `\n` by default.
+	char*          buffer;    // The buffer to the read data, note how it is a (char*) and not an `char`
+	char*    current;   // The pointer current offset within the buffer
+	char     separator; // The character for line separator, `\n` by default.
 	size_t         offset;    // Offset in input (in bytes), might be different from `current - buffer` if some input was freed.
 	size_t         lines;     // Counter for lines that have been encountered
 	size_t         capacity;  // Content capacity (in bytes), might be bigger than the data acquired from the input
@@ -102,7 +102,7 @@ typedef struct ParsingContext {
 	int                     flags;
 } ParsingContext;
 ParsingContext* ParsingContext_new( Grammar* g, Iterator* iterator );
-iterated_t* ParsingContext_text( ParsingContext* this );
+char* ParsingContext_text( ParsingContext* this );
 char ParsingContext_charAt ( ParsingContext* this, size_t offset );
 size_t ParsingContext_getOffset( ParsingContext* this );
 void ParsingContext_free( ParsingContext* this );
@@ -149,7 +149,7 @@ void ParsingResult_free(ParsingResult* this);
 bool ParsingResult_isSuccess(ParsingResult* this);
 bool ParsingResult_isFailure(ParsingResult* this);
 bool ParsingResult_isPartial(ParsingResult* this);
-iterated_t* ParsingResult_text(ParsingResult* this);
+char* ParsingResult_text(ParsingResult* this);
 int ParsingResult_textOffset(ParsingResult* this);
 size_t ParsingResult_remaining(ParsingResult* this);
 typedef struct ParsingStats {
@@ -181,7 +181,7 @@ typedef struct TokenMatch {
 } TokenMatch;
 ParsingElement* Token_new(const char* expr);
 void Token_free(ParsingElement*);
-Match*          Token_recognize(ParsingElement* this, ParsingContext* context);
+Match* Token_recognize(ParsingElement* this, ParsingContext* context);
 const char* Token_expr(ParsingElement* this);
 void TokenMatch_free(Match* match);
 const char* TokenMatch_group(Match* match, int index);

@@ -175,11 +175,9 @@ extern "C" {
  * library only uses functions that are UTF8-savvy.
 */
 
-#ifndef ITERATION_UNIT
-#define ITERATION_UNIT char
-#endif
 
-typedef ITERATION_UNIT iterated_t;
+#define char char
+#define ITERATION_UNIT char
 
 /**
  * Input data is acquired through _iterators_. Iterators wrap an input source
@@ -199,9 +197,9 @@ typedef ITERATION_UNIT iterated_t;
 // @type Iterator
 typedef struct Iterator {
 	char           status;    // The status of the iterator, one of STATUS_{INIT|PROCESSING|INPUT_ENDED|ENDED}
-	char*          buffer;    // The buffer to the read data, note how it is a (char*) and not an `iterated_t`
-	iterated_t*    current;   // The pointer current offset within the buffer
-	iterated_t     separator; // The character for line separator, `\n` by default.
+	char*          buffer;    // The buffer to the read data, note how it is a (char*) and not an `char`
+	char*    current;   // The pointer current offset within the buffer
+	char     separator; // The character for line separator, `\n` by default.
 	size_t         offset;    // Offset in input (in bytes), might be different from `current - buffer` if some input was freed.
 	size_t         lines;     // Counter for lines that have been encountered
 	size_t         capacity;  // Content capacity (in bytes), might be bigger than the data acquired from the input
@@ -222,7 +220,7 @@ typedef struct FileInput {
 
 // @shared
 // The EOL character used to count lines in an iterator context.
-extern iterated_t         EOL;
+extern char         EOL;
 
 // @operation
 // Returns a new iterator instance with the given open file as input
@@ -271,8 +269,8 @@ char Iterator_charAt ( Iterator* this, size_t offset );
 bool String_move ( Iterator* this, int offset );
 
 // @define
-// The number of `iterated_t` that should be loaded after the iterator's
-// current position. This limits the numbers of `iterated_t` that a `Token`
+// The number of `char` that should be loaded after the iterator's
+// current position. This limits the numbers of `char` that a `Token`
 // could match.
 #define ITERATOR_BUFFER_AHEAD 64000
 
@@ -388,8 +386,8 @@ int Element__walk( Element* this, WalkingCallback callback, int step, void* cont
 typedef struct Match {
 	// TODO: We might need to put offset there
 	char            status;     // The status of the match (see STATUS_XXX)
-	size_t          offset;     // The offset of `iterated_t` matched
-	size_t          length;     // The number of `iterated_t` matched
+	size_t          offset;     // The offset of `char` matched
+	size_t          length;     // The number of `char` matched
 	size_t          line;       // The line number for the match
 	Element*        element;
 	void*           data;      // The matched data (usually a subset of the input stream)
@@ -559,10 +557,6 @@ ParsingElement* ParsingElement_clear(ParsingElement* this);
 size_t ParsingElement_skip(ParsingElement* this, ParsingContext* context);
 
 // @method
-// Returns the match for this parsing element for the given iterator's state.
-// inline Match* ParsingElement_recognize( ParsingElement* this, ParsingContext* context );
-
-// @method
 // Processes the given match once the parsing element has fully succeeded. This
 // is where user-bound actions will be applied, and where you're most likely
 // to do things such as construct an AST.
@@ -643,7 +637,7 @@ void Token_free(ParsingElement*);
 
 // @method
 // The specialized match function for token parsing elements.
-Match*          Token_recognize(ParsingElement* this, ParsingContext* context);
+Match* Token_recognize(ParsingElement* this, ParsingContext* context);
 
 // @method
 const char* Token_expr(ParsingElement* this);
@@ -654,14 +648,6 @@ void TokenMatch_free(Match* match);
 
 // @method
 const char* TokenMatch_group(Match* match, int index);
-
-// TODO
-// @method
-// int TokenMatch_groupStart(Match* match, int index);
-
-// @method
-// int TokenMatch_groupEnd(Match* match, int index);
-
 
 // @method
 int TokenMatch_count(Match* match);
@@ -935,7 +921,7 @@ typedef struct ParsingContext {
 ParsingContext* ParsingContext_new( Grammar* g, Iterator* iterator );
 
 // @method
-iterated_t* ParsingContext_text( ParsingContext* this );
+char* ParsingContext_text( ParsingContext* this );
 
 // @method
 // Gets the character at the given offset
@@ -1002,7 +988,7 @@ bool ParsingResult_isFailure(ParsingResult* this);
 bool ParsingResult_isPartial(ParsingResult* this);
 
 // @method
-iterated_t* ParsingResult_text(ParsingResult* this);
+char* ParsingResult_text(ParsingResult* this);
 
 // @method
 int ParsingResult_textOffset(ParsingResult* this);

@@ -1,18 +1,20 @@
-typedef char bool;
-typedef char iterated_t;
 typedef struct Iterator {
  char status;
  char* buffer;
- iterated_t* current;
- iterated_t separator;
+ char* current;
+ char separator;
  size_t offset;
  size_t lines;
  size_t capacity;
  size_t available;
- bool freeBuffer;
+ 
+_Bool 
+               freeBuffer;
 
  void* input;
- bool (*move) (struct Iterator*, int n);
+ 
+_Bool 
+              (*move) (struct Iterator*, int n);
 } Iterator;
 
 
@@ -25,7 +27,7 @@ typedef struct FileInput {
 
 
 
-extern iterated_t EOL;
+extern char EOL;
 
 
 
@@ -45,12 +47,16 @@ void Iterator_free(Iterator* this);
 
 
 
-bool Iterator_open( Iterator* this, const char* path );
+
+_Bool 
+    Iterator_open( Iterator* this, const char* path );
 
 
 
 
-bool Iterator_hasMore( Iterator* this );
+
+_Bool 
+    Iterator_hasMore( Iterator* this );
 
 
 
@@ -60,18 +66,24 @@ size_t Iterator_remaining( Iterator* this );
 
 
 
-bool Iterator_moveTo ( Iterator* this, size_t offset );
+
+_Bool 
+    Iterator_moveTo ( Iterator* this, size_t offset );
 
 
 
-bool Iterator_backtrack ( Iterator* this, size_t offset, size_t lines );
+
+_Bool 
+    Iterator_backtrack ( Iterator* this, size_t offset, size_t lines );
 
 
 
 char Iterator_charAt ( Iterator* this, size_t offset );
 
 
-bool String_move ( Iterator* this, int offset );
+
+_Bool 
+    String_move ( Iterator* this, int offset );
 FileInput* FileInput_new(const char* path );
 
 
@@ -86,7 +98,9 @@ size_t FileInput_preload( Iterator* this );
 
 
 
-bool FileInput_move ( Iterator* this, int n );
+
+_Bool 
+    FileInput_move ( Iterator* this, int n );
 typedef struct ParsingVariable ParsingVariable;
 typedef struct ParsingContext ParsingContext;
 typedef struct ParsingElement ParsingElement;
@@ -100,7 +114,9 @@ typedef struct Grammar {
  int axiomCount;
  int skipCount;
  Element** elements;
- bool isVerbose;
+ 
+_Bool 
+                 isVerbose;
 } Grammar;
 
 
@@ -172,16 +188,22 @@ Match* Match_new(void);
 void Match_free(Match* this);
 
 
-bool Match_isSuccess(Match* this);
+
+_Bool 
+    Match_isSuccess(Match* this);
 
 
-bool Match_hasNext(Match* this);
+
+_Bool 
+    Match_hasNext(Match* this);
 
 
 Match* Match_getNext(Match* this);
 
 
-bool Match_hasChildren(Match* this);
+
+_Bool 
+    Match_hasChildren(Match* this);
 
 
 Match* Match_getChildren(Match* this);
@@ -237,7 +259,9 @@ typedef struct ParsingElement {
 
 
 
-bool ParsingElement_Is(void* this);
+
+_Bool 
+            ParsingElement_Is(void* this);
 
 
 
@@ -262,6 +286,11 @@ ParsingElement* ParsingElement_clear(ParsingElement* this);
 
 
 size_t ParsingElement_skip(ParsingElement* this, ParsingContext* context);
+
+
+
+
+
 Match* ParsingElement_process( ParsingElement* this, Match* match );
 
 
@@ -326,6 +355,8 @@ void TokenMatch_free(Match* match);
 
 
 const char* TokenMatch_group(Match* match, int index);
+
+
 int TokenMatch_count(Match* match);
 typedef struct Reference {
  char type;
@@ -335,12 +366,16 @@ typedef struct Reference {
  struct ParsingElement* element;
  struct Reference* next;
 } Reference;
-bool Reference_Is(void* this);
+
+_Bool 
+    Reference_Is(void* this);
 
 
 
 
-bool Reference_IsMany(void* this);
+
+_Bool 
+    Reference_IsMany(void* this);
 
 
 
@@ -365,13 +400,19 @@ Reference* Reference_cardinality(Reference* this, char cardinality);
 Reference* Reference_name(Reference* this, const char* name);
 
 
-bool Reference_hasNext(Reference* this);
+
+_Bool 
+    Reference_hasNext(Reference* this);
 
 
-bool Reference_hasElement(Reference* this);
+
+_Bool 
+    Reference_hasElement(Reference* this);
 
 
-bool Reference_isMany(Reference* this);
+
+_Bool 
+    Reference_isMany(Reference* this);
 
 
 int Reference__walk( Reference* this, WalkingCallback callback, int step, void* nothing );
@@ -400,7 +441,9 @@ ParsingElement* Procedure_new(ProcedureCallback c);
 
 
 Match* Procedure_recognize(ParsingElement* this, ParsingContext* context);
-typedef bool (*ConditionCallback)(ParsingElement*, ParsingContext*);
+typedef 
+       _Bool 
+            (*ConditionCallback)(ParsingElement*, ParsingContext*);
 
 
 ParsingElement* Condition_new(ConditionCallback c);
@@ -451,7 +494,9 @@ void ParsingVariable_free(ParsingVariable* this);
 void ParsingVariable_freeAll(ParsingVariable* this);
 
 
-bool ParsingVariable_is(ParsingVariable* this, const char* key);
+
+_Bool 
+    ParsingVariable_is(ParsingVariable* this, const char* key);
 
 
 ParsingVariable* ParsingVariable_set(ParsingVariable* this, const char* name, void* value);
@@ -460,7 +505,9 @@ ParsingVariable* ParsingVariable_set(ParsingVariable* this, const char* name, vo
 void* ParsingVariable_get(ParsingVariable* this, const char* name);
 
 
-ParsingVariable* ParsingVariable_find(ParsingVariable* this, const char* key, bool local);
+ParsingVariable* ParsingVariable_find(ParsingVariable* this, const char* key, 
+                                                                             _Bool 
+                                                                                  local);
 
 
 int ParsingVariable_getDepth(ParsingVariable* this);
@@ -496,7 +543,7 @@ typedef struct ParsingContext {
 ParsingContext* ParsingContext_new( Grammar* g, Iterator* iterator );
 
 
-iterated_t* ParsingContext_text( ParsingContext* this );
+char* ParsingContext_text( ParsingContext* this );
 
 
 
@@ -554,16 +601,22 @@ ParsingResult* ParsingResult_new(Match* match, ParsingContext* context);
 void ParsingResult_free(ParsingResult* this);
 
 
-bool ParsingResult_isSuccess(ParsingResult* this);
+
+_Bool 
+    ParsingResult_isSuccess(ParsingResult* this);
 
 
-bool ParsingResult_isFailure(ParsingResult* this);
+
+_Bool 
+    ParsingResult_isFailure(ParsingResult* this);
 
 
-bool ParsingResult_isPartial(ParsingResult* this);
+
+_Bool 
+    ParsingResult_isPartial(ParsingResult* this);
 
 
-iterated_t* ParsingResult_text(ParsingResult* this);
+char* ParsingResult_text(ParsingResult* this);
 
 
 int ParsingResult_textOffset(ParsingResult* this);
@@ -643,8 +696,50 @@ void Utilities_indent( ParsingElement* this, ParsingContext* context );
 void Utilities_dedent( ParsingElement* this, ParsingContext* context );
 
 
-bool Utilites_checkIndent( ParsingElement* this, ParsingContext* context );
-iterated_t EOL = '\n';
+
+_Bool 
+    Utilites_checkIndent( ParsingElement* this, ParsingContext* context );
+typedef struct gc_Reference {
+ char guard;
+ size_t size;
+ int count;
+ void* previous;
+ void* next;
+} gc_Reference;
+void* gc_Reference_data( gc_Reference* ref );
+
+void gc_Reference_acquire( gc_Reference* ref );
+
+gc_Reference* gc_Reference_release( gc_Reference* ref );
+
+void gc_Reference_free( gc_Reference* ref );
+gc_Reference* gc_ref( void* ptr );
+
+
+
+
+
+
+void* gc_new( size_t size );
+
+
+
+
+
+void gc_free( void* ptr );
+
+
+
+void* gc_realloc( void* ptr, size_t size );
+
+char* gc_strdup(const char* s);
+
+void* gc_calloc(size_t count, size_t size);
+
+void gc_acquire( void* ptr );
+
+void gc_release( void* ptr );
+char EOL = '\n';
 
 Match FAILURE_S = {
  .status = 'F',
@@ -725,8 +820,8 @@ Iterator* Iterator_Open(const char* path) {
 Iterator* Iterator_FromString(const char* text) {
  Iterator* this = Iterator_new();
  if (this!=NULL) {
-  this->buffer = (iterated_t*)text;
-  this->current = (iterated_t*)text;
+  this->buffer = (char*)text;
+  this->current = (char*)text;
   this->capacity = strlen(text);
   this->available = this->capacity;
   this->move = String_move;
@@ -750,7 +845,9 @@ Iterator* Iterator_new( void ) {
  return this;
 }
 
-bool Iterator_open( Iterator* this, const char *path ) {
+
+_Bool 
+    Iterator_open( Iterator* this, const char *path ) {
  FileInput* input = FileInput_new(path);
  assert(this->status == '-');
  if (input!=NULL) {
@@ -762,11 +859,11 @@ bool Iterator_open( Iterator* this, const char *path ) {
 
   assert(this->buffer == NULL);
 
-  this->capacity = sizeof(iterated_t) * 64000 * 2;
-  iterated_t* new_buffer = (iterated_t*) gc_calloc(this->capacity + 1, sizeof(iterated_t)) ; assert (new_buffer!=NULL);
+  this->capacity = sizeof(char) * 64000 * 2;
+  char* new_buffer = (char*) gc_calloc(this->capacity + 1, sizeof(char)) ; assert (new_buffer!=NULL);
   this->buffer = new_buffer;
   assert(this->buffer != NULL);
-  this->current = (iterated_t*)this->buffer;
+  this->current = (char*)this->buffer;
 
 
   ((char*)this->buffer)[this->capacity] = '\0';
@@ -781,7 +878,9 @@ bool Iterator_open( Iterator* this, const char *path ) {
  }
 }
 
-bool Iterator_hasMore( Iterator* this ) {
+
+_Bool 
+    Iterator_hasMore( Iterator* this ) {
  size_t remaining = Iterator_remaining(this);
 
 
@@ -797,11 +896,15 @@ size_t Iterator_remaining( Iterator* this ) {
  return (size_t)remaining;
 }
 
-bool Iterator_moveTo ( Iterator* this, size_t offset ) {
+
+_Bool 
+    Iterator_moveTo ( Iterator* this, size_t offset ) {
  return this->move(this, offset - this->offset );
 }
 
-bool Iterator_backtrack ( Iterator* this, size_t offset, size_t lines ) {
+
+_Bool 
+    Iterator_backtrack ( Iterator* this, size_t offset, size_t lines ) {
  assert(offset <= this->offset);
  assert(lines <= this->lines);
  this->lines = lines;
@@ -829,7 +932,9 @@ void Iterator_free( Iterator* this ) {
 
 
 
-bool String_move ( Iterator* this, int n ) {
+
+_Bool 
+    String_move ( Iterator* this, int n ) {
  assert(this->capacity == this->available);
  if ( n == 0) {
 
@@ -939,7 +1044,7 @@ size_t FileInput_preload( Iterator* this ) {
   this->buffer[this->capacity] = '\0';
 
   size_t to_read = this->capacity - left;
-  size_t read = fread((iterated_t*)this->buffer + this->available, sizeof(iterated_t), to_read, input->file);
+  size_t read = fread((char*)this->buffer + this->available, sizeof(char), to_read, input->file);
   this->available += read;
   left += read;
   ;;
@@ -953,7 +1058,9 @@ size_t FileInput_preload( Iterator* this ) {
  return left;
 }
 
-bool FileInput_move ( Iterator* this, int n ) {
+
+_Bool 
+    FileInput_move ( Iterator* this, int n ) {
  if ( n == 0) {
 
   return 1;
@@ -1154,7 +1261,9 @@ int Match_getEndOffset(Match *this) {
  return (int)(this->length + this->offset);
 }
 
-bool Match_isSuccess(Match* this) {
+
+_Bool 
+    Match_isSuccess(Match* this) {
  return (this != NULL && this != FAILURE && this->status == 'M');
 }
 
@@ -1170,7 +1279,9 @@ int Match__walk(Match* this, WalkingCallback callback, int step, void* context )
 }
 
 
-bool Match_hasNext(Match* this) {
+
+_Bool 
+    Match_hasNext(Match* this) {
  return this != NULL && this->next != NULL;
 }
 
@@ -1178,7 +1289,9 @@ Match* Match_getNext(Match* this) {
  return this != NULL ? this->next : NULL;
 }
 
-bool Match_hasChildren(Match* this) {
+
+_Bool 
+    Match_hasChildren(Match* this) {
  return this != NULL && this->children != NULL;
 }
 
@@ -1303,7 +1416,9 @@ void Match_toJSON(Match* this, int fd) {
 
 
 
-bool ParsingElement_Is(void *this) {
+
+_Bool 
+    ParsingElement_Is(void *this) {
  if (this == NULL) { return 0; }
  switch (((ParsingElement*)this)->type) {
 
@@ -1470,11 +1585,15 @@ int Element__walk( Element* this, WalkingCallback callback, int step, void* cont
 
 
 
-bool Reference_Is(void * this) {
+
+_Bool 
+    Reference_Is(void * this) {
  return this!=NULL && ((Reference*)this)->type == '#';
 }
 
-bool Reference_IsMany(void * this) {
+
+_Bool 
+    Reference_IsMany(void * this) {
  return Reference_Is(this) && (((Reference*)this)->cardinality == '+' || ((Reference*)this)->cardinality == '*');
 }
 
@@ -1516,15 +1635,21 @@ void Reference_free(Reference* this) {
  if (this!=NULL) {; gc_free(this); }
 }
 
-bool Reference_hasElement(Reference* this) {
+
+_Bool 
+    Reference_hasElement(Reference* this) {
  return this->element != NULL;
 }
 
-bool Reference_hasNext(Reference* this) {
+
+_Bool 
+    Reference_hasNext(Reference* this) {
  return this->next != NULL;
 }
 
-bool Reference_isMany(Reference* this) {
+
+_Bool 
+    Reference_isMany(Reference* this) {
 
  return this != NULL && (this->cardinality == '+' || this->cardinality == '*');
 }
@@ -1640,7 +1765,9 @@ Match* Reference_recognize(Reference* this, ParsingContext* context) {
  ;;
 
 
- bool is_success = Match_isSuccess(result) ? 1 : 0;
+ 
+_Bool 
+     is_success = Match_isSuccess(result) ? 1 : 0;
  switch (this->cardinality) {
   case '1':
    break;
@@ -2136,7 +2263,9 @@ ParsingElement* Condition_new(ConditionCallback c) {
 
 Match* Condition_recognize(ParsingElement* this, ParsingContext* context) {
  if (this->config != NULL) {
-  bool value = ((ConditionCallback)this->config)(this, context);
+  
+ _Bool 
+      value = ((ConditionCallback)this->config)(this, context);
   Match* result = value == 1 ? Match_Success(0, this, context) : FAILURE;
   if(context->grammar->isVerbose && !(context->flags & 1) && Match_isSuccess(result)){fprintf(stdout, "[✓] %s└ Condition " "\033[1m\033[32m" "%s" "\033[0m" "#%d matched %zu:%zu-%zu[→%d]", context->indent, this->name, this->id, context->iterator->lines, context->iterator->offset - result->length, context->iterator->offset, context->depth);fprintf(stdout, "\n");;}
   if(context->grammar->isVerbose && !(context->flags & 1) && !Match_isSuccess(result)){fprintf(stdout, " !  %s└ Condition " "\033[1m\033[31m" "%s" "\033[0m" "#%d failed at %zu:%zu[→%d]", context->indent, this->name, this->id, context->iterator->lines, context->iterator->offset, context->depth);fprintf(stdout, "\n");;}
@@ -2240,12 +2369,16 @@ void* ParsingVariable_get(ParsingVariable* this, const char* name) {
  return found != NULL ? found->value : NULL;
 }
 
-bool ParsingVariable_is(ParsingVariable* this, const char* key) {
+
+_Bool 
+    ParsingVariable_is(ParsingVariable* this, const char* key) {
  if (this == NULL || key == NULL) {return 0;}
  return (key == this->key || strcmp(this->key, key)) == 0 ? 1 : 0;
 }
 
-ParsingVariable* ParsingVariable_find(ParsingVariable* this, const char* key, bool local) {
+ParsingVariable* ParsingVariable_find(ParsingVariable* this, const char* key, 
+                                                                             _Bool 
+                                                                                  local) {
  ParsingVariable* current=this;
  while (current!=NULL) {
   if (ParsingVariable_is(current, key)) {
@@ -2336,7 +2469,7 @@ void ParsingContext_free( ParsingContext* this ) {
  }
 }
 
-iterated_t* ParsingContext_text( ParsingContext* this ) {
+char* ParsingContext_text( ParsingContext* this ) {
  return this->iterator->buffer;
 }
 
@@ -2475,19 +2608,25 @@ ParsingResult* ParsingResult_new(Match* match, ParsingContext* context) {
 }
 
 
-bool ParsingResult_isFailure(ParsingResult* this) {
+
+_Bool 
+    ParsingResult_isFailure(ParsingResult* this) {
  return this->status == 'F';
 }
 
-bool ParsingResult_isPartial(ParsingResult* this) {
+
+_Bool 
+    ParsingResult_isPartial(ParsingResult* this) {
  return this->status == 'p';
 }
 
-bool ParsingResult_isSuccess(ParsingResult* this) {
+
+_Bool 
+    ParsingResult_isSuccess(ParsingResult* this) {
  return this->status == 'S';
 }
 
-iterated_t* ParsingResult_text(ParsingResult* this) {
+char* ParsingResult_text(ParsingResult* this) {
  return this->context->iterator->buffer;
 }
 
@@ -2709,6 +2848,8 @@ void Utilities_dedent( ParsingElement* this, ParsingContext* context ) {
 
 }
 
-bool Utilites_checkIndent( ParsingElement *this, ParsingContext* context ) {
+
+_Bool 
+    Utilites_checkIndent( ParsingElement *this, ParsingContext* context ) {
  return 1;
 }

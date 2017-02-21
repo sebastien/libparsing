@@ -19,7 +19,7 @@
 // SEE: http://stackoverflow.com/questions/18329532/pcre-is-not-matching-utf8-characters
 // HASH: search.h, hcreate, hsearch, etc
 
-iterated_t   EOL = '\n';
+char   EOL = '\n';
 
 Match FAILURE_S = {
 	.status = STATUS_FAILED,
@@ -121,8 +121,8 @@ Iterator* Iterator_Open(const char* path) {
 Iterator* Iterator_FromString(const char* text) {
 	NEW(Iterator, this);
 	if (this!=NULL) {
-		this->buffer     = (iterated_t*)text;
-		this->current    = (iterated_t*)text;
+		this->buffer     = (char*)text;
+		this->current    = (char*)text;
 		this->capacity   = strlen(text);
 		this->available  = this->capacity;
 		this->move       = String_move;
@@ -158,11 +158,11 @@ bool Iterator_open( Iterator* this, const char *path ) {
 		// bytes ahead (if the input source has the data)
 		assert(this->buffer == NULL);
 		// FIXME: Capacity should be in units, no?
-		this->capacity = sizeof(iterated_t) * ITERATOR_BUFFER_AHEAD * 2;
-		__ARRAY_NEW(new_buffer, iterated_t, this->capacity + 1)
+		this->capacity = sizeof(char) * ITERATOR_BUFFER_AHEAD * 2;
+		__ARRAY_NEW(new_buffer, char, this->capacity + 1)
 		this->buffer   = new_buffer;
 		assert(this->buffer != NULL);
-		this->current = (iterated_t*)this->buffer;
+		this->current = (char*)this->buffer;
 		// We make sure we have a trailing \0 sign to stop any string parsing
 		// function to go any further.
 		((char*)this->buffer)[this->capacity] = '\0';
@@ -186,7 +186,7 @@ bool Iterator_hasMore( Iterator* this ) {
 
 size_t Iterator_remaining( Iterator* this ) {
 	int buffer_offset = ((char*)this->current - this->buffer);
-	// FIXME: Does not work if iterated_t is not the same as char
+	// FIXME: Does not work if char is not the same as char
 	int remaining = this->available - buffer_offset;
 	assert(remaining >= 0);
 	//DEBUG("Iterator_remaining: %d, offset=%zu available=%zu capacity=%zu", remaining, this->offset, this->available, this->capacity)
@@ -265,7 +265,7 @@ bool String_move ( Iterator* this, int n ) {
 		n = MAX(n, 0 - this->offset);
 		// FIXME: This is a little bit brittle, we should rather use a macro
 		// in the iterator itself.
-		this->current    = (((ITERATION_UNIT*)this->current) + n);
+		this->current    = (((char*)this->current) + n);
 		this->offset    += n;
 		if (n!=0) {
 			this->status  = STATUS_PROCESSING;
@@ -335,7 +335,7 @@ size_t FileInput_preload( Iterator* this ) {
 		this->buffer[this->capacity] = '\0';
 		// We want to read as much as possible so that we fill the buffer
 		size_t to_read         = this->capacity - left;
-		size_t read            = fread((iterated_t*)this->buffer + this->available, sizeof(iterated_t), to_read, input->file);
+		size_t read            = fread((char*)this->buffer + this->available, sizeof(char), to_read, input->file);
 		this->available        += read;
 		left                   += read;
 		DEBUG("<<< FileInput: read %zu bytes from input, available %zu, remaining %zu", read, this->available, Iterator_remaining(this));
@@ -1748,7 +1748,7 @@ void ParsingContext_free( ParsingContext* this ) {
 	}
 }
 
-iterated_t* ParsingContext_text( ParsingContext* this ) {
+char* ParsingContext_text( ParsingContext* this ) {
 	return this->iterator->buffer;
 }
 
@@ -1917,7 +1917,7 @@ bool ParsingResult_isSuccess(ParsingResult* this) {
 	return this->status == STATUS_SUCCESS;
 }
 
-iterated_t* ParsingResult_text(ParsingResult* this) {
+char* ParsingResult_text(ParsingResult* this) {
 	return this->context->iterator->buffer;
 }
 

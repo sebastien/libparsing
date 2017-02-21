@@ -31,11 +31,11 @@
  * __NEW(Array_Int,a) ; a->push(1);
  * ```
 */
-typedef char bool;
 #define TRUE  1
 #define FALSE 0
 
 #define HAS_FLAG(v,flag) (v & flag)
+#include <stdbool.h>
 
 
 // See <bin/memcheck.py> for hte tool that checks memory allocations.

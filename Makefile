@@ -57,8 +57,8 @@ PYTHON         ?=python2.7
 SOURCES_C      =$(wildcard $(SOURCES)/c/*.c)
 SOURCES_H      =$(wildcard $(SOURCES)/h/*.h)
 SOURCES_PY     =$(wildcard $(SOURCES)/py/*.py) $(wildcard $(SOURCES)/py/*/*.py)
-TESTS_C        =$(wildcard $(TESTS)/test-*.c)
-TESTS_PY       =$(wildcard $(TESTS)/test-*.py)
+TESTS_C        =$(wildcard $(TESTS)/*.c)
+TESTS_PY       =$(wildcard $(TESTS)/*.py)
 
 # === BUILD FILES =============================================================
 
@@ -76,8 +76,8 @@ BUILD_ALL       =$(BUILD_O) $(BUILD_SO) $(BUILD_FFI)
 
 DIST_BIN      = $(TESTS_C:$(TESTS)/%.c=$(DIST)/%)
 DIST_SO       = $(DIST)/lib$(PROJECT).so $(DIST)/lib$(PROJECT).so.$(VERSION) 
-DIST_FILES    = $(DIST_BIN) $(DIST_SO)
-PRODUCTS      = $(DIST_FILES)
+DIST_ALL      = $(DIST_BIN) $(DIST_SO)
+PRODUCTS      = $(DIST_ALL)
 
 # === COMPILER FILES ==========================================================
 
@@ -182,7 +182,7 @@ $(DIST)/lib$(PROJECT).so.$(VERSION): $(DIST)/lib$(PROJECT).so
 	@echo "$(GREEN)📝  $@ [SO $(VERSION)]$(RESET)"
 	@cp $< $@
 
-$(DIST)/test-%: $(BUILD)/test-%.o $(SOURCES_O)
+$(DIST)/c-%: $(BUILD)/c-%.o $(SOURCES_O)
 	@echo "$(GREEN)📝  $@ [EXE]$(RESET)"
 	@mkdir -p `dirname $@`
 	$(CC) -L$(DIST)  -shared $(LDFLAGS) $(OUTPUT_OPTION) $? 
@@ -211,7 +211,7 @@ $(SOURCES)/python/lib$(PROJECT)/_libparsing.so: $(SOURCES_C) $(SOURCES_H) $(BUIL
 # OBJECTS
 # =============================================================================
 
-$(BUILD)/test-%.o: $(TESTS)/test-%.c $(SOURCES_H) Makefile
+$(BUILD)/c-%.o: $(TESTS)/c-%.c $(SOURCES_H) Makefile
 	@echo "$(GREEN)📝  $@ [C TEST]$(RESET)"
 	@mkdir -p `dirname $@`
 	$(COMPILE.c) $(OUTPUT_OPTION) $<

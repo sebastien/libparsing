@@ -1,4 +1,3 @@
-#ifndef WITH_CFFI
 #ifndef __GC__
 #define __GC__
 #ifdef __cplusplus
@@ -76,6 +75,5 @@ void gc_release( void* ptr );
 
 #ifdef __cplusplus
 }
-#endif
 #endif
 #endif

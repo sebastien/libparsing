@@ -14,6 +14,8 @@ import reporter, texto, templating
 VERSION = "0.0.0"
 LICENSE = "http://ffctn.com/doc/licenses/bsd"
 
+# TODO: The parser has some issues with comment-out functions
+
 # START:DOC
 __doc__ = """
 == cparse
@@ -103,10 +105,10 @@ RE_CALLBACK    = re.compile("\s*typedef\s+\w[\w\d_]*\s*\*?\s+\(\s*\*([\w\_]+)\s*
 RE_TYPEDEF     = re.compile("\s*typedef\s+\w[\w\d_]*\s*\*?\s+\s*([\w\_]+)\s*")
 RE_SINGLE      = re.compile("\s*(static|extern)\s+\w+\s+([\w_]+)")
 
-TYPE_SYMBOL    = "S"
-TYPE_DOC       = "D"
-TYPE_CODE      = "C"
-TYPE_FILE      = "F"
+TYPE_SYMBOL    = "SYM"
+TYPE_DOC       = "DOC"
+TYPE_CODE      = "CDE"
+TYPE_FILE      = "FLE"
 
 SYMBOL_EXTRACTORS = dict(
 	define      = RE_MACRO,
@@ -193,7 +195,10 @@ class Library:
 
 class Group:
 
-	def __init__( self, type=None, name=None, code=None, doc=None, classifier=None, start=0 ):
+	ID = 0
+
+	def __init__( self, type=None, name=None, code=None, doc=None, classifier=None, start=0):
+		self.id   = Group.ID ; Group.ID += 1
 		self.type = type
 		self.name = name
 		self.code = code
@@ -207,7 +212,7 @@ class Group:
 		return "\n".join(self.symbols[name].code)
 
 	def __repr__( self ):
-		return "<Group:type={0},name={1},classifier={2},start={3}@{4}>".format(self.type, self.name, self.classifier, self.start, id(self))
+		return "<Group#{5}:type={0},name={1},classifier={2},start={3}@{4}>".format(self.type, self.name, self.classifier, self.start, id(self), self.id)
 
 class Parser:
 
@@ -263,18 +268,26 @@ class Parser:
 					result.append(current)
 			elif t == TYPE_CODE:
 				current.code.append(l)
+			else:
+				assert None
 		# Now we post_process groups
-		for group in result:
+		r = []
+		for i,group in enumerate(result):
 			if group.type == TYPE_SYMBOL:
+				first_line = None
 				try:
 					first_line  = (_ for _ in group.code if _).next()
 				except StopIteration:
-					reporter.error("Cannot find code for type: {0} in {1}".format(group, lines[group.start]))
-				match       = SYMBOL_EXTRACTORS[group.classifier].match(first_line)
-				assert match, "Symbol extractor {0} cannot match {1}".format(group.classifier, first_line)
-				group.name = match.groups()[-1]
-				root.symbols[group.name] = group
-		return result
+					reporter.error("Group has no code: {0}".format(group))
+				if first_line:
+					match       = SYMBOL_EXTRACTORS[group.classifier].match(first_line)
+					assert match, "Symbol extractor {0} cannot match {1}".format(group.classifier, first_line)
+					group.name = match.groups()[-1]
+					root.symbols[group.name] = group
+					r.append(group)
+				else:
+					reporter.warn("Filtered out empty group: {0} at {1}".format(group, lines[group.start]))
+		return r
 
 class Formatter:
 
