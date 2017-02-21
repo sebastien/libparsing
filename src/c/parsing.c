@@ -1366,20 +1366,28 @@ Match* Token_recognize(ParsingElement* this, ParsingContext* context) {
 const char* TokenMatch_group(Match* match, int index) {
 	assert (match                != NULL);
 	assert (match->data          != NULL);
-	assert (((ParsingElement*)(match->element))->type == TYPE_TOKEN);
+	assert (Match_getElementType(match) == TYPE_TOKEN);
 	TokenMatch* m = (TokenMatch*)match->data;
-	assert (index >= 0);
-	assert (index < m->count);
-	return m->groups[index];
+	if (m) {
+		assert (index >= 0);
+		assert (index < m->count);
+		return m->groups[index];
+	} else {
+		return NULL;
+	}
 }
 
 
 int TokenMatch_count(Match* match) {
 	assert (match                != NULL);
 	assert (match->data          != NULL);
-	assert (((ParsingElement*)(match->element))->type == TYPE_TOKEN);
+	assert (Match_getElementType(match) == TYPE_TOKEN);
 	TokenMatch* m = (TokenMatch*)match->data;
-	return m->count;
+	if (m != NULL) {
+		return m->count;
+	} else {
+		return 0;
+	}
 }
 
 void Token_print(ParsingElement* this) {
@@ -1756,9 +1764,10 @@ int  ParsingVariable_count(ParsingVariable* this) {
 
 ParsingContext* ParsingContext_new( Grammar* g, Iterator* iterator ) {
 	__NEW(ParsingContext, this);
-	this->grammar   = g;
-	this->iterator  = iterator;
-	this->stats     = ParsingStats_new();
+	this->grammar      = g;
+	this->iterator     = iterator;
+	this->stats        = ParsingStats_new();
+	this->freeIterator = FALSE;
 	if (g != NULL) {
 		ParsingStats_setSymbolsCount(this->stats, g->axiomCount + g->skipCount);
 	}
@@ -1772,11 +1781,11 @@ ParsingContext* ParsingContext_new( Grammar* g, Iterator* iterator ) {
 }
 
 void ParsingContext_free( ParsingContext* this ) {
-	// NOTE: We don't need to free the last match, or the grammar;
+	// NOTE: We don't need to free the last match, the grammar;
 	if (this!=NULL) {
+		if (this->freeIterator) {Iterator_free(this->iterator);}
 		ParsingVariable_freeAll(this->variables);
 		ParsingStats_free(this->stats);
-		Iterator_free(this->iterator);
 		__FREE(this);
 	}
 }
@@ -2101,7 +2110,9 @@ ParsingResult* Grammar_parseIterator( Grammar* this, Iterator* iterator ) {
 ParsingResult* Grammar_parsePath( Grammar* this, const char* path ) {
 	Iterator* iterator = Iterator_Open(path);
 	if (iterator != NULL) {
-		return Grammar_parseIterator(this, iterator);
+		ParsingResult* result = Grammar_parseIterator(this, iterator);
+		result->context->freeIterator = TRUE;
+		return result;
 	} else {
 		errno = ENOENT;
 		return NULL;
@@ -2111,7 +2122,9 @@ ParsingResult* Grammar_parsePath( Grammar* this, const char* path ) {
 ParsingResult* Grammar_parseString( Grammar* this, const char* text ) {
 	Iterator* iterator = Iterator_FromString(text);
 	if (iterator != NULL) {
-		return Grammar_parseIterator(this, iterator);
+		ParsingResult* result = Grammar_parseIterator(this, iterator);
+		result->context->freeIterator = TRUE;
+		return result;
 	} else {
 		errno = ENOENT;
 		return NULL;

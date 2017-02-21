@@ -931,7 +931,7 @@ typedef struct ParsingContext {
 	int                     depth;
 	const char*             indent;
 	int                     flags;
-
+	bool                    freeIterator;
 } ParsingContext;
 
 

@@ -1,6 +1,6 @@
 #include "parsing.h"
 
-int main (void) {
+Grammar* createGrammar () {
 	// We define the grammar
 	Grammar* g                 = Grammar_new();
 
@@ -192,29 +192,31 @@ int main (void) {
 	g->axiom = s_Source;
 	g->skip  = s_SPACES;
 
+	return g;
+}
+
+ParsingResult* parsePCSSFile( Grammar* g, const char* path ) {
+	ParsingResult* r = Grammar_parsePath(g, path);
+	printf("Parsed: '%s'→\n\tStatus %c, read %zu/%zu bytes\n", path, r->status, r->context->iterator->offset, r->context->iterator->available);
+	return r;
+}
+
+int main( int argc, char* argv[]) {
 	// ========================================================================
 	// MAIN
 	// ========================================================================
 
-	Iterator* iterator = Iterator_new();
 	const char* path = "test/c-parser-pcss.pcss";
+	Grammar* g = createGrammar();
 
-	printf("Opening file: %s", path);
-	if (!Iterator_open(iterator, path)) {
-		printf("Cannot open file: %s", path);
+	if (argc == 1) {
+		ParsingResult_free(parsePCSSFile(g, path));
 	} else {
-		ParsingResult* r = Grammar_parseIterator(g, iterator);
-		// Below is a simple test on how to iterate on the file
-		// int count = 0;
-		// while (FileInput_next(i)) {
-		// 	DEBUG("Read %c at %zu/%zu\n", *i->current, i->offset, i->available);
-		// 	count += 1;
-		// }
-		printf("Status %c, read %zu/%zu bytes\n", r->status, r->context->iterator->offset, r->context->iterator->available);
-		// NOTE: The following core dumps
-		ParsingResult_free(r);
+		for (int i=1 ; i<argc ; i++) {
+			ParsingResult_free(parsePCSSFile(g, argv[i]));
+		}
 	}
-	Iterator_free(iterator);
+
 	Grammar_free(g);
 	printf ("[OK]");
 	return 1;

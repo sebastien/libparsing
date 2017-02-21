@@ -70,7 +70,7 @@ BUILD_PY_SO        =$(SOURCES)/python/lib$(PROJECT)/lib$(PROJECT).so   \
 
 BUILD_PY_FFI       =$(SOURCES)/python/lib$(PROJECT)/_lib$(PROJECT).ffi \
                  $(SOURCES)/python/lib$(PROJECT)/_lib$(PROJECT).c
-BUILD_ALL       =$(BUILD_O) #$(BUILD_PY_SO) $(BUILD_PY_FFI)
+BUILD_ALL       =$(BUILD_O) $(BUILD_PY_SO) $(BUILD_PY_FFI)
 
 # === DIST FILES ==============================================================
 
@@ -205,7 +205,7 @@ $(SOURCES)/python/lib$(PROJECT)/_libparsing.ffi: $(SOURCES)/h/$(PROJECT).h
 $(SOURCES)/python/lib$(PROJECT)/_libparsing.c: $(SOURCES_C) $(SOURCES_H)
 	$(CC) $(CFLAGS) -E -DWITH_CFFI $(SOURCES_C) | egrep -v '^#' > $@
 
-$(SOURCES)/python/lib$(PROJECT)/_libparsing.so: $(SOURCES_C) $(SOURCES_H) $(BUILD_FFI)
+$(SOURCES)/python/lib$(PROJECT)/_libparsing.so: $(BUILD_PY_FFI)
 	$(PYTHON) $(SOURCES)/python/lib$(PROJECT)/_build.py $@
 
 # =============================================================================

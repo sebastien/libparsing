@@ -10,13 +10,15 @@ typedef struct TokenMatchGroup TokenMatchGroup;
 typedef bool (*ConditionCallback)(ParsingElement*, ParsingContext*);
 typedef void (*ProcedureCallback)(ParsingElement* this, ParsingContext* context);
 typedef void (*ContextCallback)(ParsingContext* context, char op );
-typedef int (*WalkingCallback)(Element* this, int step, void* context);
+typedef int (*ElementWalkingCallback)(Element* this, int step, void* context);
+typedef int (*MatchWalkingCallback)(Match* this, int step, void* context);
 typedef struct Element {
 	char           type;       // Type is used du differentiate ParsingElement from Reference
 	int            id;         // The ID, assigned by the grammar, as the relative distance to the axiom
+	char*          name;       // The name of the element
 } Element;
-int Element_walk( Element* this, WalkingCallback callback, void* context);
-int Element__walk( Element* this, WalkingCallback callback, int step, void* context);
+int Element_walk( Element* this, ElementWalkingCallback callback, void* context);
+int Element__walk( Element* this, ElementWalkingCallback callback, int step, void* context);
 typedef struct Reference {
 	char            type;            // Set to Reference_T, to disambiguate with ParsingElement
 	int             id;              // The ID, assigned by the grammar, as the relative distance to the axiom
@@ -36,7 +38,7 @@ Reference* Reference_name(Reference* this, const char* name);
 bool Reference_hasNext(Reference* this);
 bool Reference_hasElement(Reference* this);
 bool Reference_isMany(Reference* this);
-int Reference__walk( Reference* this, WalkingCallback callback, int step, void* nothing );
+int Reference__walk( Reference* this, ElementWalkingCallback callback, int step, void* nothing );
 Match* Reference_recognize(Reference* this, ParsingContext* context);
 typedef struct Match {
 	char            status;     // The status of the match (see STATUS_XXX)
@@ -50,7 +52,8 @@ typedef struct Match {
 	struct Match*   parent;    // A pointer to the parent match
 	void*           result;    // A pointer to the result of the match
 } Match;
-Match* Match_Success(size_t length, Element* element, ParsingContext* context);
+Match* Match_Success(size_t length, ParsingElement* element, ParsingContext* context);
+Match* Match_SuccessFromReference(size_t length, Reference* element, ParsingContext* context);
 Match* Match_new(void);
 void Match_free(Match* this);
 bool Match_isSuccess(Match* this);
@@ -64,7 +67,7 @@ int Match_getEndOffset(Match* this);
 int Match_getElementID(Match* this);
 char Match_getElementType(Match* this);
 const char* Match_getElementName(Match* this);
-int Match__walk(Match* this, WalkingCallback callback, int step, void* context );
+int Match__walk(Match* this, MatchWalkingCallback callback, int step, void* context );
 int Match_countAll(Match* this);
 int Match_countChildren(Match* this);
 void Match__toJSON(Match* match, int fd);
@@ -80,6 +83,7 @@ typedef struct Iterator {
 	size_t         available; // Available data in buffer (in bytes), always `<= capacity`
 	bool           freeBuffer;
 	void*          input;     // Pointer to the input source (opaque structure)
+	void           (*freeInput) (void*);
 	bool          (*move) (struct Iterator*, int n); // Plug-in function to move to the previous/next positions
 } Iterator;
 Iterator* Iterator_Open(const char* path);
@@ -95,8 +99,6 @@ char Iterator_charAt ( Iterator* this, size_t offset );
 typedef struct ParsingContext {
 	struct Grammar*         grammar;      // The grammar used to parse
 	struct Iterator*        iterator;     // Iterator on the input data
-	struct ParsingOffset*   offsets;      // The parsing offsets, starting at 0
-	struct ParsingOffset*   current;      // The current parsing offset
 	struct ParsingStats*    stats;
 	struct ParsingVariable* variables;
 	struct Match*           lastMatch;    // The last deepest successful match, useful for displaying error
@@ -104,6 +106,7 @@ typedef struct ParsingContext {
 	int                     depth;
 	const char*             indent;
 	int                     flags;
+	bool                    freeIterator;
 } ParsingContext;
 ParsingContext* ParsingContext_new( Grammar* g, Iterator* iterator );
 char* ParsingContext_text( ParsingContext* this );
@@ -139,6 +142,8 @@ size_t ParsingElement_skip(ParsingElement* this, ParsingContext* context);
 Match* ParsingElement_process( ParsingElement* this, Match* match );
 ParsingElement* ParsingElement_name( ParsingElement* this, const char* name );
 const char* ParsingElement_getName( ParsingElement* this );
+int ParsingElement_walk( ParsingElement* this, ElementWalkingCallback callback, void* context);
+int ParsingElement__walk( ParsingElement* this, ElementWalkingCallback callback, int step, void* context);
 ParsingElement* Word_new(const char* word);
 ParsingElement* Group_new(Reference* children[]);
 ParsingElement* Rule_new(Reference* children[]);
