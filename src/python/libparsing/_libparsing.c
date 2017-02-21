@@ -1580,8 +1580,8 @@ Match* ParsingElement_process( ParsingElement* this, Match* match ) {
 }
 
 size_t ParsingElement_skip( ParsingElement* this, ParsingContext* context) {
- if (this == NULL || context == NULL || context->grammar->skip == NULL || context->flags & 1) {return 0;}
- context->flags = context->flags | 1;
+ if (this == NULL || context == NULL || context->grammar->skip == NULL || context->flags & 0x1) {return 0;}
+ context->flags=context->flags|0x1;;
  ParsingElement* skip = context->grammar->skip;
  size_t offset = context->iterator->offset;
 
@@ -1591,7 +1591,7 @@ size_t ParsingElement_skip( ParsingElement* this, ParsingContext* context) {
  if (skipped > 0) {
   if(context->grammar->isVerbose){fprintf(stdout, " %s   ►►►skipped %zu", context->indent, skipped);fprintf(stdout, "\n");;}
  }
- context->flags = context->flags & ~1;
+ context->flags = context->flags & ~0x1;
  return skipped;
 }
 
@@ -1776,7 +1776,7 @@ Match* Reference_recognize(Reference* this, ParsingContext* context) {
 
   ;
   if (this->cardinality != '1' && this->cardinality != '?') {
-   if(context->grammar->isVerbose && !(context->flags & 1)){fprintf(stdout, "   %s ├┈" "\033[1m\033[33m" "[%d](%c)" "\033[0m", context->indent, count, this->cardinality);fprintf(stdout, "\n");;}
+   if(context->grammar->isVerbose && !(context->flags & 0x1)){fprintf(stdout, "   %s ├┈" "\033[1m\033[33m" "[%d](%c)" "\033[0m", context->indent, count, this->cardinality);fprintf(stdout, "\n");;}
 
     ;
   }
@@ -1941,10 +1941,10 @@ Match* Word_recognize(ParsingElement* this, ParsingContext* context) {
   Match* success = ParsingContext_registerMatch(context, (Element*)this, Match_Success(config->length, this, context));
  
   context->iterator->move(context->iterator, config->length);
-  if(context->grammar->isVerbose && !(context->flags & 1)){fprintf(stdout, "[✓] %s└ Word %s#%d:`" "\033[36m" "%s" "\033[0m" "` matched %zu:%zu-%zu[→%d]", context->indent, this->name, this->id, ((WordConfig*)this->config)->word, context->iterator->lines, context->iterator->offset - config->length, context->iterator->offset, context->depth);fprintf(stdout, "\n");;};
+  if(context->grammar->isVerbose && !(context->flags & 0x1)){fprintf(stdout, "[✓] %s└ Word %s#%d:`" "\033[36m" "%s" "\033[0m" "` matched %zu:%zu-%zu[→%d]", context->indent, this->name, this->id, ((WordConfig*)this->config)->word, context->iterator->lines, context->iterator->offset - config->length, context->iterator->offset, context->depth);fprintf(stdout, "\n");;};
   return success;
  } else {
-  if(context->grammar->isVerbose && !(context->flags & 1)){fprintf(stdout, " !  %s└ Word %s#%d:" "\033[36m" "`%s`" "\033[0m" " failed at %zu:%zu[→%d]", context->indent, this->name, this->id, ((WordConfig*)this->config)->word, context->iterator->lines, context->iterator->offset, context->depth);fprintf(stdout, "\n");;};
+  if(context->grammar->isVerbose && !(context->flags & 0x1)){fprintf(stdout, " !  %s└ Word %s#%d:" "\033[36m" "`%s`" "\033[0m" " failed at %zu:%zu[→%d]", context->indent, this->name, this->id, ((WordConfig*)this->config)->word, context->iterator->lines, context->iterator->offset, context->depth);fprintf(stdout, "\n");;};
   return ParsingContext_registerMatch(context, (Element*)this, FAILURE);
  }
 }
@@ -2052,7 +2052,7 @@ Match* Token_recognize(ParsingElement* this, ParsingContext* context) {
    case PCRE_ERROR_NOMEMORY : fprintf(stderr, "ERR ");fprintf(stderr, "Token:%s Ran out of memory", config->expr);fprintf(stderr, "\n");; break;
    default : fprintf(stderr, "ERR ");fprintf(stderr, "Token:%s Unknown error", config->expr);fprintf(stderr, "\n");; break;
   };
-  if(context->grammar->isVerbose && !(context->flags & 1)){fprintf(stdout, "    %s└✘Token " "\033[1m\033[31m" "%s" "\033[0m" "#%d:`" "\033[36m" "%s" "\033[0m" "` failed at %zu:%zu", context->indent, this->name, this->id, config->expr, context->iterator->lines, context->iterator->offset);fprintf(stdout, "\n");;};
+  if(context->grammar->isVerbose && !(context->flags & 0x1)){fprintf(stdout, "    %s└✘Token " "\033[1m\033[31m" "%s" "\033[0m" "#%d:`" "\033[36m" "%s" "\033[0m" "` failed at %zu:%zu", context->indent, this->name, this->id, config->expr, context->iterator->lines, context->iterator->offset);fprintf(stdout, "\n");;};
  } else {
   if(r == 0) {
    fprintf(stderr, "ERR ");fprintf(stderr, "Token: %s many substrings matched\n", config->expr);fprintf(stderr, "\n");;
@@ -2065,7 +2065,7 @@ Match* Token_recognize(ParsingElement* this, ParsingContext* context) {
   }
 
   result = Match_Success(vector[1], this, context);
-  if(context->grammar->isVerbose && !(context->flags & 1)){fprintf(stdout, "[✓] %s└ Token " "\033[1m\033[32m" "%s" "\033[0m" "#%d:" "\033[36m" "`%s`" "\033[0m" " matched " "\033[1m\033[32m" "%zu:%zu-%zu" "\033[0m", context->indent, this->name, this->id, config->expr, context->iterator->lines, context->iterator->offset, context->iterator->offset + result->length);fprintf(stdout, "\n");;};
+  if(context->grammar->isVerbose && !(context->flags & 0x1)){fprintf(stdout, "[✓] %s└ Token " "\033[1m\033[32m" "%s" "\033[0m" "#%d:" "\033[36m" "`%s`" "\033[0m" " matched " "\033[1m\033[32m" "%zu:%zu-%zu" "\033[0m", context->indent, this->name, this->id, config->expr, context->iterator->lines, context->iterator->offset, context->iterator->offset + result->length);fprintf(stdout, "\n");;};
 
 
   TokenMatch* data = (TokenMatch*) gc_new(sizeof(TokenMatch)); assert (data!=NULL); ;
@@ -2159,7 +2159,7 @@ ParsingElement* Group_new(Reference* children[]) {
 Match* Group_recognize(ParsingElement* this, ParsingContext* context){
 
 
- if(context->grammar->isVerbose && !(context->flags & 1)){fprintf(stdout, "??? %s┌── Group " "\033[1m\033[33m" "%s" "\033[0m" ":#%d at %zu:%zu[→%d]", context->indent, this->name, this->id, context->iterator->lines, context->iterator->offset, context->depth);fprintf(stdout, "\n");;};
+ if(context->grammar->isVerbose && !(context->flags & 0x1)){fprintf(stdout, "??? %s┌── Group " "\033[1m\033[33m" "%s" "\033[0m" ":#%d at %zu:%zu[→%d]", context->indent, this->name, this->id, context->iterator->lines, context->iterator->offset, context->depth);fprintf(stdout, "\n");;};
  Match* result = NULL;
  size_t offset = context->iterator->offset;
  size_t lines = context->iterator->lines;
@@ -2171,7 +2171,12 @@ Match* Group_recognize(ParsingElement* this, ParsingContext* context){
  Match* match = NULL;
  step = 0;
  while (child != NULL ) {
+
+  int _flags = context->flags;;
+  context->flags=context->flags|0x2;;
   match = Reference_recognize(child, context);
+  context->flags = _flags;;
+
   if (Match_isSuccess(match)) {
 
    assert(result == NULL);
@@ -2189,11 +2194,11 @@ Match* Group_recognize(ParsingElement* this, ParsingContext* context){
 
 
  if (Match_isSuccess(result)) {
-  if(context->grammar->isVerbose && !(context->flags & 1)){fprintf(stdout, "[✓] %s╘═⇒ Group " "\033[1m\033[32m" "%s" "\033[0m" "#%d[%d] matched" "\033[1m\033[32m" "%zu:%zu-%zu" "\033[0m" "[%zu][→%d]", context->indent, this->name, this->id, step, context->iterator->lines, result->offset, context->iterator->offset, result->length, context->depth);fprintf(stdout, "\n");;}
+  if(context->grammar->isVerbose && !(context->flags & 0x1)){fprintf(stdout, "[✓] %s╘═⇒ Group " "\033[1m\033[32m" "%s" "\033[0m" "#%d[%d] matched" "\033[1m\033[32m" "%zu:%zu-%zu" "\033[0m" "[%zu][→%d]", context->indent, this->name, this->id, step, context->iterator->lines, result->offset, context->iterator->offset, result->length, context->depth);fprintf(stdout, "\n");;}
   return ParsingContext_registerMatch(context, (Element*)this, result);
  } else {
 
-  if(context->grammar->isVerbose && !(context->flags & 1)){fprintf(stdout, " !  %s╘═⇒ Group " "\033[1m\033[31m" "%s" "\033[0m" "#%d[%d] failed at %zu:%zu-%zu[→%d]", context->indent, this->name, this->id, step, context->iterator->lines, context->iterator->offset, offset, context->depth);fprintf(stdout, "\n");;}
+  if(context->grammar->isVerbose && !(context->flags & 0x1)){fprintf(stdout, " !  %s╘═⇒ Group " "\033[1m\033[31m" "%s" "\033[0m" "#%d[%d] failed at %zu:%zu-%zu[→%d]", context->indent, this->name, this->id, step, context->iterator->lines, context->iterator->offset, offset, context->depth);fprintf(stdout, "\n");;}
   Match_free(result);
   if (context->iterator->offset != offset ) {
    Iterator_backtrack(context->iterator, offset, lines);
@@ -2223,7 +2228,7 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
  size_t lines = context->iterator->lines;
  Reference* child = this->children;
 
- if(context->grammar->isVerbose && !(context->flags & 1)){fprintf(stdout, "??? %s┌── Rule:" "\033[1m\033[33m" "%s" "\033[0m" " at %zu:%zu[→%d]", context->indent, this->name, context->iterator->lines, context->iterator->offset, context->depth);fprintf(stdout, "\n");;};
+ if(context->grammar->isVerbose && !(context->flags & 0x1)){fprintf(stdout, "??? %s┌── Rule:" "\033[1m\033[33m" "%s" "\033[0m" " at %zu:%zu[→%d]", context->indent, this->name, context->iterator->lines, context->iterator->offset, context->depth);fprintf(stdout, "\n");;};
 
 
  ParsingContext_push(context);
@@ -2233,15 +2238,18 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
  while (child != NULL) {
 
   if (child->next != NULL) {
-   if(context->grammar->isVerbose && !(context->flags & 1)){fprintf(stdout, " ‥%s├─" "\033[1m\033[33m" "%d" "\033[0m", context->indent, step);fprintf(stdout, "\n");;};
+   if(context->grammar->isVerbose && !(context->flags & 0x1)){fprintf(stdout, " ‥%s├─" "\033[1m\033[33m" "%d" "\033[0m", context->indent, step);fprintf(stdout, "\n");;};
   } else {
-   if(context->grammar->isVerbose && !(context->flags & 1)){fprintf(stdout, " ‥%s└─" "\033[1m\033[33m" "%d" "\033[0m", context->indent, step);fprintf(stdout, "\n");;};
+   if(context->grammar->isVerbose && !(context->flags & 0x1)){fprintf(stdout, " ‥%s└─" "\033[1m\033[33m" "%d" "\033[0m", context->indent, step);fprintf(stdout, "\n");;};
   }
 
 
 
 
+  int _flags = context->flags;;
+  context->flags=context->flags|0x2;;
   Match* match = Reference_recognize(child, context);
+  context->flags = _flags;;
 
 
 
@@ -2257,7 +2265,10 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 
 
 
+    int _flags = context->flags;;
+    context->flags=context->flags|0x2;;
     match = Reference_recognize(child, context);
+    context->flags = _flags;;
 
 
     if (!Match_isSuccess(match)) {
@@ -2308,13 +2319,13 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 
 
  if (Match_isSuccess(result)) {
-  if(context->grammar->isVerbose && !(context->flags & 1)){fprintf(stdout, "[✓] %s╘═⇒ Rule " "\033[1m\033[32m" "%s" "\033[0m" "#%d[%d] matched " "\033[1m\033[32m" "%zu:%zu-%zu" "\033[0m" "[%zub][→%d]", context->indent, this->name, this->id, step, context->iterator->lines, offset, context->iterator->offset, result->length, context->depth);fprintf(stdout, "\n");;}
+  if(context->grammar->isVerbose && !(context->flags & 0x1)){fprintf(stdout, "[✓] %s╘═⇒ Rule " "\033[1m\033[32m" "%s" "\033[0m" "#%d[%d] matched " "\033[1m\033[32m" "%zu:%zu-%zu" "\033[0m" "[%zub][→%d]", context->indent, this->name, this->id, step, context->iterator->lines, offset, context->iterator->offset, result->length, context->depth);fprintf(stdout, "\n");;}
 
 
 
   result->length = last->offset - result->offset + last->length;
  } else {
-  if(context->grammar->isVerbose && !(context->flags & 1)){fprintf(stdout, " !  %s╘ Rule " "\033[1m\033[31m" "%s" "\033[0m" "#%d failed on step %d=%s at %zu:%zu-%zu[→%d]", context->indent, this->name, this->id, step, step_name == NULL ? "-" : step_name, context->iterator->lines, offset, context->iterator->offset, context->depth);fprintf(stdout, "\n");;}
+  if(context->grammar->isVerbose && !(context->flags & 0x1)){fprintf(stdout, " !  %s╘ Rule " "\033[1m\033[31m" "%s" "\033[0m" "#%d failed on step %d=%s at %zu:%zu-%zu[→%d]", context->indent, this->name, this->id, step, step_name == NULL ? "-" : step_name, context->iterator->lines, offset, context->iterator->offset, context->depth);fprintf(stdout, "\n");;}
 
   Match_free(result);
   result = FAILURE;
@@ -2347,7 +2358,7 @@ Match* Procedure_recognize(ParsingElement* this, ParsingContext* context) {
 
   ((ProcedureCallback)(this->config))(this, context);
  }
- if(context->grammar->isVerbose && !(context->flags & 1) && this->name){fprintf(stdout, "[✓] %sProcedure " "\033[1m\033[32m" "%s" "\033[0m" "#%d executed at %zu", context->indent, this->name, this->id, context->iterator->offset);fprintf(stdout, "\n");;}
+ if(context->grammar->isVerbose && !(context->flags & 0x1) && this->name){fprintf(stdout, "[✓] %sProcedure " "\033[1m\033[32m" "%s" "\033[0m" "#%d executed at %zu", context->indent, this->name, this->id, context->iterator->offset);fprintf(stdout, "\n");;}
  return ParsingContext_registerMatch(context, (Element*)this, Match_Success(0, this, context));
 }
 
@@ -2371,11 +2382,11 @@ Match* Condition_recognize(ParsingElement* this, ParsingContext* context) {
  _Bool 
       value = ((ConditionCallback)this->config)(this, context);
   Match* result = value == 1 ? Match_Success(0, this, context) : FAILURE;
-  if(context->grammar->isVerbose && !(context->flags & 1) && Match_isSuccess(result)){fprintf(stdout, "[✓] %s└ Condition " "\033[1m\033[32m" "%s" "\033[0m" "#%d matched %zu:%zu-%zu[→%d]", context->indent, this->name, this->id, context->iterator->lines, context->iterator->offset - result->length, context->iterator->offset, context->depth);fprintf(stdout, "\n");;}
-  if(context->grammar->isVerbose && !(context->flags & 1) && !Match_isSuccess(result)){fprintf(stdout, " !  %s└ Condition " "\033[1m\033[31m" "%s" "\033[0m" "#%d failed at %zu:%zu[→%d]", context->indent, this->name, this->id, context->iterator->lines, context->iterator->offset, context->depth);fprintf(stdout, "\n");;}
+  if(context->grammar->isVerbose && !(context->flags & 0x1) && Match_isSuccess(result)){fprintf(stdout, "[✓] %s└ Condition " "\033[1m\033[32m" "%s" "\033[0m" "#%d matched %zu:%zu-%zu[→%d]", context->indent, this->name, this->id, context->iterator->lines, context->iterator->offset - result->length, context->iterator->offset, context->depth);fprintf(stdout, "\n");;}
+  if(context->grammar->isVerbose && !(context->flags & 0x1) && !Match_isSuccess(result)){fprintf(stdout, " !  %s└ Condition " "\033[1m\033[31m" "%s" "\033[0m" "#%d failed at %zu:%zu[→%d]", context->indent, this->name, this->id, context->iterator->lines, context->iterator->offset, context->depth);fprintf(stdout, "\n");;}
   return ParsingContext_registerMatch(context, (Element*)this, result);
  } else {
-  if(context->grammar->isVerbose && !(context->flags & 1)){fprintf(stdout, "[✓] %s└ Condition %s#%d matched by default at %zu", context->indent, this->name, this->id, context->iterator->offset);fprintf(stdout, "\n");;};
+  if(context->grammar->isVerbose && !(context->flags & 0x1)){fprintf(stdout, "[✓] %s└ Condition %s#%d matched by default at %zu", context->indent, this->name, this->id, context->iterator->offset);fprintf(stdout, "\n");;};
   Match* result = Match_Success(0, this, context);
   assert(Match_isSuccess(result));
   return ParsingContext_registerMatch(context, (Element*)this, result);
@@ -2587,7 +2598,8 @@ size_t ParsingContext_getOffset(ParsingContext* this) {
 
 Match* ParsingContext_registerMatch(ParsingContext* this, Element* e, Match* m) {
 
- if ((this->flags & 1)) {return m;}
+ if ((this->flags & 0x1)) {return m;}
+ if ((this->flags & 0x2)) {return m;}
  ParsingStats_registerMatch(this->stats, e, m);
 
 

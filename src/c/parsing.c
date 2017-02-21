@@ -877,7 +877,7 @@ Match* ParsingElement_process( ParsingElement* this, Match* match ) {
 
 size_t ParsingElement_skip( ParsingElement* this, ParsingContext* context) {
 	if (this == NULL || context == NULL || context->grammar->skip == NULL || context->flags & FLAG_SKIPPING) {return 0;}
-	context->flags = context->flags | FLAG_SKIPPING;
+	SET_FLAG(context->flags, FLAG_SKIPPING);
 	ParsingElement* skip = context->grammar->skip;
 	size_t offset        = context->iterator->offset;
 	// We don't care about the result, just the offset change.
@@ -887,7 +887,7 @@ size_t ParsingElement_skip( ParsingElement* this, ParsingContext* context) {
 	if (skipped > 0) {
 		OUT_IF(context->grammar->isVerbose, " %s   ►►►skipped %zu", context->indent, skipped)
 	}
-	context->flags = context->flags & ~FLAG_SKIPPING;
+	UNSET_FLAG(context->flags, FLAG_SKIPPING)
 	return skipped;
 }
 
@@ -1455,7 +1455,12 @@ Match* Group_recognize(ParsingElement* this, ParsingContext* context){
 	Match*     match            = NULL;
 	step                        = 0;
 	while (child != NULL ) {
+
+		PUSH_FLAGS(context->flags);
+		SET_FLAG(context->flags,FLAG_NOSTAT);
 		match = Reference_recognize(child, context);
+		POP_FLAGS(context->flags);
+
 		if (Match_isSuccess(match)) {
 			// The first succeeding child wins
 			assert(result == NULL);
@@ -1533,7 +1538,10 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 
 		// We iterate over the children of the rule. We expect each child to
 		// match, and we might skip inbetween the children to find a match.
+		PUSH_FLAGS(context->flags);
+		SET_FLAG(context->flags, FLAG_NOSTAT);
 		Match* match = Reference_recognize(child, context);
+		POP_FLAGS(context->flags);
 
 		// If the match is not a success, we will try to skip some input
 		// and try the match again.
@@ -1549,7 +1557,10 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 
 				// If the rule failed, we try to skip characters. We free any
 				// failure match, as we won't need it anymore.
+				PUSH_FLAGS(context->flags);
+				SET_FLAG(context->flags, FLAG_NOSTAT);
 				match = Reference_recognize(child, context);
+				POP_FLAGS(context->flags);
 
 				// If we haven't matched even after the skip, then we have a failure.
 				if (!Match_isSuccess(match)) {
@@ -1874,6 +1885,7 @@ size_t ParsingContext_getOffset(ParsingContext* this) {
 Match* ParsingContext_registerMatch(ParsingContext* this, Element* e, Match* m) {
 	// We don't register skipping matches, as they'll be discarded right away
 	if (HAS_FLAG(this->flags, FLAG_SKIPPING)) {return m;}
+	if (HAS_FLAG(this->flags, FLAG_NOSTAT))   {return m;}
 	ParsingStats_registerMatch(this->stats, e, m);
 	// NOTE: We make sure to only register the deepest match, as the grammar
 	// is likely to backtack and yield a partial match, erasing where the error

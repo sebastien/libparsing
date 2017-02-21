@@ -440,8 +440,12 @@ typedef struct Match {
 // @define
 #define TYPE_REFERENCE  '#'
 
-#define FLAG_SKIPPING    1
-
+#define FLAG_SKIPPING    0x1
+#define FLAG_NOSTAT      0x2
+#define PUSH_FLAGS(v)    int _flags = v;
+#define SET_FLAG(v,f)    v=v|f;
+#define UNSET_FLAG(v,f)  v = v & ~f;
+#define POP_FLAGS(v)     v = _flags;
 // @define
 // A parsing element that is not bound to a grammar will have ID_UNBOUND
 // by default.
