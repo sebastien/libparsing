@@ -4,11 +4,21 @@
 extern "C" {
 #endif
 
+ /* Enable certain library functions (strdup) on linux.  See feature_test_macros(7) */
+#ifdef _XOPEN_SOURCE
+#define _XOPEN_SOURCE 700
+#endif
+
 #define ASSERT_EXITS(r) assert (r != NULL)
 #define ASSERT_REF(r)   assert(((gc_Reference*)r)->guard == 'G')
 #ifdef HAS_GC
 #define HAS_GC
 #endif
+
+#ifndef WITH_CFFI
+#include <string.h>
+#endif
+
 
 typedef struct gc_Reference {
 	char           guard;

@@ -13,7 +13,7 @@ void test_reference_creation() {
 
 int main () {
 	test_reference_creation();
-	printf("[OK]");
+	printf("[OK]\n");
 	return 0;
 }
 

@@ -197,7 +197,7 @@ int main (void) {
 	// ========================================================================
 
 	Iterator* iterator = Iterator_new();
-	const char* path = "tests/test-pcss.pcss";
+	const char* path = "test/c-parser-pcss.pcss";
 
 	printf("Opening file: %s", path);
 	if (!Iterator_open(iterator, path)) {

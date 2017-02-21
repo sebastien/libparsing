@@ -126,6 +126,7 @@ typedef struct ParsingElement {
 } ParsingElement;
 bool         ParsingElement_Is(void* this);
 ParsingElement* ParsingElement_new(Reference* children[]);
+void ParsingElement_freeChildren(ParsingElement* this);
 void ParsingElement_free(ParsingElement* this);
 ParsingElement* ParsingElement_Ensure(void* referenceOfElement);
 ParsingElement* ParsingElement_add(ParsingElement* this, Reference* child);
@@ -201,6 +202,8 @@ typedef struct Grammar {
 Grammar* Grammar_new(void);
 void Grammar_free(Grammar* this);
 void Grammar_prepare ( Grammar* this );
+void Grammar_setVerbose ( Grammar* this );
+void Grammar_setSilent ( Grammar* this );
 int Grammar_symbolsCount ( Grammar* this );
 ParsingResult* Grammar_parseIterator( Grammar* this, Iterator* iterator );
 ParsingResult* Grammar_parsePath( Grammar* this, const char* path );

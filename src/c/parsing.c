@@ -412,32 +412,50 @@ Grammar* Grammar_new(void) {
 	return this;
 }
 
+void Grammar_setVerbose ( Grammar* this ) {
+	this->isVerbose = TRUE;
+}
+
+void Grammar_setSilent ( Grammar* this ) {
+	this->isVerbose = FALSE;
+}
+
 int Grammar_symbolsCount(Grammar* this) {
 	return this->axiomCount + this->skipCount;
 }
 
 void Grammar_freeElements(Grammar* this) {
+	if (this->elements == NULL) {
+		Grammar_prepare(this);
+	}
 	int count = (this->axiomCount + this->skipCount);
-	for (int i = 0; i < count ; i++ ) {
-		Element* element = this->elements[i];
-		if (ParsingElement_Is(element)) {
-			ParsingElement* e = (ParsingElement*)element;
-			DEBUG("Grammar_freeElements(%p):[%d/%d]->ParsingElement %p %c.%d#%s", this, i, count, element, e->type, e->id, e->name)
-			ParsingElement_free(e);
-		} else {
-			// Reference* r = (Reference*)element;
-			//DEBUG("Grammar_freeElements(%p):[%d/%d]->Reference %p.%c(%d)[%c]#%s", this, i, count, element, r->type, r->id, r->cardinality, r->name)
-			// Reference_free(r);
+	if (this->elements != NULL) {
+		// NOTE: We iterate count so that we have count + 1
+		for (int i = 0; i < count + 1 ; i++ ) {
+			Element* element = this->elements[i];
+			if (element == NULL) {
+				TRACE("Grammar_freeElements(%p):[%d/%d]->NULL", this, i, count);
+			} else if (ParsingElement_Is(element)) {
+				ParsingElement* e = (ParsingElement*)element;
+				TRACE("Grammar_freeElements(%p):[%d/%d]->ParsingElement %p %c.%d#%s", this, i, count, element, e->type, e->id, e->name)
+				ParsingElement_free(e);
+			} else {
+				Reference* r = (Reference*)element;
+				TRACE("Grammar_freeElements(%p):[%d/%d]->Reference %p.%c(%d)[%c]#%s", this, i, count, element, r->type, r->id, r->cardinality, r->name)
+				Reference_free(r);
+			}
 		}
 	}
 	this->axiomCount = 0;
 	this->skipCount  = 0;
 	this->skip       = NULL;
 	this->axiom      = NULL;
-	this->elements   = NULL;
+	__FREE(this->elements);
+	this->elements = NULL;
 }
 
 void Grammar_free(Grammar* this) {
+	Grammar_freeElements(this);
 	__FREE(this);
 }
 
@@ -753,8 +771,7 @@ ParsingElement* ParsingElement_new(Reference* children[]) {
 	return this;
 }
 
-void ParsingElement_free(ParsingElement* this) {
-	// TRACE("ParsingElement_free: %p", this)
+void ParsingElement_freeChildren( ParsingElement* this ) {
 	if (this == NULL) {return;}
 	Reference* child = this->children;
 	while (child != NULL) {
@@ -763,8 +780,24 @@ void ParsingElement_free(ParsingElement* this) {
 		Reference_free(child);
 		child = next;
 	}
-	__FREE(this->name);
-	__FREE(this);
+}
+
+
+void ParsingElement_free(ParsingElement* this) {
+	// NOTE: We don't want/need to free the children as the Grammar already
+	// holds a table of all elements.
+	if (this == NULL) {return;}
+	switch (this->type) {
+		case TYPE_TOKEN:
+			Token_free(this);
+			break;
+		case TYPE_WORD:
+			Word_free(this);
+			break;
+		default:
+			if (this!=NULL) {__FREE(this->name)};
+			__FREE(this);
+	}
 }
 
 ParsingElement* ParsingElement_add(ParsingElement* this, Reference* child) {
@@ -1120,6 +1153,7 @@ void Word_free(ParsingElement* this) {
 		free((void*)config->word);
 		__FREE(config);
 	}
+	if (this!=NULL) {__FREE(this->name)};
 	__FREE(this);
 }
 
@@ -1206,6 +1240,7 @@ void Token_free(ParsingElement* this) {
 		__FREE(config->expr);
 		__FREE(config);
 	}
+	if (this!=NULL) {__FREE(this->name)};
 	__FREE(this);
 }
 

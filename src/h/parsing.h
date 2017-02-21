@@ -336,6 +336,12 @@ void Grammar_free(Grammar* this);
 void Grammar_prepare ( Grammar* this );
 
 // @method
+void Grammar_setVerbose ( Grammar* this );
+
+// @method
+void Grammar_setSilent ( Grammar* this );
+
+// @method
 int Grammar_symbolsCount ( Grammar* this );
 
 // @method
@@ -537,6 +543,9 @@ bool         ParsingElement_Is(void* this);
 // parsing elements as children. Note that this is an internal
 // constructor, and you should use the specialized versions instead.
 ParsingElement* ParsingElement_new(Reference* children[]);
+
+// @method
+void ParsingElement_freeChildren(ParsingElement* this);
 
 // @destructor
 void ParsingElement_free(ParsingElement* this);
@@ -1174,7 +1183,16 @@ bool Utilites_checkIndent( ParsingElement* this, ParsingContext* context );
 // Creates a `Condition` parsing element
 #define CONDITION(f)      Condition_new(f)
 
+// @macro
+// Sets the grammar's axiom to the given symbol
+#define AXIOM(n) g->axiom = s_ ## n;
+
+// @macro
+// Sets the grammar's axiom to the given symbol
+#define SKIP(n)  g->skip  = s_ ## n;
+
 /*
+ *
  * Symbol reference & cardinality
  * ------------------------------
 */

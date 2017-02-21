@@ -13,7 +13,7 @@
 
 PROJECT        :=parsing
 PYMODULE       :=lib$(PROJECT) 
-FEATURES       :=pcre fortify gc
+FEATURES       :=pcre fortify gc trace debug
 ALL_FEATURES   :=pcre memcheck debug trace fortify
 
 # === FEATURES ================================================================
@@ -74,7 +74,8 @@ BUILD_ALL       =$(BUILD_O) $(BUILD_SO) $(BUILD_FFI)
 
 # === DIST FILES ==============================================================
 
-DIST_BIN      = $(TESTS_C:$(TESTS)/%.c=$(DIST)/%)
+DIST_TESTS    = $(TESTS_C:$(TESTS)/%.c=$(DIST)/%)
+DIST_BIN      = $(DIST_TESTS)
 DIST_SO       = $(DIST)/lib$(PROJECT).so $(DIST)/lib$(PROJECT).so.$(VERSION) 
 DIST_ALL      = $(DIST_BIN) $(DIST_SO)
 PRODUCTS      = $(DIST_ALL)
@@ -182,10 +183,10 @@ $(DIST)/lib$(PROJECT).so.$(VERSION): $(DIST)/lib$(PROJECT).so
 	@echo "$(GREEN)📝  $@ [SO $(VERSION)]$(RESET)"
 	@cp $< $@
 
-$(DIST)/c-%: $(BUILD)/c-%.o $(SOURCES_O)
+$(DIST)/c-%: $(BUILD)/c-%.o $(SOURCES_O) $(DIST)/lib$(PROJECT).so
 	@echo "$(GREEN)📝  $@ [EXE]$(RESET)"
 	@mkdir -p `dirname $@`
-	$(CC) -L$(DIST)  -shared $(LDFLAGS) $(OUTPUT_OPTION) $? 
+	$(CC) -L$(DIST) -l$(PROJECT) $(LDFLAGS) $(OUTPUT_OPTION) $? 
 	chmod +x $@
 
 # =============================================================================
@@ -211,10 +212,10 @@ $(SOURCES)/python/lib$(PROJECT)/_libparsing.so: $(SOURCES_C) $(SOURCES_H) $(BUIL
 # OBJECTS
 # =============================================================================
 
-$(BUILD)/c-%.o: $(TESTS)/c-%.c $(SOURCES_H) Makefile
+$(BUILD)/c-%.o: $(TESTS)/c-%.c $(SOURCES_H) $(DIST)/lib$(PROJECT).so Makefile
 	@echo "$(GREEN)📝  $@ [C TEST]$(RESET)"
 	@mkdir -p `dirname $@`
-	$(COMPILE.c) $(OUTPUT_OPTION) $<
+	$(COMPILE.c) -shared -Og -g $(OUTPUT_OPTION) $<
 
 $(BUILD)/%.o: $(SOURCES)/c/%.c $(DEPDIR)/%.d Makefile
 	@echo "$(GREEN)📝  $@ [C SOURCE]$(RESET)"
@@ -229,6 +230,9 @@ $(DEPDIR)/%.d: ;
 print-%:
 	@echo $*=
 	@echo $($*) | xargs -n1 echo | sort -dr
+
+clean-%:
+	@echo $($*) | xargs -n1 echo | sort -dr | xargs -n1 rm
 
 -include $(patsubst %,$(DEPDIR)/%.d,$(basename $(SRCS)))
 
