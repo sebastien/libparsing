@@ -146,11 +146,32 @@ Iterator* Iterator_new( void ) {
 	return this;
 }
 
+void Iterator__freeInput( Iterator* this ) {
+	if (this->freeInput != NULL && this->input != NULL) {
+		this->freeInput(this->input);
+	}
+	this->freeInput = NULL;
+	this->input = NULL;
+}
+
+void Iterator_free( Iterator* this ) {
+	TRACE("Iterator_free: %p", this)
+	if (this != NULL) {
+		Iterator__freeInput(this);
+	}
+	if (this->freeBuffer) {
+		__FREE(this->buffer);
+	}
+	__FREE(this);
+}
+
 bool Iterator_open( Iterator* this, const char *path ) {
 	NEW(FileInput, input, path);
 	assert(this->status == STATUS_INIT);
+	Iterator__freeInput(this);
 	if (input!=NULL) {
 		this->input  = (void*)input;
+		this->freeInput = FileInput_free;
 		this->status = STATUS_PROCESSING;
 		this->offset = 0;
 		// We allocate a buffer that's twice the size of ITERATOR_BUFFER_AHEAD
@@ -210,14 +231,7 @@ char Iterator_charAt ( Iterator* this, size_t offset ) {
 	return (char)(this->buffer[offset]);
 }
 
-void Iterator_free( Iterator* this ) {
-	// FIXME: Should close input file
-	// TRACE("Iterator_free: %p", this)
-	if (this->freeBuffer) {
-		__FREE(this->buffer);
-	}
-	__FREE(this);
-}
+
 
 // ----------------------------------------------------------------------------
 //
@@ -297,9 +311,11 @@ FileInput* FileInput_new(const char* path ) {
 	}
 }
 
-void FileInput_free(FileInput* this) {
-	// TRACE("FileInput_free: %p", this)
-	if (this->file != NULL) { fclose(this->file);   }
+void FileInput_free(void* this) {
+	TRACE("FileInput_free: %p", this)
+	FileInput* self = (FileInput*) this;
+	if (self != NULL && self->file != NULL) { fclose(self->file);   }
+	__FREE(this);
 }
 
 size_t FileInput_preload( Iterator* this ) {
@@ -1624,53 +1640,6 @@ Match*  Condition_recognize(ParsingElement* this, ParsingContext* context) {
 
 // ----------------------------------------------------------------------------
 //
-// PARSING STEP
-//
-// ----------------------------------------------------------------------------
-
-ParsingStep* ParsingStep_new( ParsingElement* element ) {
-	__NEW(ParsingStep, this);
-	assert(element != NULL);
-	this->element   = element;
-	this->step      = 0;
-	this->iteration = 0;
-	this->status    = STATUS_INIT;
-	this->match     = (Match*)NULL;
-	this->previous  = NULL;
-	return this;
-}
-
-void ParsingStep_free( ParsingStep* this ) {
-	__FREE(this);
-}
-
-// ----------------------------------------------------------------------------
-//
-// PARSING OFFSET
-//
-// ----------------------------------------------------------------------------
-
-ParsingOffset* ParsingOffset_new( size_t offset ) {
-	__NEW(ParsingOffset, this);
-	this->offset = offset;
-	this->last   = (ParsingStep*)NULL;
-	this->next   = (ParsingOffset*)NULL;
-	return this;
-}
-
-void ParsingOffset_free( ParsingOffset* this ) {
-	ParsingStep* step     = this->last;
-	ParsingStep* previous = NULL;
-	while (step != NULL) {
-		previous   = step->previous;
-		ParsingStep_free(step);
-		step       = previous;
-	}
-	__FREE(this);
-}
-
-// ----------------------------------------------------------------------------
-//
 // PARSING VARIABLE
 //
 // ----------------------------------------------------------------------------
@@ -1789,8 +1758,6 @@ ParsingContext* ParsingContext_new( Grammar* g, Iterator* iterator ) {
 	if (g != NULL) {
 		ParsingStats_setSymbolsCount(this->stats, g->axiomCount + g->skipCount);
 	}
-	this->offsets   = NULL;
-	this->current   = NULL;
 	this->depth     = 0;
 	this->variables = ParsingVariable_new(0, "depth", 0);
 	this->callback  = NULL;
@@ -2115,7 +2082,6 @@ ParsingResult* Grammar_parseIterator( Grammar* this, Iterator* iterator ) {
 	// We make sure the grammar is prepared before we start parsing
 	if (this->elements == NULL) {Grammar_prepare(this);}
 	assert(this->axiom != NULL);
-	// ParsingOffset*  offset  = ParsingOffset_new(iterator->offset);
 	ParsingContext* context = ParsingContext_new(this, iterator);
 	assert(this->axiom->recognize != NULL);
 	clock_t t1  = clock();

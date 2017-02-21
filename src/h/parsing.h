@@ -207,6 +207,7 @@ typedef struct Iterator {
 	bool           freeBuffer;
 	// FIXME: The head should be freed when the offsets have been parsed, no need to keep in memory stuff we won't need.
 	void*          input;     // Pointer to the input source (opaque structure)
+	void           (*freeInput) (void*);
 	bool          (*move) (struct Iterator*, int n); // Plug-in function to move to the previous/next positions
 } Iterator;
 
@@ -278,7 +279,7 @@ bool String_move ( Iterator* this, int offset );
 FileInput* FileInput_new(const char* path );
 
 // @destructor
-void       FileInput_free(FileInput* this);
+void       FileInput_free(void* this);
 
 // @method
 // Preloads data from the input source so that the buffer
@@ -835,9 +836,6 @@ Match*          Condition_recognize(ParsingElement* this, ParsingContext* contex
  * will be applied to advance the iterator.
 */
 
-typedef struct ParsingStep    ParsingStep;
-typedef struct ParsingOffset  ParsingOffset;
-
 // @type
 typedef struct ParsingStats {
 	size_t   bytesRead;
@@ -926,8 +924,6 @@ typedef void (*ContextCallback)(ParsingContext* context, char op );
 typedef struct ParsingContext {
 	struct Grammar*         grammar;      // The grammar used to parse
 	struct Iterator*        iterator;     // Iterator on the input data
-	struct ParsingOffset*   offsets;      // The parsing offsets, starting at 0
-	struct ParsingOffset*   current;      // The current parsing offset
 	struct ParsingStats*    stats;
 	struct ParsingVariable* variables;
 	struct Match*           lastMatch;    // The last deepest successful match, useful for displaying error
@@ -1020,57 +1016,6 @@ int ParsingResult_textOffset(ParsingResult* this);
 
 // @method
 size_t ParsingResult_remaining(ParsingResult* this);
-
-/*
- * The result of _recognizing_ parsing elements at given offsets within the
- * input stream is stored in `ParsingOffset`. Each parsing offset is a stack
- * of `ParsingStep`, corresponding to successive attempts at matching
- * parsing elements at the current position.
- *
- * FIXME: Not sure about the following two paragraphs
- *
- * The parsing offset is a stack of parsing steps, where the tail is the most
- * specific parsing step. By following the tail's previous parsing step,
- * you can unwind the stack.
- *
- * The parsing steps each have an offset within the iterated stream. Offsets
- * where data has been fully extracted (ie, a leaf parsing element has matched
- * and processing returned a NOTHING) can be freed as they are not necessary
- * any more.
-*/
-
-// @type ParsingOffset
-typedef struct ParsingOffset {
-	size_t                offset; // The offset matched in the input stream
-	ParsingStep*          last;   // The last matched parsing step (ie. corresponding to the most specialized parsing element)
-	struct ParsingOffset* next;   // The link to the next offset (if any)
-} ParsingOffset;
-
-// @constructor
-ParsingOffset* ParsingOffset_new( size_t offset );
-
-// @destructor
-void ParsingOffset_free( ParsingOffset* this );
-
-/**
- * The parsing step allows to memoize the state of a parsing element at a given
- * offset. This is the data structure that will be manipulated and created/destroyed
- * the most during the parsing process.
-*/
-typedef struct ParsingStep {
-	ParsingElement*     element;       // The parsing elemnt we're matching
-	char                step;          // The step corresponds to current child's index (0 for token/word)
-	unsigned int        iteration;     // The current iteration (on the step)
-	char                status;        // Match status `STATUS_{INIT|PROCESSING|FAILED}`
-	Match*              match;         // The corresponding match, if any.
-	struct ParsingStep* previous;      // The previous parsing step on the parsing offset's stack
-} ParsingStep;
-
-// @constructor
-ParsingStep* ParsingStep_new( ParsingElement* element );
-
-// @destructor
-void ParsingStep_free( ParsingStep* this );
 
 /**
  * Processor
