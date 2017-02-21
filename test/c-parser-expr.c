@@ -9,7 +9,7 @@
 */
 Grammar* createGrammar() {
 	Grammar* g = Grammar_new();
-	Grammar_setVerbose(g);
+	// Grammar_setVerbose(g);
 
 	SYMBOL (WS,             TOKEN("\\s+"));
 	SYMBOL (NUMBER,         TOKEN("\\d+(\\.\\d+)?"));

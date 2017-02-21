@@ -141,6 +141,7 @@ Iterator* Iterator_new( void ) {
 	this->available     = 0;
 	this->capacity      = 0;
 	this->input         = NULL;
+	this->freeInput     = NULL;
 	this->move          = NULL;
 	this->freeBuffer    = FALSE;
 	return this;
@@ -530,10 +531,12 @@ void Match_free(Match* this) {
 		// We free the children
 		assert(this->children != this);
 		Match_free(this->children);
+		this->children = NULL;
 
 		// We free the next one
 		assert(this->next != this);
 		Match_free(this->next);
+		this->next = NULL;
 
 		// If the match is from a parsing element
 		if (ParsingElement_Is(this->element)) {
@@ -873,7 +876,8 @@ size_t ParsingElement_skip( ParsingElement* this, ParsingContext* context) {
 	ParsingElement* skip = context->grammar->skip;
 	size_t offset        = context->iterator->offset;
 	// We don't care about the result, just the offset change.
-	Match_free(skip->recognize(skip, context));
+	Match* match = skip->recognize(skip, context);
+	Match_free(match);
 	size_t skipped = context->iterator->offset - offset;
 	if (skipped > 0) {
 		OUT_IF(context->grammar->isVerbose, " %s   ►►►skipped %zu", context->indent, skipped)
@@ -1441,7 +1445,7 @@ Match* Group_recognize(ParsingElement* this, ParsingContext* context){
 			break;
 		} else {
 			// Otherwise we try the next child
-			Match_free(match);
+			Match_free(match); match = NULL;
 			child  = child->next;
 			step  += 1;
 		}
@@ -1514,7 +1518,7 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 		// and try the match again.
 		if (!Match_isSuccess(match)) {
 
-			Match_free(match);
+			Match_free(match); match = NULL;
 			size_t skipped = ParsingElement_skip(this, context);
 
 			// If we've skipped at least one input element, then we can
@@ -1528,7 +1532,7 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 				// If we haven't matched even after the skip, then we have a failure.
 				if (!Match_isSuccess(match)) {
 					// We free any failure match
-					Match_free(match);
+					Match_free(match); match = NULL;
 					result = FAILURE;
 					// NOTE: We don't need to backtrack here, as a failure will
 					// automatically backtrack to the start offset, so we
@@ -1837,15 +1841,18 @@ size_t ParsingContext_getOffset(ParsingContext* this) {
 }
 
 Match* ParsingContext_registerMatch(ParsingContext* this, Element* e, Match* m) {
+	// We don't register skipping matches, as they'll be discarded right away
+	if (HAS_FLAG(this->flags, FLAG_SKIPPING)) {return m;}
 	ParsingStats_registerMatch(this->stats, e, m);
 	// NOTE: We make sure to only register the deepest match, as the grammar
 	// is likely to backtack and yield a partial match, erasing where the error
 	// actually lies. We skip empty matches.
-	if (Match_isSuccess(m)
-	&& (this->lastMatch == NULL || ((this->lastMatch->offset + this->lastMatch->length) < (m->offset + m->length)))
-	&& m->length > 0
-	) {
-		this->lastMatch = m;
+	if (m != NULL && Match_isSuccess(m)) {
+		if (this->lastMatch == NULL) {
+			this->lastMatch = m;
+		} else if ( (this->lastMatch->offset + this->lastMatch->length) < (m->offset + m->length) && m->length > 0) {
+			this->lastMatch = m;
+		}
 	}
 	return m;
 }
