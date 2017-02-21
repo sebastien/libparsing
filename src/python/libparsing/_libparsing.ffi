@@ -1,5 +1,5 @@
 typedef char* iterated_t;
-typedef void   Element;
+typedef struct Element        Element;
 typedef struct ParsingElement ParsingElement;
 typedef struct ParsingResult  ParsingResult;
 typedef struct ParsingStats   ParsingStats;
@@ -11,6 +11,10 @@ typedef bool (*ConditionCallback)(ParsingElement*, ParsingContext*);
 typedef void (*ProcedureCallback)(ParsingElement* this, ParsingContext* context);
 typedef void (*ContextCallback)(ParsingContext* context, char op );
 typedef int (*WalkingCallback)(Element* this, int step, void* context);
+typedef struct Element {
+	char           type;       // Type is used du differentiate ParsingElement from Reference
+	int            id;         // The ID, assigned by the grammar, as the relative distance to the axiom
+} Element;
 int Element_walk( Element* this, WalkingCallback callback, void* context);
 int Element__walk( Element* this, WalkingCallback callback, int step, void* context);
 typedef struct Reference {

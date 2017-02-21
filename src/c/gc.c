@@ -72,7 +72,7 @@ gc_Reference* gc_ref( void* ptr ) {
 }
 
 
-void* gc_init( gc_Reference* ref, size_t size ) {
+void gc_init( gc_Reference* ref, size_t size ) {
 #ifndef GC_TRANSPARENT
 	ref->guard    = 'R';
 	ref->size     = size;

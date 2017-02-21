@@ -308,13 +308,14 @@ typedef struct ParsingElement  ParsingElement;
 typedef struct ParsingResult   ParsingResult;
 typedef struct Reference       Reference;
 typedef struct Match           Match;
-typedef void                   Element;
+typedef struct Element         Element;
 
-// FIXME: Not sure why this is disabled
-// typedef struct Element {
-// 	char           type;       // Type is used du differentiate ParsingElement from Reference
-// 	int            id;         // The ID, assigned by the grammar, as the relative distance to the axiom
-// } Element;
+// @type Element
+typedef struct Element {
+	char           type;       // Type is used du differentiate ParsingElement from Reference
+	int            id;         // The ID, assigned by the grammar, as the relative distance to the axiom
+	char*          name;       // The name of the element
+} Element;
 
 // @type Grammar
 typedef struct Grammar {
@@ -362,13 +363,13 @@ void Grammar_freeElements(Grammar* this);
 */
 
 // @callback
-typedef int (*WalkingCallback)(Element* this, int step, void* context);
+typedef int (*ElementWalkingCallback)(Element* this, int step, void* context);
 
 // @method
-int Element_walk( Element* this, WalkingCallback callback, void* context);
+int Element_walk( Element* this, ElementWalkingCallback callback, void* context);
 
 // @method
-int Element__walk( Element* this, WalkingCallback callback, int step, void* context);
+int Element__walk( Element* this, ElementWalkingCallback callback, int step, void* context);
 
 /**
  * ### Parsing Elements
@@ -450,6 +451,9 @@ typedef struct Match {
 // will have an id of `ID_BINDING` temporarily.
 #define ID_BINDING       -1
 
+// @callback
+typedef int (*MatchWalkingCallback)(Match* this, int step, void* context);
+
 // @singleton FAILURE_S
 // A specific match that indicates a failure
 extern Match FAILURE_S;
@@ -459,7 +463,9 @@ extern Match* FAILURE;
 
 // @operation
 // Creates a new successful match of the given length
-Match* Match_Success(size_t length, Element* element, ParsingContext* context);
+Match* Match_Success(size_t length, ParsingElement* element, ParsingContext* context);
+
+Match* Match_SuccessFromReference(size_t length, Reference* element, ParsingContext* context);
 
 // @constructor
 Match* Match_new(void);
@@ -507,7 +513,7 @@ const char* Match_getElementName(Match* this);
 // Calls `callback` with `(Match, step, context)` as arguments, doing
 // the same for all descendants (depth-first traversal), stopping the
 // traversal when `callbacks` return 0 or less.
-int Match__walk(Match* this, WalkingCallback callback, int step, void* context );
+int Match__walk(Match* this, MatchWalkingCallback callback, int step, void* context );
 
 // @method
 int Match_countAll(Match* this);
@@ -578,6 +584,13 @@ ParsingElement* ParsingElement_name( ParsingElement* this, const char* name );
 
 // @method
 const char* ParsingElement_getName( ParsingElement* this );
+
+// @method
+int ParsingElement_walk( ParsingElement* this, ElementWalkingCallback callback, void* context);
+
+// @method
+int ParsingElement__walk( ParsingElement* this, ElementWalkingCallback callback, int step, void* context);
+
 
 /**
  * ### Word
@@ -736,7 +749,7 @@ bool Reference_hasElement(Reference* this);
 bool Reference_isMany(Reference* this);
 
 // @method
-int Reference__walk( Reference* this, WalkingCallback callback, int step, void* nothing );
+int Reference__walk( Reference* this, ElementWalkingCallback callback, int step, void* nothing );
 
 // @method
 // Returns the matched value corresponding to the first match of this reference.

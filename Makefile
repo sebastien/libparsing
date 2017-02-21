@@ -65,12 +65,12 @@ TESTS_PY       =$(wildcard $(TESTS)/*.py)
 BUILD_SOURCES_O =$(SOURCES_C:$(SOURCES)/c/%.c=$(BUILD)/%.o)
 BUILD_TESTS_O   =$(TESTS_C:$(TESTS)/%.c=$(BUILD)/%.o)
 BUILD_O         =$(BUILD_SOURCES_O) $(BUILD_TESTS_O)
-BUILD_SO        =$(SOURCES)/python/lib$(PROJECT)/lib$(PROJECT).so   \
+BUILD_PY_SO        =$(SOURCES)/python/lib$(PROJECT)/lib$(PROJECT).so   \
                  $(SOURCES)/python/lib$(PROJECT)/_lib$(PROJECT).so  \
 
-BUILD_FFI       =$(SOURCES)/python/lib$(PROJECT)/_lib$(PROJECT).ffi \
+BUILD_PY_FFI       =$(SOURCES)/python/lib$(PROJECT)/_lib$(PROJECT).ffi \
                  $(SOURCES)/python/lib$(PROJECT)/_lib$(PROJECT).c
-BUILD_ALL       =$(BUILD_O) $(BUILD_SO) $(BUILD_FFI)
+BUILD_ALL       =$(BUILD_O) #$(BUILD_PY_SO) $(BUILD_PY_FFI)
 
 # === DIST FILES ==============================================================
 

@@ -11,7 +11,7 @@ O    = ("type", "constructor", "operation", "method", "destructor")
 # the types.
 cdef = (
 	"typedef char* iterated_t;\n"
-	"typedef void   Element;\n"
+	"typedef struct Element        Element;\n"
 	"typedef struct ParsingElement ParsingElement;\n"
 	"typedef struct ParsingResult  ParsingResult;\n"
 	"typedef struct ParsingStats   ParsingStats;\n"
@@ -20,28 +20,29 @@ cdef = (
 	"typedef struct Grammar Grammar;\n"
 	"typedef struct TokenMatchGroup TokenMatchGroup;\n"
 ) + clib.getCode(
-	("ConditionCallback",    None),
-	("ProcedureCallback",    None),
-	("ContextCallback",      None),
-	("WalkingCallback",      None),
-	("Element*",             O),
-	("Reference*",           O),
-	("Match*",               O),
-	("Iterator*",            O),
-	("ParsingContext*",      O),
-	("ParsingElement*",      O),
-	("ParsingResult*",       O),
-	("ParsingStats*",        O),
-	("Word*" ,               O),
-	("Token",                O),
-	("TokenMatch",           O),
-	("Token_*",              O),
-	("TokenMatch_*",         O),
-	("Group*",               O),
-	("Rule*",                O),
-	("Procedure*",           O),
-	("Condition*",           O),
-	("Grammar*",             O),
+	("ConditionCallback",      None),
+	("ProcedureCallback",      None),
+	("ContextCallback",        None),
+	("ElementWalkingCallback", None),
+	("MatchWalkingCallback",   None),
+	("Element*",               O),
+	("Reference*",             O),
+	("Match*",                 O),
+	("Iterator*",              O),
+	("ParsingContext*",        O),
+	("ParsingElement*",        O),
+	("ParsingResult*",         O),
+	("ParsingStats*",          O),
+	("Word*" ,                 O),
+	("Token",                  O),
+	("TokenMatch",             O),
+	("Token_*",                O),
+	("TokenMatch_*",           O),
+	("Group*",                 O),
+	("Rule*",                  O),
+	("Procedure*",             O),
+	("Condition*",             O),
+	("Grammar*",               O),
 )
 cdef = "\n".join(_ for _ in cdef.split("\n") if _.strip())
 

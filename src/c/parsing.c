@@ -12,7 +12,7 @@
 #include "gc.h"
 #include "oo.h"
 
-#define MATCH_STATS(m) ParsingContext_registerMatch(context, this, m)
+#define MATCH_STATS(m) ParsingContext_registerMatch(context, (Element*)this, m)
 #define ANONYMOUS      "unnamed"
 
 // SEE: https://en.wikipedia.org/wiki/C_data_types
@@ -465,7 +465,7 @@ void Grammar_free(Grammar* this) {
 //
 // ----------------------------------------------------------------------------
 
-Match* Match_Success(size_t length, Element* element, ParsingContext* context) {
+Match* Match__Success(size_t length, Element* element, ParsingContext* context) {
 	NEW(Match,this);
 	assert( element != NULL );
 	this->status   = STATUS_MATCHED;
@@ -473,12 +473,20 @@ Match* Match_Success(size_t length, Element* element, ParsingContext* context) {
 	this->length   = length;
 	// FIXME: This should be the original line offset
 	this->line     = context->iterator->lines;
-	this->element  = element;
+	this->element  = (Element*)element;
 	this->data     = NULL;
 	this->next     = NULL;
 	this->children = NULL;
 	this->parent   = NULL;
 	return this;
+}
+
+Match* Match_Success(size_t length, ParsingElement* element, ParsingContext* context) {
+	return Match__Success(length, (Element*)element, context);
+}
+
+Match* Match_SuccessFromReference(size_t length, Reference* element, ParsingContext* context) {
+	return Match__Success(length, (Element*)element, context);
 }
 
 Match* Match_new(void) {
@@ -500,22 +508,37 @@ Match* Match_new(void) {
 // TODO: We might want to recycle the objects for better performance and
 // fewer allocs.
 void Match_free(Match* this) {
+	printf("Match_free\n");
 	if (this!=NULL && this!=FAILURE) {
 		TRACE("Match_free(%c:%d@%s,%lu-%lu)", ((ParsingElement*)this->element)->type, ((ParsingElement*)this->element)->id, ((ParsingElement*)this->element)->name, this->offset, this->offset + this->length)
+
 		// We free the children
 		assert(this->children != this);
 		Match_free(this->children);
+
 		// We free the next one
 		assert(this->next != this);
 		Match_free(this->next);
+
 		// If the match is from a parsing element
 		if (ParsingElement_Is(this->element)) {
+			printf("Match_free: From ELEMENT\n");
 			ParsingElement* element = ((ParsingElement*)this->element);
+			assert(ParsingElement_Is(this->element));
 			// and the parsing element declared a free match function, we
 			// apply it.
 			if (element->freeMatch) {
 				element->freeMatch(this);
 			}
+		} else {
+			assert(Reference_Is(this->element));
+			printf("Match_free: From REFERENCE:%d\n", this->element->id);
+			ParsingElement* element = ((Reference*)this->element)->element;
+			assert(ParsingElement_Is(this->element));
+			if (element->freeMatch) {
+				element->freeMatch(this);
+			}
+
 		}
 		// We deallocate this one
 		__FREE(this);
@@ -528,7 +551,7 @@ int Match_getElementID(Match* this) {
 	if (((ParsingElement*)this->element)->type == TYPE_REFERENCE) {
 		return ((Reference*)this->element)->id;
 	} else {
-		ParsingElement* element = (this->element);
+		ParsingElement* element = ParsingElement_Ensure(this->element);
 		return element->id;
 	}
 }
@@ -538,7 +561,7 @@ char Match_getElementType(Match* this) {
 	if (((ParsingElement*)this->element)->type == TYPE_REFERENCE) {
 		return ((Reference*)this->element)->type;
 	} else {
-		ParsingElement* element = (this->element);
+		ParsingElement* element = ParsingElement_Ensure(this->element);
 		return element->type;
 	}
 }
@@ -548,7 +571,7 @@ const char* Match_getElementName(Match* this) {
 	if (((ParsingElement*)this->element)->type == TYPE_REFERENCE) {
 		return ((Reference*)this->element)->name;
 	} else {
-		ParsingElement* element = (this->element);
+		ParsingElement* element = ParsingElement_Ensure(this->element);
 		return element->name;
 	}
 }
@@ -572,7 +595,7 @@ bool Match_isSuccess(Match* this) {
 	return (this != NULL && this != FAILURE && this->status == STATUS_MATCHED);
 }
 
-int Match__walk(Match* this, WalkingCallback callback, int step, void* context ){
+int Match__walk(Match* this, MatchWalkingCallback callback, int step, void* context ){
 	step = callback(this, step, context);
 	if (this->children != NULL && step >= 0) {
 		step = Match__walk(this->children, callback, step + 1, context);
@@ -600,7 +623,7 @@ Match* Match_getChildren(Match* this) {
 	return this != NULL ? this->children : NULL;
 }
 
-int Match__walkCounter (Element* this, int step, void* context) {
+int Match__walkCounter (Match* this, int step, void* context) {
 	return step;
 }
 
@@ -857,7 +880,11 @@ const char* ParsingElement_getName( ParsingElement* this ) {
 	return this == NULL ? NULL : (const char*)this->name;
 }
 
-int ParsingElement__walk( ParsingElement* this, WalkingCallback callback, int step, void* context ) {
+int ParsingElement_walk( ParsingElement* this, ElementWalkingCallback callback, void* context ) {
+	return ParsingElement__walk(this, callback, 0, context);
+}
+
+int ParsingElement__walk( ParsingElement* this, ElementWalkingCallback callback, int step, void* context ) {
 	TRACE("ParsingElement__walk: %4d %c %-20s [%4d]", this->id, this->type, this->name, step);
 	int i = step;
 	step  = callback((Element*)this, step, context);
@@ -881,11 +908,11 @@ int ParsingElement__walk( ParsingElement* this, WalkingCallback callback, int st
 //
 // ----------------------------------------------------------------------------
 
-int Element_walk( Element* this, WalkingCallback callback, void* context ) {
+int Element_walk( Element* this, ElementWalkingCallback callback, void* context ) {
 	return Element__walk(this, callback, 0, context);
 }
 
-int Element__walk( Element* this, WalkingCallback callback, int step, void* context ) {
+int Element__walk( Element* this, ElementWalkingCallback callback, int step, void* context ) {
 	assert (callback != NULL);
 	TRACE("Element__walk     = %4d", step);
 	if (this!=NULL) {
@@ -894,8 +921,7 @@ int Element__walk( Element* this, WalkingCallback callback, int step, void* cont
 		} else if (ParsingElement_Is(this)) {
 			step = ParsingElement__walk((ParsingElement*)this, callback, step, context);
 		} else {
-			// If it is neither a reference or parsing element, it is a Match
-			step = Match__walk((Match*)this, callback, step, context);
+			assert(FALSE);
 		}
 	}
 	return step;
@@ -979,7 +1005,7 @@ Reference* Reference_name(Reference* this, const char* name) {
 	return this;
 }
 
-int Reference__walk( Reference* this, WalkingCallback callback, int step, void* context ) {
+int Reference__walk( Reference* this, ElementWalkingCallback callback, int step, void* context ) {
 	TRACE("Reference__walk     : %4d %c %-20s [%4d]", this->id, this->type, this->name, step);
 	step = callback((Element*)this, step, context);
 	if (step >= 0) {
@@ -1021,7 +1047,7 @@ Match* Reference_recognize(Reference* this, ParsingContext* context) {
 
 		// We ask the element to recognize the current iterator's position
 		int iteration_offset = context->iterator->offset;
-		Match* match = this->element->recognize(this->element, context);
+		Match* match         = this->element->recognize(this->element, context);
 		int parsed           = context->iterator->offset - iteration_offset;
 
 		// Is the match successful ?
@@ -1107,7 +1133,7 @@ Match* Reference_recognize(Reference* this, ParsingContext* context) {
 		// the children) will match the cardinality and will contain parsing
 		// element matches.
 		int    length   = context->iterator->offset - offset;
-		Match* m        = Match_Success(length, (ParsingElement*)this, context);
+		Match* m        = Match_SuccessFromReference(length, this, context);
 		// We make sure that if we had a success, that we add
 		m->children     = result == FAILURE ? NULL : result;
 		m->offset       = offset;
@@ -1234,7 +1260,7 @@ void Token_free(ParsingElement* this) {
 	if (config != NULL) {
 		// FIXME: Not sure how to free a regexp
 #ifdef WITH_PCRE
-		if (config->regexp != NULL) {}
+		if (config->regexp != NULL) {pcre_free(config->regexp);}
 		if (config->extra  != NULL) {pcre_free_study(config->extra);}
 #endif
 		__FREE(config->expr);
@@ -2047,32 +2073,32 @@ void Grammar_prepare ( Grammar* this ) {
 		assert(this->elements == NULL);
 
 		TRACE("Grammar_prepare: resetting element IDs %c", ' ')
-		Element_walk(this->axiom, Grammar__resetElementIDs, NULL);
+		ParsingElement_walk(this->axiom, Grammar__resetElementIDs, NULL);
 		if (this->skip != NULL) {
-			Element_walk(this->skip, Grammar__resetElementIDs, NULL);
+			ParsingElement_walk(this->skip, Grammar__resetElementIDs, NULL);
 		}
 
 		TRACE("Grammar_prepare: assigning new element IDs %c", ' ')
-		int count = Element_walk(this->axiom, Grammar__assignElementIDs, NULL);
+		int count = ParsingElement_walk(this->axiom, Grammar__assignElementIDs, NULL);
 		this->axiomCount = count;
 		if (this->skip != NULL) {
-			this->skipCount = Element__walk(this->skip, Grammar__assignElementIDs, count + 1, NULL) - count;
+			this->skipCount = ParsingElement__walk(this->skip, Grammar__assignElementIDs, count + 1, NULL) - count;
 		}
 
 		// Now we register the elements
 		__ARRAY_NEW(elements, Element*, this->skipCount + this->axiomCount + 1);
 		this->elements = elements;
 
-		count = Element_walk(this->axiom, Grammar__registerElement, this);
+		count = ParsingElement_walk(this->axiom, Grammar__registerElement, this);
 		if (this->skip != NULL) {
-			Element__walk(this->skip, Grammar__registerElement, count, this);
+			ParsingElement__walk(this->skip, Grammar__registerElement, count, this);
 		}
 
 		#ifdef WITH_TRACE
 		int j = this->skipCount + this->axiomCount + 1;
 		TRACE("Grammar_prepare:  skip=%d + axiom=%d = total=%d symbols", this->skipCount, this->axiomCount, j);
 		for (int i=0 ; i < j ; i++) {
-			ParsingElement* element = this->elements[i];
+			Element* element = this->elements[i];
 			if (element == NULL) {
 			} else if (element->type == TYPE_REFERENCE) {
 				TRACE("Grammar_prepare:  Reference    %4d %c %-20s [%4d/%4d]", element->id, element->type, element->name, i, j - 1);

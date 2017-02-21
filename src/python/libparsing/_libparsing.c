@@ -107,7 +107,15 @@ typedef struct ParsingElement ParsingElement;
 typedef struct ParsingResult ParsingResult;
 typedef struct Reference Reference;
 typedef struct Match Match;
-typedef void Element;
+typedef struct Element Element;
+
+
+typedef struct Element {
+ char type;
+ int id;
+} Element;
+
+
 typedef struct Grammar {
  ParsingElement* axiom;
  ParsingElement* skip;
@@ -1220,22 +1228,37 @@ Match* Match_new(void) {
 
 
 void Match_free(Match* this) {
+ printf("Match_free\n");
  if (this!=NULL && this!=FAILURE) {
   fprintf(stderr, "--- ");fprintf(stderr, "Match_free(%c:%d@%s,%lu-%lu)", ((ParsingElement*)this->element)->type, ((ParsingElement*)this->element)->id, ((ParsingElement*)this->element)->name, this->offset, this->offset + this->length);fprintf(stderr, "\n");
+
 
   assert(this->children != this);
   Match_free(this->children);
 
+
   assert(this->next != this);
   Match_free(this->next);
 
+
   if (ParsingElement_Is(this->element)) {
+   printf("Match_free: From ELEMENT\n");
    ParsingElement* element = ((ParsingElement*)this->element);
+   assert(ParsingElement_Is(this->element));
 
 
    if (element->freeMatch) {
     element->freeMatch(this);
    }
+  } else {
+   assert(Reference_Is(this->element));
+   printf("Match_free: From REFERENCE:%d\n", this->element->id);
+   ParsingElement* element = ((Reference*)this->element)->element;
+   assert(ParsingElement_Is(this->element));
+   if (element->freeMatch) {
+    element->freeMatch(this);
+   }
+
   }
 
   if (this!=NULL) {; gc_free(this); } ;
@@ -1966,7 +1989,7 @@ void Token_free(ParsingElement* this) {
  if (config != NULL) {
 
 
-  if (config->regexp != NULL) {}
+  if (config->regexp != NULL) {pcre_free(config->regexp);}
   if (config->extra != NULL) {pcre_free_study(config->extra);}
 
   if (config->expr!=NULL) {; gc_free(config->expr); } ;
