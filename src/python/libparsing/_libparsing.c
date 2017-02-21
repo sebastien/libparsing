@@ -1794,6 +1794,8 @@ Match* Reference_recognize(Reference* this, ParsingContext* context) {
    if (count == 0) {
 
 
+    assert(result == FAILURE);
+    assert(tail == NULL);
     result = match;
     tail = match;
     if (parsed == 0 || this->cardinality == '1' || this->cardinality == '?') {
@@ -1805,6 +1807,7 @@ Match* Reference_recognize(Reference* this, ParsingContext* context) {
    } else {
 
 
+    assert(result);
     tail->next = match;
     tail = match;
     if (parsed == 0) {
@@ -1814,6 +1817,8 @@ Match* Reference_recognize(Reference* this, ParsingContext* context) {
    count++;
 
   } else {
+
+   Match_free(match);
 
 
    size_t skipped = ParsingElement_skip((ParsingElement*)this, context);
@@ -1860,6 +1865,7 @@ _Bool
   default:
 
    fprintf(stderr, "ERR ");fprintf(stderr, "Unsupported cardinality %c", this->cardinality);fprintf(stderr, "\n");;
+   Match_free(result);
    return ParsingContext_registerMatch(context, (Element*)this, FAILURE);
  }
 
@@ -1880,6 +1886,7 @@ _Bool
   return ParsingContext_registerMatch(context, (Element*)this, m);
  } else {
 
+  Match_free(result);
   return ParsingContext_registerMatch(context, (Element*)this, FAILURE);
  }
 }
@@ -2167,11 +2174,11 @@ Match* Group_recognize(ParsingElement* this, ParsingContext* context){
   match = Reference_recognize(child, context);
   if (Match_isSuccess(match)) {
 
+   assert(result == NULL);
    result = Match_Success(match->length, this, context);
    result->offset = iteration_offset;
    result->children = match;
    child = NULL;
-   break;
   } else {
 
    Match_free(match); match = NULL;
@@ -2187,6 +2194,7 @@ Match* Group_recognize(ParsingElement* this, ParsingContext* context){
  } else {
 
   if(context->grammar->isVerbose && !(context->flags & 1)){fprintf(stdout, " !  %s╘═⇒ Group " "\033[1m\033[31m" "%s" "\033[0m" "#%d[%d] failed at %zu:%zu-%zu[→%d]", context->indent, this->name, this->id, step, context->iterator->lines, context->iterator->offset, offset, context->depth);fprintf(stdout, "\n");;}
+  Match_free(result);
   if (context->iterator->offset != offset ) {
    Iterator_backtrack(context->iterator, offset, lines);
    assert( context->iterator->offset == offset );
@@ -2239,6 +2247,7 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 
   if (!Match_isSuccess(match)) {
 
+
    Match_free(match); match = NULL;
    size_t skipped = ParsingElement_skip(this, context);
 
@@ -2263,6 +2272,10 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
     }
 
    } else {
+
+
+    Match_free(result);
+    Match_free(match);
     result = FAILURE;
     break;
    }
@@ -2271,12 +2284,14 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 
   assert(Match_isSuccess(match));
   if (last == NULL) {
+   assert(result == FAILURE);
 
 
    result = Match_Success(0, this, context);
    result->offset = offset;
    result->children = last = match;
   } else {
+   assert(last->next == NULL);
    last = last->next = match;
   }
 
@@ -2301,6 +2316,8 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
  } else {
   if(context->grammar->isVerbose && !(context->flags & 1)){fprintf(stdout, " !  %s╘ Rule " "\033[1m\033[31m" "%s" "\033[0m" "#%d failed on step %d=%s at %zu:%zu-%zu[→%d]", context->indent, this->name, this->id, step, step_name == NULL ? "-" : step_name, context->iterator->lines, offset, context->iterator->offset, context->depth);fprintf(stdout, "\n");;}
 
+  Match_free(result);
+  result = FAILURE;
 
   if (offset != context->iterator->offset) {
    Iterator_backtrack(context->iterator, offset, lines);

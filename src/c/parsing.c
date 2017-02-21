@@ -1080,6 +1080,8 @@ Match* Reference_recognize(Reference* this, ParsingContext* context) {
 			if (count == 0) {
 				// If it's the first match and we're in a ONE/OPTIONAL reference, we break
 				// the loop.
+				assert(result == FAILURE);
+				assert(tail   == NULL);
 				result = match;
 				tail   = match;
 				if (parsed == 0 || this->cardinality == CARDINALITY_ONE || this->cardinality == CARDINALITY_OPTIONAL) {
@@ -1091,6 +1093,7 @@ Match* Reference_recognize(Reference* this, ParsingContext* context) {
 			} else {
 				// If we're already had a match we append the tail and update
 				// the tail to be the current match
+				assert(result);
 				tail->next = match;
 				tail       = match;
 				if (parsed == 0) {
@@ -1100,6 +1103,8 @@ Match* Reference_recognize(Reference* this, ParsingContext* context) {
 			count++;
 		// or is it not successful?
 		} else {
+			// We free the match (it's a FAILURE or NULL, anyway).
+			Match_free(match);
 			// If the match is not a success, then we try to skip some input
 			// and see if we get a match.
 			size_t skipped = ParsingElement_skip((ParsingElement*)this, context);
@@ -1144,6 +1149,7 @@ Match* Reference_recognize(Reference* this, ParsingContext* context) {
 		default:
 			// Unsuported cardinality
 			ERROR("Unsupported cardinality %c", this->cardinality);
+			Match_free(result);
 			return MATCH_STATS(FAILURE);
 	}
 
@@ -1164,6 +1170,7 @@ Match* Reference_recognize(Reference* this, ParsingContext* context) {
 		return MATCH_STATS(m);
 	} else {
 		//OUT_IF(context->grammar->isVerbose, " !  %sReference %s#%d@%s failed %d/%c times at %d-%d", context->indent, this->element->name, this->element->id, this->name, count, this->cardinality, offset, (int)context->stats->matchOffset);
+		Match_free(result);
 		return MATCH_STATS(FAILURE);
 	}
 }
@@ -1451,11 +1458,11 @@ Match* Group_recognize(ParsingElement* this, ParsingContext* context){
 		match = Reference_recognize(child, context);
 		if (Match_isSuccess(match)) {
 			// The first succeeding child wins
+			assert(result == NULL);
 			result           = Match_Success(match->length, this, context);
 			result->offset   = iteration_offset;
 			result->children = match;
 			child            = NULL;
-			break;
 		} else {
 			// Otherwise we try the next child
 			Match_free(match); match = NULL;
@@ -1471,6 +1478,7 @@ Match* Group_recognize(ParsingElement* this, ParsingContext* context){
 	} else {
 		// If no child has succeeded, the whole group fails
 		OUT_STEP(" !  %s╘═⇒ Group " BOLDRED "%s" RESET "#%d[%d] failed at %zu:%zu-%zu[→%d]", context->indent, this->name, this->id, step, context->iterator->lines, context->iterator->offset, offset, context->depth)
+		Match_free(result);
 		if (context->iterator->offset != offset ) {
 			Iterator_backtrack(context->iterator, offset, lines);
 			assert( context->iterator->offset == offset );
@@ -1531,6 +1539,7 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 		// and try the match again.
 		if (!Match_isSuccess(match)) {
 
+			// For safety, we free the failure
 			Match_free(match); match = NULL;
 			size_t skipped = ParsingElement_skip(this, context);
 
@@ -1555,6 +1564,10 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 				}
 			// If we didn't skip, then we fail the rule
 			} else {
+				// We free the result, which might not be a failure
+				// if we had a partial rule match.
+				Match_free(result);
+				Match_free(match);
 				result = FAILURE;
 				break;
 			}
@@ -1563,12 +1576,14 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 		// So we had a match
 		assert(Match_isSuccess(match));
 		if (last == NULL) {
+			assert(result == FAILURE);
 			// If this is the first child (ie. last == NULL), we create
 			// a new match success at the original parsing offset.
 			result           = Match_Success(0, this, context);
 			result->offset   = offset;
 			result->children = last = match;
 		} else {
+			assert(last->next == NULL);
 			last = last->next = match;
 		}
 
@@ -1593,6 +1608,8 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 	} else {
 		OUT_STEP(" !  %s╘ Rule " BOLDRED "%s" RESET "#%d failed on step %d=%s at %zu:%zu-%zu[→%d]",
 				context->indent, this->name, this->id, step, step_name == NULL ? "-" : step_name, context->iterator->lines, offset, context->iterator->offset, context->depth)
+		Match_free(result);
+		result = FAILURE;
 		// If we had a failure, then we backtrack the iterator
 		if (offset != context->iterator->offset) {
 			Iterator_backtrack(context->iterator, offset, lines);

@@ -18,22 +18,31 @@ Grammar* createGrammar(char* type) {
 	if ( strcmp(type, "word") == 0 ) {
 		SYMBOL (WORD_A, WORD("a"));
 		AXIOM(WORD_A);
+
 	} else if (strcmp(type, "token") == 0) {
 		SYMBOL (TOKEN_A, TOKEN("a"));
 		AXIOM(TOKEN_A);
+
+	} else if (strcmp(type, "ref") == 0) {
+		SYMBOL (TOKEN_A, TOKEN("a"));
+		SYMBOL (GROUP_A, GROUP(_S(TOKEN_A)));
+		AXIOM(GROUP_A);
 
 	} else if (strcmp(type, "rule") == 0) {
 		SYMBOL (TOKEN_A, TOKEN("a"));
 		SYMBOL (RULE_A, RULE(_S(TOKEN_A)));
 		AXIOM(RULE_A);
+
 	} else if (strcmp(type, "rule01") == 0) {
 		SYMBOL (TOKEN_A, TOKEN("a"));
 		SYMBOL (RULE_A, RULE(OPTIONAL(_S(TOKEN_A))));
 		AXIOM(RULE_A);
+
 	} else if (strcmp(type, "rule0N") == 0) {
 		SYMBOL (TOKEN_A, TOKEN("a"));
 		SYMBOL (RULE_A, RULE(MANY_OPTIONAL(_S(TOKEN_A))));
 		AXIOM(RULE_A);
+
 	} else if (strcmp(type, "rule1N") == 0) {
 		SYMBOL (TOKEN_A, TOKEN("a"));
 		SYMBOL (RULE_A, RULE(MANY(_S(TOKEN_A))));
@@ -43,18 +52,22 @@ Grammar* createGrammar(char* type) {
 		SYMBOL (TOKEN_A, TOKEN("a"));
 		SYMBOL (GROUP_A, GROUP(_S(TOKEN_A)));
 		AXIOM(GROUP_A);
+
 	} else if (strcmp(type, "group01") == 0) {
 		SYMBOL (TOKEN_A, TOKEN("a"));
 		SYMBOL (GROUP_A, GROUP(OPTIONAL(_S(TOKEN_A))));
 		AXIOM(GROUP_A);
+
 	} else if (strcmp(type, "group0N") == 0) {
 		SYMBOL (TOKEN_A, TOKEN("a"));
 		SYMBOL (GROUP_A, GROUP(MANY_OPTIONAL(_S(TOKEN_A))));
 		AXIOM(GROUP_A);
+
 	} else if (strcmp(type, "group1N") == 0) {
 		SYMBOL (TOKEN_A, TOKEN("a"));
 		SYMBOL (GROUP_A, GROUP(MANY(_S(TOKEN_A))));
 		AXIOM(GROUP_A);
+
 	} else {
 		Grammar_free(g);
 		g = NULL;
@@ -76,21 +89,28 @@ const char* getText( char* type ) {
 	}
 }
 
+
 int main (int argc, char** argv) {
 	const char* all[] = {
-		"word", "token", "rule", "group",
+		NULL,
+		"word", "token", "rule", "group", "ref",
 		"rule01",  "rule0N",  "rule1N",
 		"group01", "group0N", "group1N"
 	};
-	for (int i=1 ; i<argc ; i++) {
-		char* type = argv[i];
-		Grammar* g    = createGrammar(type);
+
+	const char** types = argc > 1 ? argv : all;
+	int   count        = argc > 1 ? argc : 10;
+
+	for (int i=1 ; i<count ; i++) {
+		char* type    = types[i];
 		const char* s = getText(type);
-		printf("Parsing type '%s':'%s'\n", type, type);
+		Grammar* g    = createGrammar(type);
+		Grammar_setVerbose(g);
+		printf("Parsing type %d:'%s'\n", i, type);
 		if (g != NULL ) {
-			// ParsingResult* r = Grammar_parseString(g, s);
-			// TEST_TRUE( ParsingResult_isSuccess(r) );
-			// ParsingResult_free(r);
+			ParsingResult* r = Grammar_parseString(g, s);
+			TEST_TRUE( ParsingResult_isSuccess(r) );
+			ParsingResult_free(r);
 			Grammar_free(g);
 		} else {
 			printf("[!] Unknown type: %s\n", s);
