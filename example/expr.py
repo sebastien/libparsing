@@ -52,6 +52,10 @@ if __name__ == "__main__":
 	g.prepare()
 	p      = Processor(g)
 	result = g.parseString(EXAMPLES[0])
+	print "XXX"
+	result.match.toJSON()
+	print "\nXXX"
+
 	print (p.process(result))
 
 # EOF

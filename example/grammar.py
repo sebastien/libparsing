@@ -1,3 +1,4 @@
+#encoding: utf8
 from libparsing import *
 
 __doc__ = """

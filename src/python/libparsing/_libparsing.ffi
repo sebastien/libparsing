@@ -65,6 +65,7 @@ int Match_getOffset(Match* this);
 int Match_getLength(Match* this);
 int Match_getEndOffset(Match* this);
 int Match_getElementID(Match* this);
+char Match_getType(Match* this);
 char Match_getElementType(Match* this);
 const char* Match_getElementName(Match* this);
 int Match__walk(Match* this, MatchWalkingCallback callback, int step, void* context );

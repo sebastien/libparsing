@@ -243,6 +243,9 @@ int Match_getEndOffset(Match* this);
 int Match_getElementID(Match* this);
 
 
+char Match_getType(Match* this);
+
+
 
 
 
@@ -1273,6 +1276,11 @@ int Match_getElementID(Match* this) {
  }
 }
 
+char Match_getType(Match* this) {
+ if (this == NULL || this->element == NULL) {return ' ';}
+ else {return this->element->type;}
+}
+
 char Match_getElementType(Match* this) {
  if (this == NULL || this->element == NULL) {return ' ';}
  if (((ParsingElement*)this->element)->type == '#') {
@@ -2113,7 +2121,7 @@ void TokenMatch_free(Match* match) {
  assert (match != NULL);
  assert (Match_getElementType(match) == 'T');
 
- ;
+ ;;
  if (match->data != NULL) {
   TokenMatch* m = (TokenMatch*)match->data;
   if (m != NULL ) {

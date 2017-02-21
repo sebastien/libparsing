@@ -526,7 +526,7 @@ Match* Match_new(void) {
 // fewer allocs.
 void Match_free(Match* this) {
 	if (this!=NULL && this!=FAILURE) {
-		TRACE("Match_free(%c:%d@%s,%lu-%lu)", ((ParsingElement*)this->element)->type, ((ParsingElement*)this->element)->id, ((ParsingElement*)this->element)->name, this->offset, this->offset + this->length)
+		TRACE("Match_free(%c:%d@%s,%lu-%lu):%p", ((ParsingElement*)this->element)->type, ((ParsingElement*)this->element)->id, ((ParsingElement*)this->element)->name, this->offset, this->offset + this->length, this)
 
 		// We free the children
 		assert(this->children != this);
@@ -570,6 +570,11 @@ int Match_getElementID(Match* this) {
 		ParsingElement* element = ParsingElement_Ensure(this->element);
 		return element->id;
 	}
+}
+
+char Match_getType(Match* this) {
+	if (this == NULL || this->element == NULL) {return ' ';}
+	else {return this->element->type;}
 }
 
 char Match_getElementType(Match* this) {
@@ -1400,7 +1405,7 @@ void TokenMatch_free(Match* match) {
 	assert (match                != NULL);
 	assert (Match_getElementType(match) == TYPE_TOKEN);
 #ifdef WITH_PCRE
-	TRACE("TokenMatch_free: %p", match)
+	TRACE("TokenMatch_free: %p, match->data=%p", match, match->data);
 	if (match->data != NULL) {
 		TokenMatch* m = (TokenMatch*)match->data;
 		if (m != NULL ) {

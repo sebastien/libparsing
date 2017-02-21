@@ -514,7 +514,7 @@ class Reference(CObject):
 class Match(CObject):
 
 	_TYPE       = ffi.typeof("Match*")
-	_RECYCLABLE = True
+	_RECYCLABLE = False
 
 	@classmethod
 	def Wrap( cls, cobject ):
@@ -542,7 +542,7 @@ class Match(CObject):
 
 	@property
 	def type( self ):
-		return lib.Match_getElementType(self._cobject)
+		return lib.Match_getType(self._cobject)
 
 	@property
 	def name( self ):
@@ -898,7 +898,7 @@ class ParsingResult(CObject):
 		super(ParsingResult, self).__del__()
 		# The parsing result is the only one we really need to free
 		# along with the grammar
-		lib.ParsingResult_free(self._cobject)
+		# lib.ParsingResult_free(self._cobject)
 
 # -----------------------------------------------------------------------------
 #
@@ -1153,7 +1153,7 @@ class Grammar(CObject):
 		super(Grammar, self).__del__()
 		# The parsing result is the only one we really need to free
 		# along with the grammar
-		lib.Grammar_free(self._cobject)
+		# lib.Grammar_free(self._cobject)
 
 
 # -----------------------------------------------------------------------------
@@ -1310,7 +1310,7 @@ class Processor:
 			return res
 
 	def _processWord( self, match ):
-		return ensure_string(ffi.string(lib.Word_word(match.element)))
+		return ensure_string(ffi.string(lib.WordMatch_group(match._cobject)))
 
 	def _processToken( self, match ):
 		n = lib.TokenMatch_count(match._cobject)
