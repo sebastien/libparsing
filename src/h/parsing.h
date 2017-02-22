@@ -5,12 +5,12 @@
 // License           : BSD License
 // ----------------------------------------------------------------------------
 // Creation date     : 12-Dec-2014
-// Last modification : 21-Nov-2016
+// Last modification : 22-Feb-2017
 // ----------------------------------------------------------------------------
 
 #ifndef __PARSING_H__
 #define __PARSING_H__
-#define __PARSING_VERSION__ "0.8.12"
+#define __PARSING_VERSION__ "0.9.0"
 #ifdef __cplusplus
 extern "C" {
 #endif
