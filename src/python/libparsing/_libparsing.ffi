@@ -55,7 +55,8 @@ typedef struct Match {
 Match* Match_Success(size_t length, ParsingElement* element, ParsingContext* context);
 Match* Match_SuccessFromReference(size_t length, Reference* element, ParsingContext* context);
 Match* Match_new(void);
-void Match_free(Match* this);
+void* Match_free(Match* this);
+void* Match_fail(Match* this);
 bool Match_isSuccess(Match* this);
 bool Match_hasNext(Match* this);
 Match* Match_getNext(Match* this);
@@ -102,7 +103,9 @@ typedef struct ParsingContext {
 	struct Iterator*        iterator;     // Iterator on the input data
 	struct ParsingStats*    stats;
 	struct ParsingVariable* variables;
-	struct Match*           lastMatch;    // The last deepest successful match, useful for displaying error
+	size_t                  lastMatchOffset;    // The last deepest successful match, useful for displaying error
+	size_t                  lastMatchLength;    // The last deepest successful match, useful for displaying error
+	int                     lastMatchElementID; // The last deepest successful match, useful for displaying error
 	ContextCallback         callback;
 	int                     depth;
 	const char*             indent;

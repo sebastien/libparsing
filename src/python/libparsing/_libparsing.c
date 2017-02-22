@@ -207,7 +207,10 @@ Match* Match_new(void);
 
 
 
-void Match_free(Match* this);
+void* Match_free(Match* this);
+
+
+void* Match_fail(Match* this);
 
 
 
@@ -558,7 +561,9 @@ typedef struct ParsingContext {
  struct Iterator* iterator;
  struct ParsingStats* stats;
  struct ParsingVariable* variables;
- struct Match* lastMatch;
+ size_t lastMatchOffset;
+ size_t lastMatchLength;
+ int lastMatchElementID;
  ContextCallback callback;
  int depth;
  const char* indent;
@@ -1228,7 +1233,7 @@ Match* Match_new(void) {
 
 
 
-void Match_free(Match* this) {
+void* Match_free(Match* this) {
  if (this!=NULL && this!=FAILURE) {
   ;
 
@@ -1263,8 +1268,14 @@ void Match_free(Match* this) {
 
   if (this!=NULL) {; gc_free(this); } ;
  }
+ return NULL;
 }
 
+
+void* Match_fail( Match* this ) {
+ Match_free(this);
+ return FAILURE;
+}
 
 int Match_getElementID(Match* this) {
  if (this == NULL || this->element == NULL) {return -1;}
@@ -1586,7 +1597,7 @@ size_t ParsingElement_skip( ParsingElement* this, ParsingContext* context) {
  size_t offset = context->iterator->offset;
 
  Match* match = skip->recognize(skip, context);
- Match_free(match);
+ match = Match_free(match);
  size_t skipped = context->iterator->offset - offset;
  if (skipped > 0) {
   if(context->grammar->isVerbose){fprintf(stdout, " %s   ►►►skipped %zu", context->indent, skipped);fprintf(stdout, "\n");;}
@@ -1818,7 +1829,7 @@ Match* Reference_recognize(Reference* this, ParsingContext* context) {
 
   } else {
 
-   Match_free(match);
+   match = Match_free(match);
 
 
    size_t skipped = ParsingElement_skip((ParsingElement*)this, context);
@@ -1865,8 +1876,8 @@ _Bool
   default:
 
    fprintf(stderr, "ERR ");fprintf(stderr, "Unsupported cardinality %c", this->cardinality);fprintf(stderr, "\n");;
-   Match_free(result);
-   return ParsingContext_registerMatch(context, (Element*)this, FAILURE);
+   result = Match_fail(result);
+   return ParsingContext_registerMatch(context, (Element*)this, result);
  }
 
 
@@ -1886,7 +1897,7 @@ _Bool
   return ParsingContext_registerMatch(context, (Element*)this, m);
  } else {
 
-  Match_free(result);
+  result = Match_fail(result);
   return ParsingContext_registerMatch(context, (Element*)this, FAILURE);
  }
 }
@@ -2170,12 +2181,10 @@ Match* Group_recognize(ParsingElement* this, ParsingContext* context){
  Reference* child = this->children;
  Match* match = NULL;
  step = 0;
- while (child != NULL ) {
 
-  int _flags = context->flags;;
-  context->flags=context->flags|0x2;;
+ while (child != NULL ) {
+  assert (match == NULL);
   match = Reference_recognize(child, context);
-  context->flags = _flags;;
 
   if (Match_isSuccess(match)) {
 
@@ -2186,7 +2195,7 @@ Match* Group_recognize(ParsingElement* this, ParsingContext* context){
    child = NULL;
   } else {
 
-   Match_free(match); match = NULL;
+   match = Match_free(match);
    child = child->next;
    step += 1;
   }
@@ -2199,7 +2208,7 @@ Match* Group_recognize(ParsingElement* this, ParsingContext* context){
  } else {
 
   if(context->grammar->isVerbose && !(context->flags & 0x1)){fprintf(stdout, " !  %s╘═⇒ Group " "\033[1m\033[31m" "%s" "\033[0m" "#%d[%d] failed at %zu:%zu-%zu[→%d]", context->indent, this->name, this->id, step, context->iterator->lines, context->iterator->offset, offset, context->depth);fprintf(stdout, "\n");;}
-  Match_free(result);
+  result = Match_fail(result);
   if (context->iterator->offset != offset ) {
    Iterator_backtrack(context->iterator, offset, lines);
    assert( context->iterator->offset == offset );
@@ -2245,18 +2254,14 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 
 
 
-
-  int _flags = context->flags;;
-  context->flags=context->flags|0x2;;
   Match* match = Reference_recognize(child, context);
-  context->flags = _flags;;
 
 
 
   if (!Match_isSuccess(match)) {
 
 
-   Match_free(match); match = NULL;
+   match = Match_free(match);
    size_t skipped = ParsingElement_skip(this, context);
 
 
@@ -2265,16 +2270,13 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 
 
 
-    int _flags = context->flags;;
-    context->flags=context->flags|0x2;;
     match = Reference_recognize(child, context);
-    context->flags = _flags;;
 
 
     if (!Match_isSuccess(match)) {
 
-     Match_free(match); match = NULL;
-     result = FAILURE;
+     match = Match_free(match);
+     result = Match_fail(result);
 
 
 
@@ -2285,9 +2287,8 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
    } else {
 
 
-    Match_free(result);
-    Match_free(match);
-    result = FAILURE;
+    match = Match_free(match);
+    result = Match_fail(result);
     break;
    }
   }
@@ -2298,7 +2299,9 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
    assert(result == FAILURE);
 
 
-   result = Match_Success(0, this, context);
+
+
+   result = Match_Success(match->length, this, context);
    result->offset = offset;
    result->children = last = match;
   } else {
@@ -2327,8 +2330,7 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
  } else {
   if(context->grammar->isVerbose && !(context->flags & 0x1)){fprintf(stdout, " !  %s╘ Rule " "\033[1m\033[31m" "%s" "\033[0m" "#%d failed on step %d=%s at %zu:%zu-%zu[→%d]", context->indent, this->name, this->id, step, step_name == NULL ? "-" : step_name, context->iterator->lines, offset, context->iterator->offset, context->depth);fprintf(stdout, "\n");;}
 
-  Match_free(result);
-  result = FAILURE;
+  result = Match_fail(result);
 
   if (offset != context->iterator->offset) {
    Iterator_backtrack(context->iterator, offset, lines);
@@ -2523,7 +2525,9 @@ ParsingContext* ParsingContext_new( Grammar* g, Iterator* iterator ) {
  this->callback = NULL;
  this->indent = INDENT + (40 * 2);
  this->flags = 0;
- this->lastMatch = NULL;
+ this->lastMatchOffset = 0;
+ this->lastMatchLength = 0;
+ this->lastMatchElementID = -1;
  return this;
 }
 
@@ -2599,16 +2603,15 @@ size_t ParsingContext_getOffset(ParsingContext* this) {
 Match* ParsingContext_registerMatch(ParsingContext* this, Element* e, Match* m) {
 
  if ((this->flags & 0x1)) {return m;}
- if ((this->flags & 0x2)) {return m;}
  ParsingStats_registerMatch(this->stats, e, m);
 
 
 
  if (m != NULL && Match_isSuccess(m)) {
-  if (this->lastMatch == NULL) {
-   this->lastMatch = m;
-  } else if ( (this->lastMatch->offset + this->lastMatch->length) < (m->offset + m->length) && m->length > 0) {
-   this->lastMatch = m;
+  if ( (this->lastMatchOffset + this->lastMatchLength) < (m->offset + m->length) && m->length > 0) {
+   this->lastMatchOffset = m->offset;
+   this->lastMatchLength = m->length;
+   this->lastMatchElementID = m->element->id;
   }
  }
  return m;
@@ -2713,7 +2716,7 @@ int ParsingResult_textOffset(ParsingResult* this) {
 
 void ParsingResult_free(ParsingResult* this) {
  if (this != NULL) {
-  Match_free(this->match);
+  this->match = Match_free(this->match);
   ParsingContext_free(this->context);
  }
  if (this!=NULL) {; gc_free(this); } ;

@@ -479,7 +479,10 @@ Match* Match_new(void);
 // Frees the given match. If the match is `FAILURE`, then it won't
 // be feed. This means that most of the times you won't need to free
 // a failed match, as it's likely to be the `FAILURE` singleton.
-void Match_free(Match* this);
+void* Match_free(Match* this);
+
+// @method
+void* Match_fail(Match* this);
 
 // @method
 bool Match_isSuccess(Match* this);
@@ -933,7 +936,9 @@ typedef struct ParsingContext {
 	struct Iterator*        iterator;     // Iterator on the input data
 	struct ParsingStats*    stats;
 	struct ParsingVariable* variables;
-	struct Match*           lastMatch;    // The last deepest successful match, useful for displaying error
+	size_t                  lastMatchOffset;    // The last deepest successful match, useful for displaying error
+	size_t                  lastMatchLength;    // The last deepest successful match, useful for displaying error
+	int                     lastMatchElementID; // The last deepest successful match, useful for displaying error
 	ContextCallback         callback;
 	int                     depth;
 	const char*             indent;

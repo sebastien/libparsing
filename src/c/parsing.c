@@ -524,7 +524,7 @@ Match* Match_new(void) {
 
 // TODO: We might want to recycle the objects for better performance and
 // fewer allocs.
-void Match_free(Match* this) {
+void* Match_free(Match* this) {
 	if (this!=NULL && this!=FAILURE) {
 		TRACE("Match_free(%c:%d@%s,%lu-%lu):%p", ((ParsingElement*)this->element)->type, ((ParsingElement*)this->element)->id, ((ParsingElement*)this->element)->name, this->offset, this->offset + this->length, this)
 
@@ -559,8 +559,14 @@ void Match_free(Match* this) {
 		// We deallocate this one
 		__FREE(this);
 	}
+	return NULL;
 }
 
+
+void* Match_fail( Match* this ) {
+	Match_free(this);
+	return FAILURE;
+}
 
 int Match_getElementID(Match* this) {
 	if (this == NULL || this->element == NULL) {return -1;}
@@ -882,7 +888,7 @@ size_t ParsingElement_skip( ParsingElement* this, ParsingContext* context) {
 	size_t offset        = context->iterator->offset;
 	// We don't care about the result, just the offset change.
 	Match* match = skip->recognize(skip, context);
-	Match_free(match);
+	match = Match_free(match);
 	size_t skipped = context->iterator->offset - offset;
 	if (skipped > 0) {
 		OUT_IF(context->grammar->isVerbose, " %s   ►►►skipped %zu", context->indent, skipped)
@@ -1104,7 +1110,7 @@ Match* Reference_recognize(Reference* this, ParsingContext* context) {
 		// or is it not successful?
 		} else {
 			// We free the match (it's a FAILURE or NULL, anyway).
-			Match_free(match);
+			match = Match_free(match);
 			// If the match is not a success, then we try to skip some input
 			// and see if we get a match.
 			size_t skipped = ParsingElement_skip((ParsingElement*)this, context);
@@ -1149,8 +1155,8 @@ Match* Reference_recognize(Reference* this, ParsingContext* context) {
 		default:
 			// Unsuported cardinality
 			ERROR("Unsupported cardinality %c", this->cardinality);
-			Match_free(result);
-			return MATCH_STATS(FAILURE);
+			result = Match_fail(result);
+			return MATCH_STATS(result);
 	}
 
 	// NOTE: We don't log refernence match, as they're duplicates of the actual
@@ -1170,7 +1176,7 @@ Match* Reference_recognize(Reference* this, ParsingContext* context) {
 		return MATCH_STATS(m);
 	} else {
 		//OUT_IF(context->grammar->isVerbose, " !  %sReference %s#%d@%s failed %d/%c times at %d-%d", context->indent, this->element->name, this->element->id, this->name, count, this->cardinality, offset, (int)context->stats->matchOffset);
-		Match_free(result);
+		result = Match_fail(result);
 		return MATCH_STATS(FAILURE);
 	}
 }
@@ -1454,12 +1460,10 @@ Match* Group_recognize(ParsingElement* this, ParsingContext* context){
 	Reference* child            = this->children;
 	Match*     match            = NULL;
 	step                        = 0;
-	while (child != NULL ) {
 
-		PUSH_FLAGS(context->flags);
-		SET_FLAG(context->flags,FLAG_NOSTAT);
+	while (child != NULL ) {
+		assert (match == NULL);
 		match = Reference_recognize(child, context);
-		POP_FLAGS(context->flags);
 
 		if (Match_isSuccess(match)) {
 			// The first succeeding child wins
@@ -1470,7 +1474,7 @@ Match* Group_recognize(ParsingElement* this, ParsingContext* context){
 			child            = NULL;
 		} else {
 			// Otherwise we try the next child
-			Match_free(match); match = NULL;
+			match = Match_free(match);
 			child  = child->next;
 			step  += 1;
 		}
@@ -1483,7 +1487,7 @@ Match* Group_recognize(ParsingElement* this, ParsingContext* context){
 	} else {
 		// If no child has succeeded, the whole group fails
 		OUT_STEP(" !  %s╘═⇒ Group " BOLDRED "%s" RESET "#%d[%d] failed at %zu:%zu-%zu[→%d]", context->indent, this->name, this->id, step, context->iterator->lines, context->iterator->offset, offset, context->depth)
-		Match_free(result);
+		result = Match_fail(result);
 		if (context->iterator->offset != offset ) {
 			Iterator_backtrack(context->iterator, offset, lines);
 			assert( context->iterator->offset == offset );
@@ -1535,20 +1539,16 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 			OUT_STEP(" ‥%s└─" BOLDYELLOW "%d" RESET, context->indent, step);
 		}
 
-
 		// We iterate over the children of the rule. We expect each child to
 		// match, and we might skip inbetween the children to find a match.
-		PUSH_FLAGS(context->flags);
-		SET_FLAG(context->flags, FLAG_NOSTAT);
 		Match* match = Reference_recognize(child, context);
-		POP_FLAGS(context->flags);
 
 		// If the match is not a success, we will try to skip some input
 		// and try the match again.
 		if (!Match_isSuccess(match)) {
 
 			// For safety, we free the failure
-			Match_free(match); match = NULL;
+			match = Match_free(match);
 			size_t skipped = ParsingElement_skip(this, context);
 
 			// If we've skipped at least one input element, then we can
@@ -1557,16 +1557,13 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 
 				// If the rule failed, we try to skip characters. We free any
 				// failure match, as we won't need it anymore.
-				PUSH_FLAGS(context->flags);
-				SET_FLAG(context->flags, FLAG_NOSTAT);
 				match = Reference_recognize(child, context);
-				POP_FLAGS(context->flags);
 
 				// If we haven't matched even after the skip, then we have a failure.
 				if (!Match_isSuccess(match)) {
 					// We free any failure match
-					Match_free(match); match = NULL;
-					result = FAILURE;
+					match  = Match_free(match);
+					result = Match_fail(result);
 					// NOTE: We don't need to backtrack here, as a failure will
 					// automatically backtrack to the start offset, so we
 					// don't have the problem of skipping eating input
@@ -1577,9 +1574,8 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 			} else {
 				// We free the result, which might not be a failure
 				// if we had a partial rule match.
-				Match_free(result);
-				Match_free(match);
-				result = FAILURE;
+				match  = Match_free(match);
+				result = Match_fail(result);
 				break;
 			}
 		}
@@ -1590,7 +1586,9 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 			assert(result == FAILURE);
 			// If this is the first child (ie. last == NULL), we create
 			// a new match success at the original parsing offset.
-			result           = Match_Success(0, this, context);
+			// NOTE: match->length used to be 0, but I can't figure out why,
+			// I think it was a bug, but am leaving a comment for reference.
+			result           = Match_Success(match->length, this, context);
 			result->offset   = offset;
 			result->children = last = match;
 		} else {
@@ -1619,8 +1617,7 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 	} else {
 		OUT_STEP(" !  %s╘ Rule " BOLDRED "%s" RESET "#%d failed on step %d=%s at %zu:%zu-%zu[→%d]",
 				context->indent, this->name, this->id, step, step_name == NULL ? "-" : step_name, context->iterator->lines, offset, context->iterator->offset, context->depth)
-		Match_free(result);
-		result = FAILURE;
+		result = Match_fail(result);
 		// If we had a failure, then we backtrack the iterator
 		if (offset != context->iterator->offset) {
 			Iterator_backtrack(context->iterator, offset, lines);
@@ -1809,7 +1806,9 @@ ParsingContext* ParsingContext_new( Grammar* g, Iterator* iterator ) {
 	this->callback  = NULL;
 	this->indent    = INDENT + (INDENT_MAX * INDENT_WIDTH);
 	this->flags     = 0;
-	this->lastMatch = NULL;
+	this->lastMatchOffset = 0;
+	this->lastMatchLength = 0;
+	this->lastMatchElementID = -1;
 	return this;
 }
 
@@ -1885,16 +1884,15 @@ size_t ParsingContext_getOffset(ParsingContext* this) {
 Match* ParsingContext_registerMatch(ParsingContext* this, Element* e, Match* m) {
 	// We don't register skipping matches, as they'll be discarded right away
 	if (HAS_FLAG(this->flags, FLAG_SKIPPING)) {return m;}
-	if (HAS_FLAG(this->flags, FLAG_NOSTAT))   {return m;}
 	ParsingStats_registerMatch(this->stats, e, m);
 	// NOTE: We make sure to only register the deepest match, as the grammar
 	// is likely to backtack and yield a partial match, erasing where the error
 	// actually lies. We skip empty matches.
 	if (m != NULL && Match_isSuccess(m)) {
-		if (this->lastMatch == NULL) {
-			this->lastMatch = m;
-		} else if ( (this->lastMatch->offset + this->lastMatch->length) < (m->offset + m->length) && m->length > 0) {
-			this->lastMatch = m;
+		if ( (this->lastMatchOffset + this->lastMatchLength) < (m->offset + m->length) && m->length > 0) {
+			this->lastMatchOffset    = m->offset;
+			this->lastMatchLength    = m->length;
+			this->lastMatchElementID = m->element->id;
 		}
 	}
 	return m;
@@ -2011,7 +2009,7 @@ int ParsingResult_textOffset(ParsingResult* this) {
 
 void ParsingResult_free(ParsingResult* this) {
 	if (this != NULL) {
-		Match_free(this->match);
+		this->match = Match_free(this->match);
 		ParsingContext_free(this->context);
 	}
 	__FREE(this);
