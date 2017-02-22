@@ -204,6 +204,7 @@ Grammar* createGrammar () {
 ParsingResult* parsePCSSFile( Grammar* g, const char* path ) {
 	ParsingResult* r = Grammar_parsePath(g, path);
 	printf("Parsed: '%s'→\n\tStatus %c, read %zu/%zu bytes\n", path, r->status, r->context->iterator->offset, r->context->iterator->available);
+	Match_printJSON(r->match);
 	return r;
 }
 

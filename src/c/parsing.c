@@ -568,6 +568,10 @@ void* Match_fail( Match* this ) {
 	return FAILURE;
 }
 
+ParsingElement* Match_getParsingElement( Match* this ) {
+	return ParsingElement_Ensure(this->element);
+}
+
 int Match_getElementID(Match* this) {
 	if (this == NULL || this->element == NULL) {return -1;}
 	if (((ParsingElement*)this->element)->type == TYPE_REFERENCE) {
@@ -671,11 +675,8 @@ int Match_countChildren(Match* this) {
 // ============================================================================
 // JSON FORMATTING
 // ============================================================================
-//
-#define JSONV(format,...) OUTPUT(format, __VA_ARGS__)
-#define JSON(format)      OUTPUT(format)
 
-void Match__childrenToJSON(Match* match, int fd) {
+void Match__childrenWriteJSON(Match* match, int fd) {
 	int count = 0 ;
 	Match* child = match->children;
 	while (child != NULL) {
@@ -690,9 +691,9 @@ void Match__childrenToJSON(Match* match, int fd) {
 	while (child != NULL) {
 		ParsingElement* element = ParsingElement_Ensure(child->element);
 		if (element->type != TYPE_PROCEDURE && element->type != TYPE_CONDITION) {
-			Match__toJSON(child, fd);
+			Match__writeJSON(child, fd);
 			if ( (i+1) < count ) {
-				JSON(",");
+				WRITE(",");
 			}
 			i += 1;
 		}
@@ -700,9 +701,9 @@ void Match__childrenToJSON(Match* match, int fd) {
 	}
 }
 
-void Match__toJSON(Match* match, int fd) {
+void Match__writeJSON(Match* match, int fd) {
 	if (match == NULL || match->element == NULL) {
-		JSON("null");
+		WRITE("null");
 		return;
 	}
 
@@ -711,11 +712,11 @@ void Match__toJSON(Match* match, int fd) {
 	if (element->type == TYPE_REFERENCE) {
 		Reference* ref = (Reference*)match->element;
 		if (ref->cardinality == CARDINALITY_ONE || ref->cardinality == CARDINALITY_OPTIONAL) {
-			Match__toJSON(match->children, fd);
+			Match__writeJSON(match->children, fd);
 		} else {
-			JSON("[");
-			Match__childrenToJSON(match, fd);
-			JSON("]");
+			WRITE("[");
+			Match__childrenWriteJSON(match, fd);
+			WRITE("]");
 		}
 	}
 	else if (element->type != TYPE_REFERENCE) {
@@ -726,47 +727,168 @@ void Match__toJSON(Match* match, int fd) {
 		switch(element->type) {
 			case TYPE_WORD:
 				word = String_escape(Word_word(element));
-				JSONV("\"%s\"", word);
+				WRITEF("\"%s\"", word);
 				free(word);
 				break;
 			case TYPE_TOKEN:
 				count = TokenMatch_count(match);
-				if (count>1) {JSON("[");}
+				if (count>1) {WRITE("[");}
 				for (i=0 ; i < count ; i++) {
 					word = String_escape(TokenMatch_group(match, i));
-					JSONV("\"%s\"", word);
+					WRITEF("\"%s\"", word);
 					free(word);
-					if ((i + 1) < count) {JSON(",X");}
+					if ((i + 1) < count) {WRITE(",X");}
 				}
-				if (count>1) {JSON("]");}
+				if (count>1) {WRITE("]");}
 				break;
 			case TYPE_GROUP:
 				if (match->children == NULL)  {
-					JSON("GROUP:undefined");
+					WRITE("GROUP:undefined");
 				} else {
-					Match__toJSON(match->children, fd);
+					Match__writeJSON(match->children, fd);
 				}
 				break;
 			case TYPE_RULE:
-				JSON("[");
-				Match__childrenToJSON(match, fd);
-				JSON("]");
+				WRITE("[");
+				Match__childrenWriteJSON(match, fd);
+				WRITE("]");
 				break;
 			case TYPE_PROCEDURE:
 				break;
 			case TYPE_CONDITION:
 				break;
 			default:
-				JSONV("\"ERROR:undefined element type=%c\"", element->type);
+				WRITEF("\"ERROR:undefined element type=%c\"", element->type);
 		}
 	} else {
-		JSONV("\"ERROR:unsupported element type=%c\"", element->type);
+		WRITEF("\"ERROR:unsupported element type=%c\"", element->type);
 	}
 }
 
-// @method
-void Match_toJSON(Match* this, int fd) {
-	Match__toJSON(this, 1);
+void Match_writeJSON(Match* this, int fd) {
+	Match__writeJSON(this, fd);
+}
+
+
+void Match_printJSON(Match* this) {
+	return Match_writeJSON(this, 1);
+}
+
+// ============================================================================
+// XML FORMATTING
+// ============================================================================
+
+#define WRITE_ELEMENT_NAME(e)  if (e->name != NULL) { WRITE(e->name); } else {WRITEF("E%d", e->id);}
+#define WRITE_ELEMENT_START(e) if (e->name != NULL) {WRITE("<")  ; WRITE_ELEMENT_NAME(e) ; WRITE(">");}
+#define WRITE_ELEMENT_END(e)   if (e->name != NULL) {WRITE("</") ; WRITE_ELEMENT_NAME(e) ; WRITE(">");}
+#define WRITE_CDATA(s)         WRITE("<![CDATA[") ; WRITE(s) ; WRITE("]]>")
+
+void Match__childrenWriteXML(Match* match, int fd, int flags) {
+	int count = 0 ;
+	Match* child = match->children;
+	while (child != NULL) {
+		ParsingElement* element = ParsingElement_Ensure(child->element);
+		if (element->type != TYPE_PROCEDURE && element->type != TYPE_CONDITION) {
+			count += 1;
+		}
+		child = child->next;
+	}
+	child = match->children;
+	int i = 0;
+	while (child != NULL) {
+		ParsingElement* element = ParsingElement_Ensure(child->element);
+		if (element->type != TYPE_PROCEDURE && element->type != TYPE_CONDITION) {
+			Match__writeXML(child, fd, flags);
+			i += 1;
+		}
+		child = child->next;
+	}
+}
+
+void Match__writeXML(Match* match, int fd, int flags) {
+	if (match == NULL || match->element == NULL) {
+		return;
+	}
+	ParsingElement* element = (ParsingElement*)match->element;
+
+	if (element->type == TYPE_REFERENCE) {
+		Reference* ref = (Reference*)match->element;
+		if (ref->cardinality == CARDINALITY_ONE || ref->cardinality == CARDINALITY_OPTIONAL) {
+			Match__writeXML(match->children, fd, flags);
+		} else {
+			Match__childrenWriteXML(match, fd, flags);
+		}
+	}
+
+	else if (element->type != TYPE_REFERENCE) {
+		int i     = 0;
+		int count = 0;
+		switch(element->type) {
+			case TYPE_WORD:
+				WRITE("<");
+				WRITE_ELEMENT_NAME(element);
+				WRITE(" t=\"");
+				WRITE(Word_word(element));
+				WRITE("\"/>");
+				break;
+			case TYPE_TOKEN:
+				count = TokenMatch_count(match);
+				if (count > 0) {
+					WRITE("<");
+					WRITE_ELEMENT_NAME(element);
+					WRITE("/>");
+				} else if (count == 1) {
+					WRITE("<");
+					WRITE_ELEMENT_NAME(element);
+					WRITE(" t=\"");
+					WRITE(TokenMatch_group(match, i));
+					WRITE("\"/>");
+				} else {
+					WRITE_ELEMENT_START(element);
+					for (i=0 ; i < count ; i++) {
+						WRITE("<g t=\"");
+						WRITE(TokenMatch_group(match, i));
+						WRITE("\"/>");
+					}
+					WRITE_ELEMENT_END(element);
+				}
+				break;
+			case TYPE_GROUP:
+				if (match->children == NULL)  {
+					// pass
+				} else {
+					WRITE_ELEMENT_START(element);
+					Match__writeXML(match->children, fd, flags);
+					WRITE_ELEMENT_END(element);
+				}
+				break;
+			case TYPE_RULE:
+				if (match->children == NULL)  {
+				} else {
+					WRITE_ELEMENT_START(element);
+					Match__childrenWriteXML(match, fd, flags);
+					WRITE_ELEMENT_END(element);
+				}
+				break;
+			case TYPE_PROCEDURE:
+				break;
+			case TYPE_CONDITION:
+				break;
+			default:
+				WRITEF("<error value=\"Undefined element type\" type=\"%c\" />", element->type);
+		}
+	} else {
+		WRITEF("<error t=\"Unsupported element type\" type=\"%c\" />", element->type);
+	}
+}
+
+void Match_printXML(Match* this) {
+	Match_writeXML(this, 1);
+}
+
+void Match_writeXML(Match* this, int fd ) {
+	WRITE("<xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\" />\n");
+	Match__writeXML(this, fd, 0);
 }
 
 // ----------------------------------------------------------------------------

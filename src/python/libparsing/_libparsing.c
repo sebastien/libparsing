@@ -243,6 +243,12 @@ int Match_getLength(Match* this);
 int Match_getEndOffset(Match* this);
 
 
+
+
+
+ParsingElement* Match_getParsingElement(Match* this);
+
+
 int Match_getElementID(Match* this);
 
 
@@ -271,10 +277,23 @@ int Match_countChildren(Match* this);
 
 
 
-void Match__toJSON(Match* match, int fd);
+void Match__writeJSON(Match* match, int fd);
 
 
-void Match_toJSON(Match* this, int fd);
+void Match_writeJSON(Match* this, int fd);
+
+
+void Match_printJSON(Match* this);
+
+
+
+void Match__writeXML(Match* match, int fd, int flags);
+
+
+void Match_writeXML(Match* this, int fd);
+
+
+void Match_printXML(Match* this);
 
 
 typedef struct ParsingElement {
@@ -1277,6 +1296,10 @@ void* Match_fail( Match* this ) {
  return FAILURE;
 }
 
+ParsingElement* Match_getParsingElement( Match* this ) {
+ return ParsingElement_Ensure(this->element);
+}
+
 int Match_getElementID(Match* this) {
  if (this == NULL || this->element == NULL) {return -1;}
  if (((ParsingElement*)this->element)->type == '#') {
@@ -1382,7 +1405,12 @@ int Match_countChildren(Match* this) {
  }
  return count;
 }
-void Match__childrenToJSON(Match* match, int fd) {
+
+
+
+
+
+void Match__childrenWriteJSON(Match* match, int fd) {
  int count = 0 ;
  Match* child = match->children;
  while (child != NULL) {
@@ -1397,9 +1425,9 @@ void Match__childrenToJSON(Match* match, int fd) {
  while (child != NULL) {
   ParsingElement* element = ParsingElement_Ensure(child->element);
   if (element->type != 'p' && element->type != 'c') {
-   Match__toJSON(child, fd);
+   Match__writeJSON(child, fd);
    if ( (i+1) < count ) {
-    printf(",");
+    dprintf(fd,"%s",",");
    }
    i += 1;
   }
@@ -1407,9 +1435,9 @@ void Match__childrenToJSON(Match* match, int fd) {
  }
 }
 
-void Match__toJSON(Match* match, int fd) {
+void Match__writeJSON(Match* match, int fd) {
  if (match == NULL || match->element == NULL) {
-  printf("null");
+  dprintf(fd,"%s","null");
   return;
  }
 
@@ -1418,11 +1446,11 @@ void Match__toJSON(Match* match, int fd) {
  if (element->type == '#') {
   Reference* ref = (Reference*)match->element;
   if (ref->cardinality == '1' || ref->cardinality == '?') {
-   Match__toJSON(match->children, fd);
+   Match__writeJSON(match->children, fd);
   } else {
-   printf("[");
-   Match__childrenToJSON(match, fd);
-   printf("]");
+   dprintf(fd,"%s","[");
+   Match__childrenWriteJSON(match, fd);
+   dprintf(fd,"%s","]");
   }
  }
  else if (element->type != '#') {
@@ -1433,47 +1461,158 @@ void Match__toJSON(Match* match, int fd) {
   switch(element->type) {
    case 'W':
     word = String_escape(Word_word(element));
-    printf("\"%s\"", word);
+    dprintf(fd,"\"%s\"",word);
     free(word);
     break;
    case 'T':
     count = TokenMatch_count(match);
-    if (count>1) {printf("[");}
+    if (count>1) {dprintf(fd,"%s","[");}
     for (i=0 ; i < count ; i++) {
      word = String_escape(TokenMatch_group(match, i));
-     printf("\"%s\"", word);
+     dprintf(fd,"\"%s\"",word);
      free(word);
-     if ((i + 1) < count) {printf(",X");}
+     if ((i + 1) < count) {dprintf(fd,"%s",",X");}
     }
-    if (count>1) {printf("]");}
+    if (count>1) {dprintf(fd,"%s","]");}
     break;
    case 'G':
     if (match->children == NULL) {
-     printf("GROUP:undefined");
+     dprintf(fd,"%s","GROUP:undefined");
     } else {
-     Match__toJSON(match->children, fd);
+     Match__writeJSON(match->children, fd);
     }
     break;
    case 'R':
-    printf("[");
-    Match__childrenToJSON(match, fd);
-    printf("]");
+    dprintf(fd,"%s","[");
+    Match__childrenWriteJSON(match, fd);
+    dprintf(fd,"%s","]");
     break;
    case 'p':
     break;
    case 'c':
     break;
    default:
-    printf("\"ERROR:undefined element type=%c\"", element->type);
+    dprintf(fd,"\"ERROR:undefined element type=%c\"",element->type);
   }
  } else {
-  printf("\"ERROR:unsupported element type=%c\"", element->type);
+  dprintf(fd,"\"ERROR:unsupported element type=%c\"",element->type);
  }
 }
 
+void Match_writeJSON(Match* this, int fd) {
+ Match__writeJSON(this, fd);
+}
 
-void Match_toJSON(Match* this, int fd) {
- Match__toJSON(this, 1);
+
+void Match_printJSON(Match* this) {
+ return Match_writeJSON(this, 1);
+}
+void Match__childrenWriteXML(Match* match, int fd, int flags) {
+ int count = 0 ;
+ Match* child = match->children;
+ while (child != NULL) {
+  ParsingElement* element = ParsingElement_Ensure(child->element);
+  if (element->type != 'p' && element->type != 'c') {
+   count += 1;
+  }
+  child = child->next;
+ }
+ child = match->children;
+ int i = 0;
+ while (child != NULL) {
+  ParsingElement* element = ParsingElement_Ensure(child->element);
+  if (element->type != 'p' && element->type != 'c') {
+   Match__writeXML(child, fd, flags);
+   i += 1;
+  }
+  child = child->next;
+ }
+}
+
+void Match__writeXML(Match* match, int fd, int flags) {
+ if (match == NULL || match->element == NULL) {
+  return;
+ }
+ ParsingElement* element = (ParsingElement*)match->element;
+
+ if (element->type == '#') {
+  Reference* ref = (Reference*)match->element;
+  if (ref->cardinality == '1' || ref->cardinality == '?') {
+   Match__writeXML(match->children, fd, flags);
+  } else {
+   Match__childrenWriteXML(match, fd, flags);
+  }
+ }
+
+ else if (element->type != '#') {
+  int i = 0;
+  int count = 0;
+  switch(element->type) {
+   case 'W':
+    dprintf(fd,"%s","<");
+    if (element->name != NULL) { dprintf(fd,"%s",element->name); } else {dprintf(fd,"E%d",element->id);};
+    dprintf(fd,"%s"," t=\"");
+    dprintf(fd,"%s",Word_word(element));
+    dprintf(fd,"%s","\"/>");
+    break;
+   case 'T':
+    count = TokenMatch_count(match);
+    if (count > 0) {
+     dprintf(fd,"%s","<");
+     if (element->name != NULL) { dprintf(fd,"%s",element->name); } else {dprintf(fd,"E%d",element->id);};
+     dprintf(fd,"%s","/>");
+    } else if (count == 1) {
+     dprintf(fd,"%s","<");
+     if (element->name != NULL) { dprintf(fd,"%s",element->name); } else {dprintf(fd,"E%d",element->id);};
+     dprintf(fd,"%s"," t=\"");
+     dprintf(fd,"%s",TokenMatch_group(match, i));
+     dprintf(fd,"%s","\"/>");
+    } else {
+     if (element->name != NULL) {dprintf(fd,"%s","<") ; if (element->name != NULL) { dprintf(fd,"%s",element->name); } else {dprintf(fd,"E%d",element->id);} ; dprintf(fd,"%s",">");};
+     for (i=0 ; i < count ; i++) {
+      dprintf(fd,"%s","<g t=\"");
+      dprintf(fd,"%s",TokenMatch_group(match, i));
+      dprintf(fd,"%s","\"/>");
+     }
+     if (element->name != NULL) {dprintf(fd,"%s","</") ; if (element->name != NULL) { dprintf(fd,"%s",element->name); } else {dprintf(fd,"E%d",element->id);} ; dprintf(fd,"%s",">");};
+    }
+    break;
+   case 'G':
+    if (match->children == NULL) {
+
+    } else {
+     if (element->name != NULL) {dprintf(fd,"%s","<") ; if (element->name != NULL) { dprintf(fd,"%s",element->name); } else {dprintf(fd,"E%d",element->id);} ; dprintf(fd,"%s",">");};
+     Match__writeXML(match->children, fd, flags);
+     if (element->name != NULL) {dprintf(fd,"%s","</") ; if (element->name != NULL) { dprintf(fd,"%s",element->name); } else {dprintf(fd,"E%d",element->id);} ; dprintf(fd,"%s",">");};
+    }
+    break;
+   case 'R':
+    if (match->children == NULL) {
+    } else {
+     if (element->name != NULL) {dprintf(fd,"%s","<") ; if (element->name != NULL) { dprintf(fd,"%s",element->name); } else {dprintf(fd,"E%d",element->id);} ; dprintf(fd,"%s",">");};
+     Match__childrenWriteXML(match, fd, flags);
+     if (element->name != NULL) {dprintf(fd,"%s","</") ; if (element->name != NULL) { dprintf(fd,"%s",element->name); } else {dprintf(fd,"E%d",element->id);} ; dprintf(fd,"%s",">");};
+    }
+    break;
+   case 'p':
+    break;
+   case 'c':
+    break;
+   default:
+    dprintf(fd,"<error value=\"Undefined element type\" type=\"%c\" />",element->type);
+  }
+ } else {
+  dprintf(fd,"<error t=\"Unsupported element type\" type=\"%c\" />",element->type);
+ }
+}
+
+void Match_printXML(Match* this) {
+ Match_writeXML(this, 1);
+}
+
+void Match_writeXML(Match* this, int fd ) {
+ dprintf(fd,"%s","<xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\" />\n");
+ Match__writeXML(this, fd, 0);
 }
 
 

@@ -65,6 +65,7 @@ Match* Match_getChildren(Match* this);
 int Match_getOffset(Match* this);
 int Match_getLength(Match* this);
 int Match_getEndOffset(Match* this);
+ParsingElement* Match_getParsingElement(Match* this);
 int Match_getElementID(Match* this);
 char Match_getType(Match* this);
 char Match_getElementType(Match* this);
@@ -72,8 +73,12 @@ const char* Match_getElementName(Match* this);
 int Match__walk(Match* this, MatchWalkingCallback callback, int step, void* context );
 int Match_countAll(Match* this);
 int Match_countChildren(Match* this);
-void Match__toJSON(Match* match, int fd);
-void Match_toJSON(Match* this, int fd);
+void Match__writeJSON(Match* match, int fd);
+void Match_writeJSON(Match* this, int fd);
+void Match_printJSON(Match* this);
+void Match__writeXML(Match* match, int fd, int flags);
+void Match_writeXML(Match* this, int fd);
+void Match_printXML(Match* this);
 typedef struct Iterator {
 	char           status;    // The status of the iterator, one of STATUS_{INIT|PROCESSING|INPUT_ENDED|ENDED}
 	char*          buffer;    // The buffer to the read data, note how it is a (char*) and not an `char`

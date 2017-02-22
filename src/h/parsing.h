@@ -441,7 +441,9 @@ typedef struct Match {
 #define TYPE_REFERENCE  '#'
 
 #define FLAG_SKIPPING    0x1
-#define FLAG_NOSTAT      0x2
+
+#define FLAG_NOEMPTY     0x1
+
 #define PUSH_FLAGS(v)    int _flags = v;
 #define SET_FLAG(v,f)    v=v|f;
 #define UNSET_FLAG(v,f)  v = v & ~f;
@@ -509,6 +511,12 @@ int Match_getLength(Match* this);
 int Match_getEndOffset(Match* this);
 
 // @method
+// Returns the parsing element for this match. Keep in mind that matches
+// might wrap references, not only parsing elements, so this ensures
+// that references are traversed.
+ParsingElement* Match_getParsingElement(Match* this);
+
+// @method
 int Match_getElementID(Match* this);
 
 // @method
@@ -537,10 +545,23 @@ int Match_countChildren(Match* this);
 
 // @method
 // Protected method
-void Match__toJSON(Match* match, int fd);
+void Match__writeJSON(Match* match, int fd);
 
 // @method
-void Match_toJSON(Match* this, int fd);
+void Match_writeJSON(Match* this, int fd);
+
+// @method
+void Match_printJSON(Match* this);
+//
+// @method
+// Protected method
+void Match__writeXML(Match* match, int fd, int flags);
+
+// @method
+void Match_writeXML(Match* this, int fd);
+
+// @method
+void Match_printXML(Match* this);
 
 // @type ParsingElement
 typedef struct ParsingElement {

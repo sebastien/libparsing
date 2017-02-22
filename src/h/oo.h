@@ -37,6 +37,10 @@
 #define HAS_FLAG(v,flag) (v & flag)
 #include <stdbool.h>
 
+#ifndef WITH_CFFI
+#include <unistd.h>
+#endif
+
 
 // See <bin/memcheck.py> for hte tool that checks memory allocations.
 #ifdef WITH_MEMCHECK
@@ -158,7 +162,10 @@
 #define ASSERT(v,msg,...) /* */
 #endif
 
-#define OUTPUT printf
+#define OUTPUT         printf
+#define WRITEF(m,...)  dprintf(fd,m,__VA_ARGS__)
+#define WRITE(m)       WRITEF("%s",m)
+//#define WRITE(m)       if (write(fd,m,strlen(m)) == 0) {ERROR("Could not write string: %s", m);}
 
 // todo: ERROR, WARNING, INFO, DEBUG
 // todo: COUNTER(name, delta)
