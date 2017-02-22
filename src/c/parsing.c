@@ -845,49 +845,70 @@ void Match__writeXML(Match* match, int fd, int flags) {
 		int count = 0;
 		switch(element->type) {
 			case TYPE_WORD:
-				WRITE("<");
-				WRITE_ELEMENT_NAME(element);
-				WRITE(" t=\"");
-				WRITE(Word_word(element));
-				WRITE("\"/>");
+				if (element->name != NULL) {
+					WRITE("<");
+					WRITE_ELEMENT_NAME(element);
+					WRITE("/>");
+				} else {
+					/* pass */
+					// WRITE(Word_word(element));
+				}
 				break;
 			case TYPE_TOKEN:
 				count = TokenMatch_count(match);
 				if (count == 0) {
-					WRITE("<");
-					WRITE_ELEMENT_NAME(element);
-					WRITE("/>");
+					if (element->name != NULL) {
+						WRITE("<");
+						WRITE_ELEMENT_NAME(element);
+						WRITE("/>");
+					}
 				} else if (count == 1) {
-					WRITE("<");
-					WRITE_ELEMENT_NAME(element);
-					WRITE(" t=\"");
-					WRITE(TokenMatch_group(match, i));
-					WRITE("\"/>");
-				} else {
-					WRITE_ELEMENT_START(element);
-					for (i=0 ; i < count ; i++) {
-						WRITE("<g t=\"");
+					if (element->name != NULL) {
+						WRITE("<");
+						WRITE_ELEMENT_NAME(element);
+						WRITE(" t=\"");
 						WRITE(TokenMatch_group(match, i));
 						WRITE("\"/>");
+					} else {
+						WRITE(TokenMatch_group(match, i));
 					}
-					WRITE_ELEMENT_END(element);
+				} else {
+					if (element->name != NULL) {
+						WRITE_ELEMENT_START(element);
+						for (i=0 ; i < count ; i++) {
+							WRITE("<g t=\"");
+							WRITE(TokenMatch_group(match, i));
+							WRITE("\"/>");
+						}
+						WRITE_ELEMENT_END(element);
+					} else {
+						/* pass */
+					}
 				}
 				break;
 			case TYPE_GROUP:
 				if (match->children == NULL)  {
 					// pass
 				} else {
-					WRITE_ELEMENT_START(element);
-					Match__writeXML(match->children, fd, flags);
-					WRITE_ELEMENT_END(element);
+					if (element->name != NULL) {
+						WRITE_ELEMENT_START(element);
+						Match__writeXML(match->children, fd, flags);
+						WRITE_ELEMENT_END(element);
+					} else {
+						Match__writeXML(match->children, fd, flags);
+					}
 				}
 				break;
 			case TYPE_RULE:
 				if (match->children == NULL)  {
 				} else {
-					WRITE_ELEMENT_START(element);
-					Match__childrenWriteXML(match, fd, flags);
-					WRITE_ELEMENT_END(element);
+					if (element->name != NULL) {
+						WRITE_ELEMENT_START(element);
+						Match__childrenWriteXML(match, fd, flags);
+						WRITE_ELEMENT_END(element);
+					} else {
+						Match__childrenWriteXML(match, fd, flags);
+					}
 				}
 				break;
 			case TYPE_PROCEDURE:

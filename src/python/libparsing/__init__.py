@@ -6,12 +6,12 @@
 # License           : BSD License
 # -----------------------------------------------------------------------------
 # Creation date     : 18-Dec-2014
-# Last modification : 28-Nov-2016
+# Last modification : 22-Feb-2017
 # -----------------------------------------------------------------------------
 
 from __future__ import print_function
 
-import sys, os, re, glob, inspect
+import sys, os, re, glob, inspect, tempfile, collections
 from   cffi    import FFI
 from   os.path import dirname, join, abspath
 
@@ -30,6 +30,8 @@ except ImportError:
 VERSION            = "0.8.12"
 LICENSE            = "http://ffctn.com/doc/licenses/bsd"
 PACKAGE_PATH       = dirname(abspath(__file__))
+
+MatchTuple = collections.namedtuple("MatchTuple", "offset length id element")
 
 # -----------------------------------------------------------------------------
 #
@@ -574,8 +576,21 @@ class Match(CObject):
 	def hasChildren( self ):
 		return lib.Match_hasChildren(self._cobject)
 
+
+	def _toHelper( self, callback ):
+		(fd, fn) = tempfile.mkstemp()
+		callback(self._cobject, fd)
+		os.close(fd)
+		with open(fn) as f:
+			text = f.read()
+		os.unlink(fn)
+		return text
+
 	def toJSON( self ):
-		return lib.Match_toJSON(self._cobject, 1)
+		return self._toHelper(lib.Match_writeJSON)
+
+	def toXML( self ):
+		return self._toHelper(lib.Match_writeXML)
 
 	# =========================================================================
 	# SUGAR
@@ -762,7 +777,24 @@ class ParsingResult(CObject):
 
 	@property
 	def lastMatch( self ):
-		return Match.Wrap(self._cobject.context.lastMatch) if self._cobject.context.lastMatch else None
+		return MatchTuple(
+			offset  = self.lastMatchOffset,
+			length  = self.lastMatchLength,
+			id      = self.lastMatchElementID,
+			element = self._grammar.symbol(self.lastMatchElementID) if self.lastMatchElementID != -1 else None,
+		)
+
+	@property
+	def lastMatchOffset( self ):
+		return self._cobject.context.lastMatchOffset
+
+	@property
+	def lastMatchLength( self ):
+		return self._cobject.context.lastMatchLength
+
+	@property
+	def lastMatchElementID( self ):
+		return self._cobject.context.lastMatchElementID
 
 	@property
 	def stats( self ):
@@ -877,8 +909,8 @@ class ParsingResult(CObject):
 			lines = self.text[:s].split("\n")
 			line  = len(lines) - 1
 			char  = len(lines[-1])
-			sym   = self._grammar.symbol(m.id) if m else "-"
-			return "Parsing failed at line {0} character {1}, offset {2}→{3}, symbol {4}:{5}".format(
+			sym   = ", symbol " + str(self._grammar.symbol(m.id)) if m and m.id and m.id >= 0 else ""
+			return "Parsing failed at line {0} character {1}, offset {2}→{3}{4}:{5}".format(
 				line, char, s, e,
 				sym,
 				"\n".join([_ for _ in t.split("\n")])
@@ -886,6 +918,9 @@ class ParsingResult(CObject):
 
 	def toJSON( self ):
 		return self.match.toJSON()
+
+	def toXML( self ):
+		return self.match.toXML()
 
 	def __repr__( self ):
 		return "<{0}(status={2}, line={3}, char={4}, offset={5}, remaining={6}) at {1:02x}>".format(
@@ -1371,6 +1406,31 @@ class Indentation(object):
 		"\t" : 4,
 	}
 
+	@classmethod
+	def Indent( self, element, context ):
+		indent = context.get("indent") or 0
+		context.set("indent", indent + 1)
+
+	@classmethod
+	def Dedent( self, element, context ):
+		indent = context.get("indent") or 0
+		context.set("indent", indent - 1)
+
+	@classmethod
+	def CheckIndent( self, element, context, min=False ):
+		indent = context.get("indent") or 0
+		o      = context.offset or 0
+		so     = max(o - indent, 0)
+		eo     = o
+		tabs   = 0
+		# This is a fix
+		if so == eo and so > 0:
+			so = eo
+		for i in range(so, eo):
+			if context[i] == b"\t":
+				tabs += 1
+		return tabs == indent
+
 	def __init__( self, allows="\t ", step=1, values=None):
 		self.allows = allows
 		self.values = values
@@ -1381,14 +1441,6 @@ class Indentation(object):
 		self.values = {"\t":1}
 		self.step   = 1
 
-	def indent( self, element, context ):
-		pass
-
-	def dedent( self, element, context ):
-		pass
-
-	def checkIndent( self, element, context ):
-		pass
 
 def __init__():
 	pass

@@ -1560,49 +1560,70 @@ void Match__writeXML(Match* match, int fd, int flags) {
   int count = 0;
   switch(element->type) {
    case 'W':
-    dprintf(fd,"%s","<");
-    if (element->name != NULL) { dprintf(fd,"%s",element->name); } else {dprintf(fd,"E%d",element->id);};
-    dprintf(fd,"%s"," t=\"");
-    dprintf(fd,"%s",Word_word(element));
-    dprintf(fd,"%s","\"/>");
+    if (element->name != NULL) {
+     dprintf(fd,"%s","<");
+     if (element->name != NULL) { dprintf(fd,"%s",element->name); } else {dprintf(fd,"E%d",element->id);};
+     dprintf(fd,"%s","/>");
+    } else {
+
+
+    }
     break;
    case 'T':
     count = TokenMatch_count(match);
     if (count == 0) {
-     dprintf(fd,"%s","<");
-     if (element->name != NULL) { dprintf(fd,"%s",element->name); } else {dprintf(fd,"E%d",element->id);};
-     dprintf(fd,"%s","/>");
+     if (element->name != NULL) {
+      dprintf(fd,"%s","<");
+      if (element->name != NULL) { dprintf(fd,"%s",element->name); } else {dprintf(fd,"E%d",element->id);};
+      dprintf(fd,"%s","/>");
+     }
     } else if (count == 1) {
-     dprintf(fd,"%s","<");
-     if (element->name != NULL) { dprintf(fd,"%s",element->name); } else {dprintf(fd,"E%d",element->id);};
-     dprintf(fd,"%s"," t=\"");
-     dprintf(fd,"%s",TokenMatch_group(match, i));
-     dprintf(fd,"%s","\"/>");
-    } else {
-     if (element->name != NULL) {dprintf(fd,"%s","<") ; if (element->name != NULL) { dprintf(fd,"%s",element->name); } else {dprintf(fd,"E%d",element->id);} ; dprintf(fd,"%s",">");};
-     for (i=0 ; i < count ; i++) {
-      dprintf(fd,"%s","<g t=\"");
+     if (element->name != NULL) {
+      dprintf(fd,"%s","<");
+      if (element->name != NULL) { dprintf(fd,"%s",element->name); } else {dprintf(fd,"E%d",element->id);};
+      dprintf(fd,"%s"," t=\"");
       dprintf(fd,"%s",TokenMatch_group(match, i));
       dprintf(fd,"%s","\"/>");
+     } else {
+      dprintf(fd,"%s",TokenMatch_group(match, i));
      }
-     if (element->name != NULL) {dprintf(fd,"%s","</") ; if (element->name != NULL) { dprintf(fd,"%s",element->name); } else {dprintf(fd,"E%d",element->id);} ; dprintf(fd,"%s",">");};
+    } else {
+     if (element->name != NULL) {
+      if (element->name != NULL) {dprintf(fd,"%s","<") ; if (element->name != NULL) { dprintf(fd,"%s",element->name); } else {dprintf(fd,"E%d",element->id);} ; dprintf(fd,"%s",">");};
+      for (i=0 ; i < count ; i++) {
+       dprintf(fd,"%s","<g t=\"");
+       dprintf(fd,"%s",TokenMatch_group(match, i));
+       dprintf(fd,"%s","\"/>");
+      }
+      if (element->name != NULL) {dprintf(fd,"%s","</") ; if (element->name != NULL) { dprintf(fd,"%s",element->name); } else {dprintf(fd,"E%d",element->id);} ; dprintf(fd,"%s",">");};
+     } else {
+
+     }
     }
     break;
    case 'G':
     if (match->children == NULL) {
 
     } else {
-     if (element->name != NULL) {dprintf(fd,"%s","<") ; if (element->name != NULL) { dprintf(fd,"%s",element->name); } else {dprintf(fd,"E%d",element->id);} ; dprintf(fd,"%s",">");};
-     Match__writeXML(match->children, fd, flags);
-     if (element->name != NULL) {dprintf(fd,"%s","</") ; if (element->name != NULL) { dprintf(fd,"%s",element->name); } else {dprintf(fd,"E%d",element->id);} ; dprintf(fd,"%s",">");};
+     if (element->name != NULL) {
+      if (element->name != NULL) {dprintf(fd,"%s","<") ; if (element->name != NULL) { dprintf(fd,"%s",element->name); } else {dprintf(fd,"E%d",element->id);} ; dprintf(fd,"%s",">");};
+      Match__writeXML(match->children, fd, flags);
+      if (element->name != NULL) {dprintf(fd,"%s","</") ; if (element->name != NULL) { dprintf(fd,"%s",element->name); } else {dprintf(fd,"E%d",element->id);} ; dprintf(fd,"%s",">");};
+     } else {
+      Match__writeXML(match->children, fd, flags);
+     }
     }
     break;
    case 'R':
     if (match->children == NULL) {
     } else {
-     if (element->name != NULL) {dprintf(fd,"%s","<") ; if (element->name != NULL) { dprintf(fd,"%s",element->name); } else {dprintf(fd,"E%d",element->id);} ; dprintf(fd,"%s",">");};
-     Match__childrenWriteXML(match, fd, flags);
-     if (element->name != NULL) {dprintf(fd,"%s","</") ; if (element->name != NULL) { dprintf(fd,"%s",element->name); } else {dprintf(fd,"E%d",element->id);} ; dprintf(fd,"%s",">");};
+     if (element->name != NULL) {
+      if (element->name != NULL) {dprintf(fd,"%s","<") ; if (element->name != NULL) { dprintf(fd,"%s",element->name); } else {dprintf(fd,"E%d",element->id);} ; dprintf(fd,"%s",">");};
+      Match__childrenWriteXML(match, fd, flags);
+      if (element->name != NULL) {dprintf(fd,"%s","</") ; if (element->name != NULL) { dprintf(fd,"%s",element->name); } else {dprintf(fd,"E%d",element->id);} ; dprintf(fd,"%s",">");};
+     } else {
+      Match__childrenWriteXML(match, fd, flags);
+     }
     }
     break;
    case 'p':
