@@ -203,8 +203,8 @@ Grammar* createGrammar () {
 
 ParsingResult* parsePCSSFile( Grammar* g, const char* path ) {
 	ParsingResult* r = Grammar_parsePath(g, path);
-	printf("Parsed: '%s'→\n\tStatus %c, read %zu/%zu bytes\n", path, r->status, r->context->iterator->offset, r->context->iterator->available);
-	Match_printJSON(r->match);
+	//printf("Parsed: '%s'→\n\tStatus %c, read %zu/%zu bytes\n", path, r->status, r->context->iterator->offset, r->context->iterator->available);
+	Match_printXML(r->match);
 	return r;
 }
 
@@ -223,8 +223,7 @@ int main( int argc, char* argv[]) {
 			ParsingResult_free(parsePCSSFile(g, argv[i]));
 		}
 	}
-
 	Grammar_free(g);
-	printf ("[OK]");
+	//printf ("[OK]");
 	return 1;
 }

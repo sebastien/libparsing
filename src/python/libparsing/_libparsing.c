@@ -277,7 +277,7 @@ int Match_countChildren(Match* this);
 
 
 
-void Match__writeJSON(Match* match, int fd);
+void Match__writeJSON(Match* match, int fd, int flags);
 
 
 void Match_writeJSON(Match* this, int fd);
@@ -1405,12 +1405,7 @@ int Match_countChildren(Match* this) {
  }
  return count;
 }
-
-
-
-
-
-void Match__childrenWriteJSON(Match* match, int fd) {
+void Match__childrenWriteJSON(Match* match, int fd, int flags) {
  int count = 0 ;
  Match* child = match->children;
  while (child != NULL) {
@@ -1425,7 +1420,7 @@ void Match__childrenWriteJSON(Match* match, int fd) {
  while (child != NULL) {
   ParsingElement* element = ParsingElement_Ensure(child->element);
   if (element->type != 'p' && element->type != 'c') {
-   Match__writeJSON(child, fd);
+   Match__writeJSON(child, fd, flags);
    if ( (i+1) < count ) {
     dprintf(fd,"%s",",");
    }
@@ -1435,7 +1430,7 @@ void Match__childrenWriteJSON(Match* match, int fd) {
  }
 }
 
-void Match__writeJSON(Match* match, int fd) {
+void Match__writeJSON(Match* match, int fd, int flags) {
  if (match == NULL || match->element == NULL) {
   dprintf(fd,"%s","null");
   return;
@@ -1446,10 +1441,10 @@ void Match__writeJSON(Match* match, int fd) {
  if (element->type == '#') {
   Reference* ref = (Reference*)match->element;
   if (ref->cardinality == '1' || ref->cardinality == '?') {
-   Match__writeJSON(match->children, fd);
+   Match__writeJSON(match->children, fd, flags);
   } else {
    dprintf(fd,"%s","[");
-   Match__childrenWriteJSON(match, fd);
+   Match__childrenWriteJSON(match, fd, flags);
    dprintf(fd,"%s","]");
   }
  }
@@ -1461,31 +1456,47 @@ void Match__writeJSON(Match* match, int fd) {
   switch(element->type) {
    case 'W':
     word = String_escape(Word_word(element));
-    dprintf(fd,"\"%s\"",word);
+    if (element->name) {dprintf(fd,"%s","{\"name\":\"");dprintf(fd,"%s",element->name);dprintf(fd,"%s","\"");} else {dprintf(fd,"%s","{\"id\":");dprintf(fd,"%d",element->id);};
+    dprintf(fd,"%s",",\"value\":\"");dprintf(fd,"%s",word);dprintf(fd,"%s","\"");
+    dprintf(fd,"%s","}");
     free(word);
     break;
    case 'T':
     count = TokenMatch_count(match);
-    if (count>1) {dprintf(fd,"%s","[");}
-    for (i=0 ; i < count ; i++) {
-     word = String_escape(TokenMatch_group(match, i));
-     dprintf(fd,"\"%s\"",word);
+    if (count == 0) {
+     if (element->name) {dprintf(fd,"%s","{\"name\":\"");dprintf(fd,"%s",element->name);dprintf(fd,"%s","\"");} else {dprintf(fd,"%s","{\"id\":");dprintf(fd,"%d",element->id);};
+     dprintf(fd,"%s","}");
+    } else if (count == 1) {
+     if (element->name) {dprintf(fd,"%s","{\"name\":\"");dprintf(fd,"%s",element->name);dprintf(fd,"%s","\"");} else {dprintf(fd,"%s","{\"id\":");dprintf(fd,"%d",element->id);};
+     word = String_escape(TokenMatch_group(match, 0));
+     dprintf(fd,"%s",",\"value\":\"");dprintf(fd,"%s",word);dprintf(fd,"%s","\"");
      free(word);
-     if ((i + 1) < count) {dprintf(fd,"%s",",X");}
+     dprintf(fd,"%s","}");
+    } else {
+     if (element->name) {dprintf(fd,"%s","{\"name\":\"");dprintf(fd,"%s",element->name);dprintf(fd,"%s","\"");} else {dprintf(fd,"%s","{\"id\":");dprintf(fd,"%d",element->id);};
+     dprintf(fd,"%s",",\"content\":[");
+     for (i=0 ; i < count ; i++) {
+      word = String_escape(TokenMatch_group(match, i));
+      dprintf(fd,"%s","\"");dprintf(fd,"%s",word);dprintf(fd,"%s","\"");
+      if (i+1 < count) {dprintf(fd,"%s",",");}
+      free(word);
+     }
+     dprintf(fd,"%s","]");
+     dprintf(fd,"%s","}");
     }
-    if (count>1) {dprintf(fd,"%s","]");}
     break;
    case 'G':
-    if (match->children == NULL) {
-     dprintf(fd,"%s","GROUP:undefined");
-    } else {
-     Match__writeJSON(match->children, fd);
-    }
-    break;
    case 'R':
-    dprintf(fd,"%s","[");
-    Match__childrenWriteJSON(match, fd);
-    dprintf(fd,"%s","]");
+    if (match->children == NULL) {
+     if (element->name) {dprintf(fd,"%s","{\"name\":\"");dprintf(fd,"%s",element->name);dprintf(fd,"%s","\"");} else {dprintf(fd,"%s","{\"id\":");dprintf(fd,"%d",element->id);};
+     dprintf(fd,"%s","}");
+    } else {
+     if (element->name) {dprintf(fd,"%s","{\"name\":\"");dprintf(fd,"%s",element->name);dprintf(fd,"%s","\"");} else {dprintf(fd,"%s","{\"id\":");dprintf(fd,"%d",element->id);};
+     dprintf(fd,"%s",",\"content\":[");
+     Match__childrenWriteJSON(match, fd, flags);
+     dprintf(fd,"%s","]");
+     dprintf(fd,"%s","}");
+    }
     break;
    case 'p':
     break;
@@ -1500,7 +1511,7 @@ void Match__writeJSON(Match* match, int fd) {
 }
 
 void Match_writeJSON(Match* this, int fd) {
- Match__writeJSON(this, fd);
+ Match__writeJSON(this, fd, 0);
 }
 
 
@@ -1557,7 +1568,7 @@ void Match__writeXML(Match* match, int fd, int flags) {
     break;
    case 'T':
     count = TokenMatch_count(match);
-    if (count > 0) {
+    if (count == 0) {
      dprintf(fd,"%s","<");
      if (element->name != NULL) { dprintf(fd,"%s",element->name); } else {dprintf(fd,"E%d",element->id);};
      dprintf(fd,"%s","/>");
@@ -1611,7 +1622,7 @@ void Match_printXML(Match* this) {
 }
 
 void Match_writeXML(Match* this, int fd ) {
- dprintf(fd,"%s","<xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\" />\n");
+ dprintf(fd,"%s","<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\" ?>\n");
  Match__writeXML(this, fd, 0);
 }
 

@@ -545,7 +545,7 @@ int Match_countChildren(Match* this);
 
 // @method
 // Protected method
-void Match__writeJSON(Match* match, int fd);
+void Match__writeJSON(Match* match, int fd, int flags);
 
 // @method
 void Match_writeJSON(Match* this, int fd);

@@ -73,7 +73,7 @@ const char* Match_getElementName(Match* this);
 int Match__walk(Match* this, MatchWalkingCallback callback, int step, void* context );
 int Match_countAll(Match* this);
 int Match_countChildren(Match* this);
-void Match__writeJSON(Match* match, int fd);
+void Match__writeJSON(Match* match, int fd, int flags);
 void Match_writeJSON(Match* this, int fd);
 void Match_printJSON(Match* this);
 void Match__writeXML(Match* match, int fd, int flags);

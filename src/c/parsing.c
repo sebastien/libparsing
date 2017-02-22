@@ -676,7 +676,11 @@ int Match_countChildren(Match* this) {
 // JSON FORMATTING
 // ============================================================================
 
-void Match__childrenWriteJSON(Match* match, int fd) {
+
+#define JSON_ELEMENT_START(e) if (e->name) {WRITE("{\"name\":\"");WRITE(e->name);WRITE("\"");} else {WRITE("{\"id\":");WRITEF("%d",e->id);}
+#define JSON_ELEMENT_END(e)   WRITE("}")
+
+void Match__childrenWriteJSON(Match* match, int fd, int flags) {
 	int count = 0 ;
 	Match* child = match->children;
 	while (child != NULL) {
@@ -691,7 +695,7 @@ void Match__childrenWriteJSON(Match* match, int fd) {
 	while (child != NULL) {
 		ParsingElement* element = ParsingElement_Ensure(child->element);
 		if (element->type != TYPE_PROCEDURE && element->type != TYPE_CONDITION) {
-			Match__writeJSON(child, fd);
+			Match__writeJSON(child, fd, flags);
 			if ( (i+1) < count ) {
 				WRITE(",");
 			}
@@ -701,7 +705,7 @@ void Match__childrenWriteJSON(Match* match, int fd) {
 	}
 }
 
-void Match__writeJSON(Match* match, int fd) {
+void Match__writeJSON(Match* match, int fd, int flags) {
 	if (match == NULL || match->element == NULL) {
 		WRITE("null");
 		return;
@@ -712,10 +716,10 @@ void Match__writeJSON(Match* match, int fd) {
 	if (element->type == TYPE_REFERENCE) {
 		Reference* ref = (Reference*)match->element;
 		if (ref->cardinality == CARDINALITY_ONE || ref->cardinality == CARDINALITY_OPTIONAL) {
-			Match__writeJSON(match->children, fd);
+			Match__writeJSON(match->children, fd, flags);
 		} else {
 			WRITE("[");
-			Match__childrenWriteJSON(match, fd);
+			Match__childrenWriteJSON(match, fd, flags);
 			WRITE("]");
 		}
 	}
@@ -727,31 +731,47 @@ void Match__writeJSON(Match* match, int fd) {
 		switch(element->type) {
 			case TYPE_WORD:
 				word = String_escape(Word_word(element));
-				WRITEF("\"%s\"", word);
+				JSON_ELEMENT_START(element);
+				WRITE(",\"value\":\"");WRITE(word);WRITE("\"");
+				JSON_ELEMENT_END(element);
 				free(word);
 				break;
 			case TYPE_TOKEN:
 				count = TokenMatch_count(match);
-				if (count>1) {WRITE("[");}
-				for (i=0 ; i < count ; i++) {
-					word = String_escape(TokenMatch_group(match, i));
-					WRITEF("\"%s\"", word);
+				if (count == 0) {
+					JSON_ELEMENT_START(element);
+					JSON_ELEMENT_END(element);
+				} else if (count == 1) {
+					JSON_ELEMENT_START(element);
+					word = String_escape(TokenMatch_group(match, 0));
+					WRITE(",\"value\":\"");WRITE(word);WRITE("\"");
 					free(word);
-					if ((i + 1) < count) {WRITE(",X");}
+					JSON_ELEMENT_END(element);
+				} else {
+					JSON_ELEMENT_START(element);
+					WRITE(",\"content\":[");
+					for (i=0 ; i < count ; i++) {
+						word = String_escape(TokenMatch_group(match, i));
+						WRITE("\"");WRITE(word);WRITE("\"");
+						if (i+1 < count) {WRITE(",");}
+						free(word);
+					}
+					WRITE("]");
+					JSON_ELEMENT_END(element);
 				}
-				if (count>1) {WRITE("]");}
 				break;
 			case TYPE_GROUP:
-				if (match->children == NULL)  {
-					WRITE("GROUP:undefined");
-				} else {
-					Match__writeJSON(match->children, fd);
-				}
-				break;
 			case TYPE_RULE:
-				WRITE("[");
-				Match__childrenWriteJSON(match, fd);
-				WRITE("]");
+				if (match->children == NULL) {
+					JSON_ELEMENT_START(element);
+					JSON_ELEMENT_END(element);
+				} else {
+					JSON_ELEMENT_START(element);
+					WRITE(",\"content\":[");
+					Match__childrenWriteJSON(match, fd, flags);
+					WRITE("]");
+					JSON_ELEMENT_END(element);
+				}
 				break;
 			case TYPE_PROCEDURE:
 				break;
@@ -766,7 +786,7 @@ void Match__writeJSON(Match* match, int fd) {
 }
 
 void Match_writeJSON(Match* this, int fd) {
-	Match__writeJSON(this, fd);
+	Match__writeJSON(this, fd, 0);
 }
 
 
@@ -833,7 +853,7 @@ void Match__writeXML(Match* match, int fd, int flags) {
 				break;
 			case TYPE_TOKEN:
 				count = TokenMatch_count(match);
-				if (count > 0) {
+				if (count == 0) {
 					WRITE("<");
 					WRITE_ELEMENT_NAME(element);
 					WRITE("/>");
@@ -887,7 +907,7 @@ void Match_printXML(Match* this) {
 }
 
 void Match_writeXML(Match* this, int fd ) {
-	WRITE("<xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\" />\n");
+	WRITE("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\" ?>\n");
 	Match__writeXML(this, fd, 0);
 }
 
