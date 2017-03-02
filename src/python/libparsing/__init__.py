@@ -933,7 +933,7 @@ class ParsingResult(CObject):
 		super(ParsingResult, self).__del__()
 		# The parsing result is the only one we really need to free
 		# along with the grammar
-		# lib.ParsingResult_free(self._cobject)
+		lib.ParsingResult_free(self._cobject)
 
 # -----------------------------------------------------------------------------
 #
@@ -1188,8 +1188,7 @@ class Grammar(CObject):
 		super(Grammar, self).__del__()
 		# The parsing result is the only one we really need to free
 		# along with the grammar
-		# lib.Grammar_free(self._cobject)
-
+		lib.Grammar_free(self._cobject)
 
 # -----------------------------------------------------------------------------
 #
