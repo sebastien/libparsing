@@ -14,7 +14,7 @@ import sys, os, tempfile
 # We make sure `build_libparsing` is within the path
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "bin"))
 
-VERSION            = "0.8.12"
+VERSION            = "0.9.1"
 if os.path.exists("src/h/parsing.h"):
 	LONG_DESCRIPTION = "\n".join(_[2:].strip() for _ in open("src/h/parsing.h").read().split("[START:INTRO]",1)[1].split("[END:INTRO]")[0].split("\n"))
 else:
@@ -57,13 +57,13 @@ setup(
 			"_libparsing.c",
 			"_libparsing.h",
 			"_libparsing.ffi",
-			"_build.py",
+			"_buildext.py",
 		]
 	},
 	# SEE: http://cffi.readthedocs.io/en/latest/cdef.html?highlight=setup.py
-	setup_requires=["cffi>=1.0.0"],
-	cffi_modules=["src/python/libparsing/_build.py:ffibuilder"],
-	install_requires=["cffi>=1.0.0"],
+	setup_requires=["cffi>=1.9.1"],
+	cffi_modules=["src/python/libparsing/_buildext.py:ffibuilder"],
+	install_requires=["cffi>=1.9.1"],
 )
 
 # EOF

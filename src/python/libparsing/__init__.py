@@ -46,24 +46,33 @@ LIBPARSING_EXT = None
 LIBPARSING_SO  = None
 LIBRARY_EXTS   = ("so", "dylib", "dll")
 
-if len([_ for _ in LIBRARY_EXTS if os.path.exists(PACKAGE_PATH + "/_libparsing" + _)]) == 0:
-	from . import _build
-	_build.build()
+# We check if there is a _libparsing SO/DYLIB/DLL file. If not, we need to
+# build it using CFFI.
+from . import _buildext
+if len([_ for _ in LIBRARY_EXTS if os.path.exists(join(PACKAGE_PATH, _buildext.filename(_)))]) == 0:
+	logging.info("Building native libparsing Python bindings‥")
+	_buildext.build()
 
+# Now we look for the actual Python extension (_libparsing
 # We need to support different extensions and different prefixes. CFFI
 # will build extensions as " _libparsing.cpython-35m-x86_64-linux-gnu.so"
 # on Linux.
+PREFIX_EXT = _buildext.name() + "."
+PREFIX_SO  = "libparsing."
 for p in os.listdir(PACKAGE_PATH):
-	if p.startswith("_libparsing.") and p.rsplit(".",1)[-1] in LIBRARY_EXTS:
+	if p.startswith(PREFIX_EXT) and p.rsplit(".",1)[-1] in LIBRARY_EXTS:
 		LIBPARSING_EXT = os.path.join(PACKAGE_PATH, p)
-	if p.startswith("libparsing.") and p.rsplit(".",1)[-1] in LIBRARY_EXTS:
+	if p.startswith(PREFIX_SO)  and p.rsplit(".",1)[-1] in LIBRARY_EXTS:
 		LIBPARSING_SO  = os.path.join(PACKAGE_PATH, p)
 
 if LIBPARSING_EXT:
 	# Using the EXT instead of the SO (ie. API vs ABI mode) improves performance
 	# by ~25%, but the extension needs to be compiled specifically for the python
 	# version.
-	from ._libparsing import lib, ffi
+	import importlib
+	libparsing_ext = importlib.import_module("libparsing." + _buildext.name())
+	lib = libparsing_ext.lib
+	ffi = libparsing_ext.ffi
 elif LIBPARSING_SO:
 	assert os.path.exists(LIBPARSING_FFI), "libparsing: Missing FFI interface file {0}".format(LIBPARSING_FFI)
 	ffi = FFI()
