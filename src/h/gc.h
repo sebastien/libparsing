@@ -9,8 +9,6 @@ extern "C" {
 #define _XOPEN_SOURCE 700
 #endif
 
-#define ASSERT_EXITS(r) assert (r != NULL)
-#define ASSERT_REF(r)   assert(((gc_Reference*)r)->guard == 'G')
 #ifdef HAS_GC
 #define HAS_GC
 #endif

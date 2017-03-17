@@ -3102,3 +3102,131 @@ _Bool
     Utilites_checkIndent( ParsingElement *this, ParsingContext* context ) {
  return 1;
 }
+void* gc_Reference_data( gc_Reference* ref ) {
+ if (ref == NULL) {
+  return NULL;
+ } else {
+  return ref + sizeof(gc_Reference);
+ }
+}
+
+void gc_Reference_acquire( gc_Reference* ref ) {
+ assert (ref != NULL);
+ assert(((gc_Reference*)ref)->guard == 'G');
+ ref->count += 1;
+}
+
+gc_Reference* gc_Reference_release( gc_Reference* ref ) {
+ assert (ref != NULL);
+ assert(((gc_Reference*)ref)->guard == 'G');
+ ref->count -= 1;
+ if (ref->count <= 0) {
+  gc_Reference_free(ref);
+  return NULL;
+ } else {
+  return ref;
+ }
+}
+
+void gc_Reference_free( gc_Reference* ref ) {
+ assert (ref != NULL);
+ assert(((gc_Reference*)ref)->guard == 'G');
+ assert(ref->count <= 0);
+ free(ref);
+}
+gc_Reference* gc_ref( void* ptr ) {
+ if (ptr == NULL) {
+  return NULL;
+ } else {
+
+  return ptr;
+
+
+
+
+
+ }
+}
+
+
+void gc_init( gc_Reference* ref, size_t size ) {
+
+
+
+
+
+
+
+}
+
+
+
+
+
+void* gc_new( size_t size ) {
+
+ return malloc(size);
+
+
+
+
+
+}
+
+void* gc_newBlank( size_t size ) {
+
+ return calloc(1, size);
+
+
+
+
+
+}
+
+
+
+
+void gc_free( void* ptr ) {
+
+ free(ptr);
+
+
+
+}
+
+void gc_acquire( void* ptr ) {
+
+
+
+}
+
+void gc_release( void* ptr ) {
+
+
+
+}
+
+void* gc_realloc( void* ptr, size_t size ) {
+
+ return realloc(ptr, size);
+}
+
+char* gc_strdup(const char* s) {
+
+ return strdup(s);
+
+
+
+
+
+
+}
+
+void* gc_calloc(size_t count, size_t size) {
+
+ return calloc(count, size);
+
+
+
+
+}

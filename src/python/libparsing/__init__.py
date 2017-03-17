@@ -44,11 +44,15 @@ lib            = None
 LIBPARSING_FFI = join(PACKAGE_PATH, "_libparsing.ffi") if os.path.exists(join(PACKAGE_PATH, "_libparsing.ffi")) else None
 LIBPARSING_EXT = None
 LIBPARSING_SO  = None
+LIBRARY_EXTS   = ("so", "dylib", "dll")
+
+if len([_ for _ in LIBRARY_EXTS if os.path.exists(PACKAGE_PATH + "/_libparsing" + _)]) == 0:
+	from . import _build
+	_build.build()
 
 # We need to support different extensions and different prefixes. CFFI
 # will build extensions as " _libparsing.cpython-35m-x86_64-linux-gnu.so"
 # on Linux.
-LIBRARY_EXTS   = ("so", "dylib", "dll")
 for p in os.listdir(PACKAGE_PATH):
 	if p.startswith("_libparsing.") and p.rsplit(".",1)[-1] in LIBRARY_EXTS:
 		LIBPARSING_EXT = os.path.join(PACKAGE_PATH, p)

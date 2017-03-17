@@ -2,6 +2,11 @@
 #include <assert.h>
 #include <stdlib.h>
 #include "gc.h"
+#endif
+
+
+#define ASSERT_EXITS(r) assert (r != NULL)
+#define ASSERT_REF(r)   assert(((gc_Reference*)r)->guard == 'G')
 #define GC_TRANSPARENT
 
 // -----------------------------------------------------------------------------
@@ -161,4 +166,3 @@ void* gc_calloc(size_t count, size_t size) {
 	return gc_Reference_data(newref);
 #endif
 }
-#endif

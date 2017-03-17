@@ -44,3 +44,22 @@ and using a similiar infrastructure as terminals look-ahead, should be able
 to precompile 256-chars matching tables for each of the state, allowing to quickly
 know which rule would match for a given ASCII character input. Non-ascii characters
 would need special handling.
+
+Profiling
+---------
+
+Using `oprofile`:
+
+```
+operf -g dist/c-parser-pcss
+opreport -g dist/c-parser-pcss
+```
+
+Using `perf`
+
+```
+sudo perf record -a -g dist/c-parser-pcss
+perf report --sort comm,dso
+```
+
+
