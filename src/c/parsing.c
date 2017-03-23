@@ -715,7 +715,7 @@ void Match__writeJSON(Match* match, int fd, int flags) {
 
 	if (element->type == TYPE_REFERENCE) {
 		Reference* ref = (Reference*)match->element;
-		if (ref->cardinality == CARDINALITY_ONE || ref->cardinality == CARDINALITY_OPTIONAL) {
+		if (ref->cardinality == CARDINALITY_ONE || ref->cardinality == CARDINALITY_NOT_EMPTY || ref->cardinality == CARDINALITY_OPTIONAL) {
 			Match__writeJSON(match->children, fd, flags);
 		} else {
 			WRITE("[");
@@ -833,7 +833,7 @@ void Match__writeXML(Match* match, int fd, int flags) {
 
 	if (element->type == TYPE_REFERENCE) {
 		Reference* ref = (Reference*)match->element;
-		if (ref->cardinality == CARDINALITY_ONE || ref->cardinality == CARDINALITY_OPTIONAL) {
+		if (ref->cardinality == CARDINALITY_ONE || ref->cardinality == CARDINALITY_NOT_EMPTY || ref->cardinality == CARDINALITY_OPTIONAL) {
 			Match__writeXML(match->children, fd, flags);
 		} else {
 			Match__childrenWriteXML(match, fd, flags);
@@ -1314,6 +1314,12 @@ Match* Reference_recognize(Reference* this, ParsingContext* context) {
 		case CARDINALITY_MANY_OPTIONAL:
 			assert(count > 0 || result == FAILURE);
 			is_success = TRUE;
+			break;
+		case CARDINALITY_NOT_EMPTY:
+			if (is_success && result->length == 0) {
+				result = Match_fail(result);
+				return MATCH_STATS(result);
+			}
 			break;
 		default:
 			// Unsuported cardinality
@@ -2129,7 +2135,7 @@ ParsingResult* ParsingResult_new(Match* match, ParsingContext* context) {
 	assert(context->iterator != NULL);
 	this->match   = match;
 	this->context = context;
-	if (match != FAILURE) {
+	if (match != FAILURE && context->iterator->offset > 0) {
 		if (Iterator_hasMore(context->iterator) && Iterator_remaining(context->iterator) > 0) {
 			LOG_IF(context->grammar->isVerbose, "Partial success, parsed %zu bytes, %zu remaining", context->iterator->offset, Iterator_remaining(context->iterator));
 			this->status = STATUS_PARTIAL;

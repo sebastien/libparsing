@@ -91,6 +91,7 @@ CARDINALITY_OPTIONAL      = b'?'
 CARDINALITY_ONE           = b'1'
 CARDINALITY_MANY_OPTIONAL = b'*'
 CARDINALITY_MANY          = b'+'
+CARDINALITY_NOT_EMPTY     = b'='
 TYPE_WORD                 = b'W'
 TYPE_TOKEN                = b'T'
 TYPE_GROUP                = b'G'
@@ -279,6 +280,9 @@ class ParsingElement(CObject):
 
 	def optional( self ):
 		return Reference(self).optional()
+
+	def notEmpty( self ):
+		return Reference(self).notEmpty()
 
 	def zeroOrMore( self ):
 		return Reference(self).zeroOrMore()
@@ -481,6 +485,10 @@ class Reference(CObject):
 		lib.Reference_cardinality(self._cobject, CARDINALITY_MANY)
 		return self
 
+	def notEmpty( self ):
+		lib.Reference_cardinality(self._cobject, CARDINALITY_NOT_EMPTY)
+		return self
+
 	# =========================================================================
 	# HELPERS
 	# =========================================================================
@@ -515,7 +523,7 @@ class Reference(CObject):
 		)
 
 	def __del__( self ):
-		super(Reference, self).__del__()
+		super(self.__class__, self).__del__()
 		# References are managed by the grammar, you should not create
 		# them directly, so we don't need to free them either.
 		pass
@@ -646,7 +654,7 @@ class Match(CObject):
 			)
 
 	def __del__( self ):
-		super(Match, self).__del__()
+		super(self.__class__, self).__del__()
 		# Matches are managed by ParsingResult, so we don't need to
 		# free  them.
 		pass
@@ -753,7 +761,7 @@ class ParsingContext(CObject):
 		return lib.ParsingContext_charAt(self._cobject, offset)
 
 	def __del__( self ):
-		super(ParsingContext, self).__del__()
+		super(self.__class__, self).__del__()
 		# Parsing contexts are owned by parsing results, so we don't need
 		# to free them
 		pass
@@ -943,7 +951,7 @@ class ParsingResult(CObject):
 		)
 
 	def __del__( self ):
-		super(ParsingResult, self).__del__()
+		super(self.__class__, self).__del__()
 		# The parsing result is the only one we really need to free
 		# along with the grammar
 		lib.ParsingResult_free(self._cobject)
@@ -1198,7 +1206,7 @@ class Grammar(CObject):
 		self._prepared = True
 
 	def __del__( self ):
-		super(Grammar, self).__del__()
+		super(self.__class__, self).__del__()
 		# The parsing result is the only one we really need to free
 		# along with the grammar
 		lib.Grammar_free(self._cobject)

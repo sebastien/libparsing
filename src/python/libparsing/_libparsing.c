@@ -1440,7 +1440,7 @@ void Match__writeJSON(Match* match, int fd, int flags) {
 
  if (element->type == '#') {
   Reference* ref = (Reference*)match->element;
-  if (ref->cardinality == '1' || ref->cardinality == '?') {
+  if (ref->cardinality == '1' || ref->cardinality == '=' || ref->cardinality == '?') {
    Match__writeJSON(match->children, fd, flags);
   } else {
    dprintf(fd,"%s","[");
@@ -1548,7 +1548,7 @@ void Match__writeXML(Match* match, int fd, int flags) {
 
  if (element->type == '#') {
   Reference* ref = (Reference*)match->element;
-  if (ref->cardinality == '1' || ref->cardinality == '?') {
+  if (ref->cardinality == '1' || ref->cardinality == '=' || ref->cardinality == '?') {
    Match__writeXML(match->children, fd, flags);
   } else {
    Match__childrenWriteXML(match, fd, flags);
@@ -2043,6 +2043,12 @@ _Bool
   case '*':
    assert(count > 0 || result == FAILURE);
    is_success = 1;
+   break;
+  case '=':
+   if (is_success && result->length == 0) {
+    result = Match_fail(result);
+    return ParsingContext_registerMatch(context, (Element*)this, result);
+   }
    break;
   default:
 
@@ -2838,7 +2844,7 @@ ParsingResult* ParsingResult_new(Match* match, ParsingContext* context) {
  assert(context->iterator != NULL);
  this->match = match;
  this->context = context;
- if (match != FAILURE) {
+ if (match != FAILURE && context->iterator->offset > 0) {
   if (Iterator_hasMore(context->iterator) && Iterator_remaining(context->iterator) > 0) {
    if(context->grammar->isVerbose){fprintf(stderr, "--- ");fprintf(stderr, "Partial success, parsed %zu bytes, %zu remaining", context->iterator->offset, Iterator_remaining(context->iterator));fprintf(stderr, "\n");;};
    this->status = 'p';

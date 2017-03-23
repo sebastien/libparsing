@@ -10,7 +10,7 @@
 
 #ifndef __PARSING_H__
 #define __PARSING_H__
-#define __PARSING_VERSION__ "0.9.1"
+#define __PARSING_VERSION__ "0.9.2"
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -742,6 +742,8 @@ typedef struct Reference {
 #define CARDINALITY_MANY_OPTIONAL '*'
 // @define
 #define CARDINALITY_MANY          '+'
+// @define
+#define CARDINALITY_NOT_EMPTY     '='
 
 // @operation
 // Tells if the given pointer is a pointer to Reference
