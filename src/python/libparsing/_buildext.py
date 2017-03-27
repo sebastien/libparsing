@@ -12,6 +12,7 @@ H_SOURCE   = open(join(BASE,NAME + ".h")).read()
 C_SOURCE   = open(join(BASE,NAME + ".c")).read()
 FFI_SOURCE = open(join(BASE,NAME + ".ffi")).read()
 PY_VERSION = "{0}_{1}_{2}".format(sys.version_info.major, sys.version_info.minor, sys.version.rsplit("[", 1)[-1].split()[0].lower())
+FFI_BUILDER = None
 
 def name():
 	"""Returns the name of the Python module to be built"""
@@ -21,13 +22,11 @@ def filename(ext):
 	"""Returns the filename of the Python module to be built"""
 	return "{0}py{1}.{2}".format(NAME, PY_VERSION, ext)
 
-def build(path=BASE):
-	"""Builds a native Python module/extension using CFFI. The extension will
-	be available at `{base}/{name}py{version}.{so|dylib|dll}`."""
-
+def builder():
 	# In order to avoid _libparsing.so: undefined symbol: PyInt_FromLong
 	# SEE: http://community.activestate.com/node/9069
 	# SEE: http://cffi.readthedocs.io/en/latest/embedding.html
+	if FFI_BUILDER: return FFI_BUILDER
 	ffibuilder = cffi.FFI()
 	ffibuilder.set_source(
 		"{0}".format(name()), H_SOURCE + C_SOURCE,
@@ -40,7 +39,12 @@ def build(path=BASE):
 	def module_init():
 		pass
 	""".format(name()))
+	return ffibuilder
 
+def build(path=BASE):
+	"""Builds a native Python module/extension using CFFI. The extension will
+	be available at `{base}/{name}py{version}.{so|dylib|dll}`."""
+	ffibuilder = builder()
 	# Now we get the destination moduled path and build the module
 	mod_path   = dirname(abspath(__file__))
 	build_path = tempfile.mkdtemp()
@@ -54,6 +58,7 @@ def build(path=BASE):
 	os.rmdir(build_path)
 	return dest
 
+FFI_BUILDER = builder ()
 if __name__ == "__main__":
 	args = sys.argv[1:]
 	build ()

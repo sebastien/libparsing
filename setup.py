@@ -62,7 +62,7 @@ setup(
 	},
 	# SEE: http://cffi.readthedocs.io/en/latest/cdef.html?highlight=setup.py
 	setup_requires=["cffi>=1.9.1"],
-	cffi_modules=["src/python/libparsing/_buildext.py:ffibuilder"],
+	cffi_modules=["src/python/libparsing/_buildext.py:FFI_BUILDER"],
 	install_requires=["cffi>=1.9.1"],
 )
 
