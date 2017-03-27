@@ -11,7 +11,7 @@ BASE       = dirname(abspath(__file__))
 H_SOURCE   = open(join(BASE,NAME + ".h")).read()
 C_SOURCE   = open(join(BASE,NAME + ".c")).read()
 FFI_SOURCE = open(join(BASE,NAME + ".ffi")).read()
-PY_VERSION = "{0}_{1}".format(sys.version_info.major, sys.version_info.minor)
+PY_VERSION = "{0}_{1}_{2}".format(sys.version_info.major, sys.version_info.minor, sys.version.rsplit("[", 1)[-1].split()[0].lower())
 
 def name():
 	"""Returns the name of the Python module to be built"""
@@ -31,7 +31,7 @@ def build(path=BASE):
 	ffibuilder = cffi.FFI()
 	ffibuilder.set_source(
 		"{0}".format(name()), H_SOURCE + C_SOURCE,
-		extra_link_args=["-Wl,-lpcre,--export-dynamic"]
+		extra_link_args=["-Wl,-lpcre,-Ofast,--export-dynamic"]
 	)
 	ffibuilder.cdef(FFI_SOURCE)
 	ffibuilder.embedding_init_code("""
