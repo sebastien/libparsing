@@ -129,7 +129,7 @@ if sys.version_info.major >= 3:
 else:
 	def ensure_bytes( v ):
 		"""Makes sure that this returns a byte string."""
-		return v.decode("utf8") if isinstance(v,unicode) else v
+		return v.encode("utf8") if isinstance(v,unicode) else v
 	def ensure_cstring(v):
 		"""Makes sure this returns a string that can be passed to C (an str)"""
 		return v.encode("utf8") if isinstance(v,unicode) else v
@@ -139,7 +139,6 @@ else:
 	def ensure_unicode( v ):
 		"""Ensures the result is a unicode string."""
 		return v.decode("utf8") if isinstance(v,str) else v
-
 	def ensure_string( v ):
 		"""Ensures the result is the default unicode string type (unicode)"""
 		return ensure_unicode(v)
