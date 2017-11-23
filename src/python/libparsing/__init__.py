@@ -27,7 +27,7 @@ try:
 except ImportError:
 	import logging
 
-VERSION            = "0.9.2"
+VERSION            = "0.9.3"
 LICENSE            = "http://ffctn.com/doc/licenses/bsd"
 PACKAGE_PATH       = dirname(abspath(__file__))
 
@@ -119,7 +119,7 @@ if sys.version_info.major >= 3:
 		"""Ensures the result is a string."""
 		return v.decode("utf8") if isinstance(v,bytes) else v
 	def ensure_unicode(v):
-		"""Ensures the result is an uncicode string(str)"""
+		"""Ensures the result is an unicode string(str)"""
 		return ensure_str(v)
 	def ensure_string( v ):
 		"""Ensures the result is the default unicode string type (str)"""
@@ -139,6 +139,7 @@ else:
 	def ensure_unicode( v ):
 		"""Ensures the result is a unicode string."""
 		return v.decode("utf8") if isinstance(v,str) else v
+
 	def ensure_string( v ):
 		"""Ensures the result is the default unicode string type (unicode)"""
 		return ensure_unicode(v)
@@ -596,7 +597,6 @@ class Match(CObject):
 
 	def hasChildren( self ):
 		return lib.Match_hasChildren(self._cobject)
-
 
 	def _toHelper( self, callback ):
 		(fd, fn) = tempfile.mkstemp()
@@ -1366,14 +1366,14 @@ class Processor:
 			return res
 
 	def _processWord( self, match ):
-		return ensure_string(ffi.string(lib.WordMatch_group(match._cobject)))
+		return ensure_unicode(ffi.string(lib.WordMatch_group(match._cobject)))
 
 	def _processToken( self, match ):
 		n = lib.TokenMatch_count(match._cobject)
 		if n == 0:
 			return None
 		else:
-			return list(ensure_string(ffi.string(lib.TokenMatch_group(match._cobject, i))) for i in range(n))
+			return list(ensure_unicode(ffi.string(lib.TokenMatch_group(match._cobject, i))) for i in range(n))
 
 	def _processCondition( self, match ):
 		return True
