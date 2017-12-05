@@ -1,6 +1,11 @@
 Ideas for Performance improvement
 =================================
 
+Benchmarks
+----------
+
+SEE https://github.com/Geal/nom_benchmarks/tree/master/http/nom-http/src
+
 Fast line-based parsing
 -----------------------
 

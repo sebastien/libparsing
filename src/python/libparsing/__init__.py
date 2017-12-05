@@ -114,7 +114,7 @@ if sys.version_info.major >= 3:
 		return v.encode("utf8") if isinstance(v,str) else v
 	def ensure_cstring(v):
 		"""Makes sure this returns a string that can be passed to C (a bytes string)"""
-		return v.encode("utf8") if isinstance(v,str) else v
+		return v.encode("utf8") if isinstance(v,str) else v.decode("utf8").encode("utf8")
 	def ensure_str(v):
 		"""Ensures the result is a string."""
 		return v.decode("utf8") if isinstance(v,bytes) else v
@@ -132,7 +132,7 @@ else:
 		return v.encode("utf8") if isinstance(v,unicode) else v
 	def ensure_cstring(v):
 		"""Makes sure this returns a string that can be passed to C (an str)"""
-		return v.encode("utf8") if isinstance(v,unicode) else v
+		return v.encode("utf8") if isinstance(v,unicode) else v.decode("utf8").encode("utf8")
 	def ensure_str( v ):
 		"""Ensures the resulting is a str (Python 2)"""
 		return v.encode("utf8") if isinstance(v,unicode) else v
@@ -249,7 +249,8 @@ class ParsingElement(CObject):
 
 	@property
 	def name( self ):
-		return  ensure_str(ffi.string(self._cobject.name))
+		name = self._cobject.name
+		return ensure_str(ffi.string(name)) if name else None
 
 	@name.setter
 	def name( self, name ):
@@ -1049,12 +1050,12 @@ class Grammar(CObject):
 
 	def parsePath( self, path ):
 		self._prepare()
-		_path = ensure_cstring(path)
+		_path = ensure_cstring(ensure_unicode(path))
 		return ParsingResult.Wrap(lib.Grammar_parsePath(self._cobject, _path), path=(path, _path), grammar=self)
 
 	def parseString( self, text ):
 		self._prepare()
-		_text = ensure_cstring(text)
+		_text = ensure_cstring(ensure_unicode(text))
 		return ParsingResult.Wrap(lib.Grammar_parseString(self._cobject,_text), text=(text, _text), grammar=self)
 
 	# =========================================================================
