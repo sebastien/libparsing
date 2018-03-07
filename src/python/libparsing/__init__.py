@@ -297,6 +297,14 @@ class ParsingElement(CObject):
 	def disableFailMemoize( self ):
 		return self
 
+	def skip( self, value=True ):
+		# TODO: Implement me
+		return self
+
+	def noskip( self ):
+		self.skip(False)
+		return self
+
 	def slots( self ):
 		child = self._cobject.children
 		res   = []
@@ -598,6 +606,15 @@ class Match(CObject):
 	def hasChildren( self ):
 		return lib.Match_hasChildren(self._cobject)
 
+	def countChildren( self ):
+		"""Returns the number of children."""
+		count = 0
+		child = self._cobject.children
+		while child:
+			child = child.next
+			count += 1
+		return count
+
 	def _toHelper( self, callback ):
 		(fd, fn) = tempfile.mkstemp()
 		callback(self._cobject, fd)
@@ -625,9 +642,18 @@ class Match(CObject):
 
 	def __getitem__( self, index ):
 		if type(index) == int:
-			for i,c in enumerate(self):
+			# We correct the index
+			if index < 0:
+				index = self.countChildren() + index
+			# We do a while iteration so that we don't wrap unncessary children
+			i     = 0
+			child = self._cobject.children
+			while child:
 				if i == index:
-					return c
+					return Match.Wrap(child)
+				else:
+					child = child.next
+					i += 1
 			raise KeyError
 		else:
 			# FIXME: It would be better to do Match_indexForKey(‥)
