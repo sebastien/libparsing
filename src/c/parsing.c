@@ -1027,6 +1027,7 @@ ParsingElement* ParsingElement_insert(ParsingElement* this, int index, Reference
 		while (current && index > 0) {
 			previous = current;
 			current  = current->next;
+			index -= 1;
 		}
 		assert (index == 0);
 		assert (current  != NULL);
