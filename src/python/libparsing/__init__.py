@@ -266,13 +266,42 @@ class ParsingElement(CObject):
 	def type( self ):
 		return self._cobject.type
 
+	@property
+	def children( self ):
+		child = self._cobject.children
+		res   = []
+		while child:
+			ref = Reference.Wrap(child)
+			yield ref
+			child = ref._cobject.next
+
+	def clear( self ):
+		# FIXME: This does not work
+		lib.ParsingElement_clear(self._cobject)
+		return self
+
 	def set( self, *children ):
+		self.clear()
 		return self.add(*children)
+
+	def insert( self, index, *children ):
+		for c in children:
+			assert isinstance(c, ParsingElement) or isinstance(c, Reference)
+			lib.ParsingElement_insert(self._cobject, index, lib.Reference_Ensure(c._cobject))
+			index += 1
+		return self
 
 	def add( self, *children ):
 		for c in children:
 			assert isinstance(c, ParsingElement) or isinstance(c, Reference)
 			lib.ParsingElement_add(self._cobject, lib.Reference_Ensure(c._cobject))
+		return self
+
+	def prepend( self, *children ):
+		l = list(self.children)
+		self.clear()
+		self.add(*children)
+		self.add(*l)
 		return self
 
 	def _as( self, name ):
@@ -654,14 +683,14 @@ class Match(CObject):
 				else:
 					child = child.next
 					i += 1
-			raise KeyError
+			raise KeyError("Cannot find item #{0} in {1}".format(index, self))
 		else:
 			# FIXME: It would be better to do Match_indexForKey(‥)
 			i = self.indexForKey(index)
 			if i >= 0:
 				return self[i]
 			else:
-				raise KeyError
+				raise KeyError("Cannot find item #{0} in {1}".format(index, self))
 
 	def __repr__(self):
 		if not self._cobject:
@@ -1283,6 +1312,9 @@ class Processor:
 		self.symbolByID   = {}
 		self.handlerByID  = {}
 		self.grammar      = grammar
+		if self.grammar:
+			# We prepare the grammar
+			self.grammar.prepare()
 		self._bindSymbols()
 		self._bindHandlers()
 
@@ -1294,7 +1326,7 @@ class Processor:
 			self.symbolByName[name] = s
 			if s.id in self.symbolByID:
 				if s.id >= 0:
-					raise Exception("Duplicate symbol id: %d, has %s already while trying to assign %s" % (s.id(), self.symbolByID[s.id()].name(), s.name()))
+					raise Exception("Duplicate symbol id: %d, has %s already while trying to assign %s" % (s.id, self.symbolByID[s.id].name, s.name))
 				elif self.isStrict:
 					logging.warn("Unused symbol: %s" % (repr(s)))
 			self.symbolByID[s.id] = s

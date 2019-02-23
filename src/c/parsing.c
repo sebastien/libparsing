@@ -1013,6 +1013,30 @@ void ParsingElement_free(ParsingElement* this) {
 	}
 }
 
+ParsingElement* ParsingElement_insert(ParsingElement* this, int index, Reference* child) {
+	assert(!Reference_hasNext(child));
+	assert(child->next == NULL);
+	assert(child->element->recognize!=NULL);
+	assert(index >= 0);
+	if (index == 0) {
+		child->next = this->children;
+		this->children = child;
+	} else {
+		Reference* current = this->children;
+		Reference* previous = NULL;
+		while (current && index > 0) {
+			previous = current;
+			current  = current->next;
+		}
+		assert (index == 0);
+		assert (current  != NULL);
+		assert (previous != NULL);
+		previous->next = child;
+		child->next = current;
+	}
+	return this;
+}
+
 ParsingElement* ParsingElement_add(ParsingElement* this, Reference* child) {
 	assert(!Reference_hasNext(child));
 	assert(child->next == NULL);

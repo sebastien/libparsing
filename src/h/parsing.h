@@ -594,6 +594,9 @@ void ParsingElement_free(ParsingElement* this);
 ParsingElement* ParsingElement_Ensure(void* referenceOfElement);
 
 // @method
+ParsingElement* ParsingElement_insert(ParsingElement* this, int index, Reference* child);
+
+// @method
 // Adds a new reference as child of this parsing element. This will only
 // be effective for composite parsing elements such as `Rule` or `Token`.
 ParsingElement* ParsingElement_add(ParsingElement* this, Reference* child);

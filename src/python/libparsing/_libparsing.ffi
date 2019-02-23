@@ -145,6 +145,7 @@ ParsingElement* ParsingElement_new(Reference* children[]);
 void ParsingElement_freeChildren(ParsingElement* this);
 void ParsingElement_free(ParsingElement* this);
 ParsingElement* ParsingElement_Ensure(void* referenceOfElement);
+ParsingElement* ParsingElement_insert(ParsingElement* this, int index, Reference* child);
 ParsingElement* ParsingElement_add(ParsingElement* this, Reference* child);
 ParsingElement* ParsingElement_clear(ParsingElement* this);
 size_t ParsingElement_skip(ParsingElement* this, ParsingContext* context);
