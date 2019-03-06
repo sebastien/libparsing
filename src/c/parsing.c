@@ -522,6 +522,17 @@ Match* Match_new(void) {
 	return this;
 }
 
+inline void Match_free__specialized(Match* this, ParsingElement* element) {
+	assert(ParsingElement_Is(this->element));
+	if (element!=NULL){
+		switch (element->type) {
+			case TYPE_TOKEN:
+				TokenMatch_free(this);
+				break;
+		}
+	}
+}
+
 // TODO: We might want to recycle the objects for better performance and
 // fewer allocs.
 void* Match_free(Match* this) {
@@ -541,20 +552,11 @@ void* Match_free(Match* this) {
 		// If the match is from a parsing element
 		if (ParsingElement_Is(this->element)) {
 			ParsingElement* element = ((ParsingElement*)this->element);
-			assert(ParsingElement_Is(this->element));
-			// and the parsing element declared a free match function, we
-			// apply it.
-			if (element->freeMatch) {
-				element->freeMatch(this);
-			}
+			Match_free__specialized(this,element);
 		} else {
 			assert(Reference_Is(this->element));
 			ParsingElement* element = ((Reference*)this->element)->element;
-			assert(ParsingElement_Is(element));
-			if (element->freeMatch) {
-				element->freeMatch(this);
-			}
-
+			Match_free__specialized(this,element);
 		}
 		// We deallocate this one
 		__FREE(this);
@@ -971,7 +973,6 @@ ParsingElement* ParsingElement_new(Reference* children[]) {
 	this->children  = NULL;
 	this->recognize = NULL;
 	this->process   = NULL;
-	this->freeMatch = NULL;
 	if (children != NULL && *children != NULL) {
 		Reference* r = Reference_Ensure(*children);
 		while ( r != NULL ) {
@@ -1453,7 +1454,6 @@ ParsingElement* Token_new(const char* expr) {
 	ParsingElement* this = ParsingElement_new(NULL);
 	this->type           = TYPE_TOKEN;
 	this->recognize      = Token_recognize;
-	this->freeMatch      = TokenMatch_free;
 	// NOTE: As of 0.7.5 we now keep a copy of the string, as it was
 	// causing problems with PyPy, hinting at potential allocation issues
 	// elsewhere.
