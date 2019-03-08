@@ -1253,6 +1253,17 @@ Match* Match_new(void) {
  return this;
 }
 
+inline void Match_free__specialized(Match* this, ParsingElement* element) {
+ assert(ParsingElement_Is(this->element));
+ if (element!=NULL && this!=NULL){
+  switch (element->type) {
+   case 'T':
+    TokenMatch_free(this);
+    break;
+  }
+ }
+}
+
 
 
 void* Match_free(Match* this) {
@@ -1272,20 +1283,11 @@ void* Match_free(Match* this) {
 
   if (ParsingElement_Is(this->element)) {
    ParsingElement* element = ((ParsingElement*)this->element);
-   assert(ParsingElement_Is(this->element));
-
-
-   if (element->freeMatch) {
-    element->freeMatch(this);
-   }
+   Match_free__specialized(this,element);
   } else {
    assert(Reference_Is(this->element));
    ParsingElement* element = ((Reference*)this->element)->element;
-   assert(ParsingElement_Is(element));
-   if (element->freeMatch) {
-    element->freeMatch(this);
-   }
-
+   Match_free__specialized(this,element);
   }
 
   if (this!=NULL) {; gc_free(this); } ;
@@ -1691,7 +1693,6 @@ ParsingElement* ParsingElement_new(Reference* children[]) {
  this->children = NULL;
  this->recognize = NULL;
  this->process = NULL;
- this->freeMatch = NULL;
  if (children != NULL && *children != NULL) {
   Reference* r = Reference_Ensure(*children);
   while ( r != NULL ) {
@@ -2185,7 +2186,6 @@ ParsingElement* Token_new(const char* expr) {
  ParsingElement* this = ParsingElement_new(NULL);
  this->type = 'T';
  this->recognize = Token_recognize;
- this->freeMatch = TokenMatch_free;
 
 
 

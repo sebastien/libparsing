@@ -524,7 +524,7 @@ Match* Match_new(void) {
 
 inline void Match_free__specialized(Match* this, ParsingElement* element) {
 	assert(ParsingElement_Is(this->element));
-	if (element!=NULL){
+	if (element!=NULL && this!=NULL){
 		switch (element->type) {
 			case TYPE_TOKEN:
 				TokenMatch_free(this);
