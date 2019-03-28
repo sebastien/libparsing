@@ -1228,7 +1228,8 @@ class Grammar(CObject):
 		e.isVerbose = 1 if verbose else 0
 		return self
 
-	def isVerbose( self, verbose ):
+	@property
+	def isVerbose( self ):
 		# FIXME: That cast should not be necessary
 		e = ffi.cast("Grammar*", self._cobject)
 		return e.isVerbose == 1
