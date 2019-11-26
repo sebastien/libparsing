@@ -1108,6 +1108,9 @@ class Grammar(CObject):
 		_path = ensure_cstring(ensure_unicode(path))
 		return ParsingResult.Wrap(lib.Grammar_parsePath(self._cobject, _path), path=(path, _path), grammar=self)
 
+	def parseStream( self, stream ):
+		return self.parseString(stream.read())
+
 	def parseString( self, text ):
 		self._prepare()
 		_text = ensure_cstring(ensure_unicode(text))
