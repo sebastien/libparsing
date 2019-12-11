@@ -284,6 +284,13 @@ class ParsingElement(CObject):
 		self.clear()
 		return self.add(*children)
 
+	def replace( self, index, *children ):
+		for c in children:
+			assert isinstance(c, ParsingElement) or isinstance(c, Reference)
+			lib.ParsingElement_replace(self._cobject, index, lib.Reference_Ensure(c._cobject))
+			index += 1
+		return self
+
 	def insert( self, index, *children ):
 		for c in children:
 			assert isinstance(c, ParsingElement) or isinstance(c, Reference)

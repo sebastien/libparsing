@@ -165,7 +165,7 @@ class Library:
 	def parse( self, *paths ):
 		for path in paths:
 			if not path: continue
-			with file(path, "r") as f:
+			with open(path, "r") as f:
 				self.addGroups(Parser.Groups(Parser.Lines(f.read())))
 		return self
 
@@ -178,7 +178,7 @@ class Library:
 
 	def getSymbols( self, pattern, classifiers=None ):
 		if classifiers and type(classifiers) not in (list, tuple): classifiers = list(classifiers)
-		assert type(pattern) in (unicode, str)
+		assert isinstance(pattern, str), f"Pattern should be str, got: {type(pattern)}"
 		symbols = [_ for _ in self.groups if _.type == TYPE_SYMBOL and fnmatch.fnmatch(_.name, pattern)]
 		if classifiers: symbols = [_ for _ in symbols if _.classifier in classifiers]
 		return symbols
@@ -276,7 +276,7 @@ class Parser:
 			if group.type == TYPE_SYMBOL:
 				first_line = None
 				try:
-					first_line  = (_ for _ in group.code if _).next()
+					first_line  = next(_ for _ in group.code if _)
 				except StopIteration:
 					reporter.error("Group has no code: {0}".format(group))
 				if first_line:

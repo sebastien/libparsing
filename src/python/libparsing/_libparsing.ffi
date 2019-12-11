@@ -128,6 +128,7 @@ void*  ParsingContext_get(ParsingContext*  this, const char* name);
 int  ParsingContext_getInt(ParsingContext*  this, const char* name);
 void  ParsingContext_set(ParsingContext*  this, const char* name, void* value);
 void  ParsingContext_setInt(ParsingContext*  this, const char* name, int value);
+void ParsingContext_on(ParsingContext* this, ContextCallback callback);
 int  ParsingContext_getVariableCount(ParsingContext* this);
 Match* ParsingContext_registerMatch(ParsingContext* this, Element* e, Match* m);
 typedef struct ParsingElement {
@@ -146,6 +147,7 @@ void ParsingElement_freeChildren(ParsingElement* this);
 void ParsingElement_free(ParsingElement* this);
 ParsingElement* ParsingElement_Ensure(void* referenceOfElement);
 ParsingElement* ParsingElement_insert(ParsingElement* this, int index, Reference* child);
+ParsingElement* ParsingElement_replace(ParsingElement* this, int index, Reference* child);
 ParsingElement* ParsingElement_add(ParsingElement* this, Reference* child);
 ParsingElement* ParsingElement_clear(ParsingElement* this);
 size_t ParsingElement_skip(ParsingElement* this, ParsingContext* context);

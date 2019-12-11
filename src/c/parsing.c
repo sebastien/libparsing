@@ -1039,6 +1039,34 @@ ParsingElement* ParsingElement_insert(ParsingElement* this, int index, Reference
 	return this;
 }
 
+ParsingElement* ParsingElement_replace(ParsingElement* this, int index, Reference* child) {
+	assert(!Reference_hasNext(child));
+	assert(child->next == NULL);
+	assert(child->element->recognize!=NULL);
+	assert(index >= 0);
+	if (index == 0) {
+		assert (this->children !=NULL );
+		child->next = this->children->next;
+		Reference_free(this->children);
+		this->children = child;
+	} else {
+		Reference* current = this->children;
+		Reference* previous = NULL;
+		while (current && index > 0) {
+			previous = current;
+			current  = current->next;
+			index -= 1;
+		}
+		assert (index == 0);
+		assert (current  != NULL);
+		assert (previous != NULL);
+		previous->next = child;
+		child->next = current->next;
+		Reference_free(current);
+	}
+	return this;
+}
+
 ParsingElement* ParsingElement_add(ParsingElement* this, Reference* child) {
 	assert(!Reference_hasNext(child));
 	assert(child->next == NULL);
