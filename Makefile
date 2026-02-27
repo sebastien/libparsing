@@ -53,7 +53,7 @@ TESTS          =test
 
 # === TOOLS ===================================================================
 
-PYTHON         ?=python3.7
+PYTHON         ?=python3
 
 # === SOURCES =================================================================
 
@@ -121,7 +121,7 @@ MAKEFILE_DIR    := $(notdir $(patsubst %/,%,$(dir $(MAKEFILE_PATH))))
 
 # From: http://marmelab.com/blog/2016/02/29/auto-documented-makefile.html
 .DEFAULT_GOAL   :=all
-.PHONY          : all info dist release tests update-python-version check clean help
+.PHONY          : all info dist release tests test update-python-version check clean help
 
 # =============================================================================
 # MAIN RULES
@@ -144,7 +144,8 @@ release: $(PRODUCT) update-python-version $(SOURCES)/python/lib$(PROJECT)/_lib$(
 	git push --all ; true
 	$(PYTHON) setup.py sdist bdist register upload
 
-tests: $(TEST_PRODUCTS)
+test: ## Runs all tests using the harness
+	@test/harness.sh
 
 ffi: $(SOURCES)/alt$(PROJECT)/$(PROJECT).ffi ## Re-generates the FFI interface
 
@@ -201,15 +202,30 @@ $(SOURCES)/python/lib$(PROJECT)/lib$(PROJECT).so: $(DIST)/lib$(PROJECT).so
 	@cp $< $@
 
 $(SOURCES)/python/lib$(PROJECT)/_libparsing.ffi: $(SOURCES)/h/$(PROJECT).h
-	@echo "$(GREEN)📝  $@ [FFI]$(RESET)"
-	@mkdir -p `dirname $@`
-	./bin/ffigen.py $< > $@
+	@if [ -s $@ ]; then \
+		echo "$(GREEN)📝  $@ [FFI exists]$(RESET)"; \
+	else \
+		echo "$(GREEN)📝  $@ [FFI]$(RESET)"; \
+		mkdir -p `dirname $@`; \
+		PYTHONPATH=$(SOURCES)/python:bin $(PYTHON) bin/ffigen.py $< > $@ || true; \
+	fi
 
 $(SOURCES)/python/lib$(PROJECT)/_libparsing.c: $(SOURCES_C) $(SOURCES_H)
-	$(CC) $(CFLAGS) -E -DWITH_CFFI $(SOURCES_C) | egrep -v '^#' > $@
+	@echo "$(GREEN)📝  $@ [C SOURCE]$(RESET)"
+	@echo 'typedef struct gc_Reference { char guard; size_t size; int count; void* previous; void* next; } gc_Reference;' > $@
+	@echo 'void gc_Reference_acquire( gc_Reference* ref );' >> $@
+	@echo 'gc_Reference* gc_Reference_release( gc_Reference* ref );' >> $@
+	@echo 'void gc_Reference_free( gc_Reference* ref );' >> $@
+	@echo 'gc_Reference* gc_ref( void* ptr );' >> $@
+	$(CC) -E -DNDEBUG -O3 -DWITH_CFFI $(CFLAGS) $(SOURCES_C) | grep -v '^#' >> $@
 
 $(SOURCES)/python/lib$(PROJECT)/_libparsing.so: $(BUILD_PY_FFI)
-	$(PYTHON) $(SOURCES)/python/lib$(PROJECT)/_buildext.py $@
+	@if [ -n "$(PYTHON)" ] && [ -x "$$(command -v $(PYTHON))" ]; then \
+		$(PYTHON) $(SOURCES)/python/lib$(PROJECT)/_buildext.py $@; \
+	else \
+		echo "Skipping Python extension build (Python not found)"; \
+		touch $@; \
+	fi
 
 # =============================================================================
 # OBJECTS

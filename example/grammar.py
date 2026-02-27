@@ -1,4 +1,4 @@
-#encoding: utf8
+# encoding: utf8
 from libparsing import *
 
 __doc__ = """
@@ -31,22 +31,26 @@ __skip__   = SPACE ;
 
 """
 
+
 def grammar(isVerbose=False):
-	g = grammar(isVerbose=isVerbose)
+	g = Grammar(isVerbose=isVerbose)
 	s = g.symbols
-	g.word("LP",            "(")
-	g.word("RP",            ")")
-	g.word("OPTIONAL",      "?")
+	g.word("LP", "(")
+	g.word("RP", ")")
+	g.word("OPTIONAL", "?")
 	g.word("MANY_OPTIONAL", "*")
-	g.word("MANY",          "+")
-	g.word("AT",            "@")
-	g.word("EQUAL",         "=")
-	g.word("COLON",         ":")
-	g.word("PIPE",          "|")
-	g.token("WORD",         "'([^']+)'")
-	g.token("TOKEN",        '"([^"]+)"')
-	g.token("NAME",         "[_\w][\w\d_]*")
-	g.rule("Group", s.LP, s.Expression, g.arule(s.PIPE, s.Expression).zeroOrMore(), s.RP)
+	g.word("MANY", "+")
+	g.word("AT", "@")
+	g.word("EQUAL", "=")
+	g.word("COLON", ":")
+	g.word("PIPE", "|")
+	g.token("WORD", "'([^']+)'")
+	g.token("TOKEN", '"([^"]+)"')
+	g.token("NAME", "[_\w][\w\d_]*")
+	g.rule(
+		"Group", s.LP, s.Expression, g.arule(s.PIPE, s.Expression).zeroOrMore(), s.RP
+	)
 	return g
+
 
 # EOF

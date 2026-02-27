@@ -1,6 +1,10 @@
-#!/usr/bin/env python2.7
+#!/usr/bin/env python3
 # encoding: utf8
-import os, sys ; sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + "/src/python")
+import os, sys
+
+sys.path.insert(
+	0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + "/src/python"
+)
 from libparsing import *
 from indent import grammarIndent
 
@@ -23,42 +27,66 @@ and here is another statement
 ```
 """
 
+
 def grammar(verbose=False):
-	g = Grammar(isVerbose = verbose)
+	g = Grammar(isVerbose=verbose)
 	s = g.symbols
-	g.token    ("NAME",        "\w+")
-	g.token    ("NUMBER",      "\d+")
-	g.token    ("INDENT",      "\t*")
-	g.token    ("WHITESPACE",  "[ ]+")
-	g.token    ("TABS",        "\s*")
-	g.word     ("COLON",       ":")
-	g.word     ("SEMICOLON",   ";")
-	g.word     ("EOL",         "\n")
-	g.word     ("COMMENT",     "#[^\n]+")
-	g.word     ("IF",          "if")
-	g.word     ("ELIF",        "elif")
-	g.word     ("ELSE",        "else")
-	g.word     ("FOR",         "for")
-	g.word     ("while",       "while")
+	g.token("NAME", "\w+")
+	g.token("NUMBER", "\d+")
+	g.token("INDENT", "\t*")
+	g.token("WHITESPACE", "[ ]+")
+	g.token("TABS", "\s*")
+	g.word("COLON", ":")
+	g.word("SEMICOLON", ";")
+	g.word("EOL", "\n")
+	g.word("COMMENT", "#[^\n]+")
+	g.word("IF", "if")
+	g.word("ELIF", "elif")
+	g.word("ELSE", "else")
+	g.word("FOR", "for")
+	g.word("while", "while")
 
 	# We merge the indentation grammar
 	grammarIndent(g)
 
-	g.group("Value",     s.NAME,   s.NUMBER)
+	g.group("Value", s.NAME, s.NUMBER)
 	g.rule("Expression", s.Value.oneOrMore())
-	#g.rule("Statement",  s.Indent, s.Expression, g.rule(s.SEMICOLON, s.Expression).zeroOrMore(), s.EOL)
-	g.rule("Statement",  s.Indent, s.Expression, s.EOL)
-	g.rule("Comment",    s.Indent, s.COMMENT, s.EOL)
+	# g.rule("Statement",  s.Indent, s.Expression, g.rule(s.SEMICOLON, s.Expression).zeroOrMore(), s.EOL)
+	g.rule("Statement", s.Indent, s.Expression, s.EOL)
+	g.rule("Comment", s.Indent, s.COMMENT, s.EOL)
 
 	g.group("Block")
-	g.rule("IfBlock", s.Indent, s.IF, s.Expression, s.COLON, s.EOL,
-		s.INDENT, s.Block.oneOrMore(), s.DEDENT
+	g.rule(
+		"IfBlock",
+		s.Indent,
+		s.IF,
+		s.Expression,
+		s.COLON,
+		s.EOL,
+		s.INDENT,
+		s.Block.oneOrMore(),
+		s.DEDENT,
 	)
-	g.rule("ElifBlock", s.Indent, s.ELIF, s.Expression, s.COLON, s.EOL,
-		s.INDENT, s.Block.oneOrMore(), s.DEDENT
+	g.rule(
+		"ElifBlock",
+		s.Indent,
+		s.ELIF,
+		s.Expression,
+		s.COLON,
+		s.EOL,
+		s.INDENT,
+		s.Block.oneOrMore(),
+		s.DEDENT,
 	)
-	g.rule("ElseBlock", s.Indent, s.ELSE, s.COLON, s.EOL,
-		s.INDENT, s.Block.oneOrMore(), s.DEDENT
+	g.rule(
+		"ElseBlock",
+		s.Indent,
+		s.ELSE,
+		s.COLON,
+		s.EOL,
+		s.INDENT,
+		s.Block.oneOrMore(),
+		s.DEDENT,
 	)
 	g.rule("If", s.IfBlock, s.ElifBlock.optional(), s.ElseBlock.optional())
 
@@ -68,9 +96,10 @@ def grammar(verbose=False):
 	g.group("Program", s.Block.zeroOrMore())
 
 	g.axiom = s.Program
-	g.skip  = s.WHITESPACE
+	g.skip = s.WHITESPACE
 
 	return g
+
 
 # -----------------------------------------------------------------------------
 #

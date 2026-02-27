@@ -1,6 +1,10 @@
-#!/usr/bin/env python2.7
+#!/usr/bin/env python3
 # encoding: utf8
-import os, sys ; sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + "/src/python")
+import os, sys
+
+sys.path.insert(
+	0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + "/src/python"
+)
 from libparsing import *
 
 __doc__ = """

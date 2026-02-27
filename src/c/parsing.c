@@ -400,9 +400,10 @@ bool FileInput_move   ( Iterator* this, int n ) {
 	} else {
 		// The assert below is temporary, once we figure out when to free the input data
 		// that we don't need anymore this would work.
-		ASSERT(this->capacity > this->offset, "FileInput_move: offset is greater than capacity (%zu > %zu)", this->offset, this->capacity)
-		// We make sure that `n` is not bigger than the length of the available buffer
-		n = ((int)this->capacity )+ n < 0 ? 0 - (int)this->capacity : n;
+	 ASSERT(this->capacity > this->offset, "FileInput_move: offset is greater than capacity (%zu > %zu)", this->offset, this->capacity)
+		// We make sure that `n` is not bigger than the distance from current position to buffer start
+		int buffer_pos = (int)(this->current - this->buffer);
+		n = buffer_pos + n < 0 ? -buffer_pos : n;
 		this->current = (((char*)this->current) + n);
 		this->offset += n;
 		if (n!=0) {this->status  = STATUS_PROCESSING;}
@@ -1434,7 +1435,7 @@ void Word_free(ParsingElement* this) {
 	WordConfig* config = (WordConfig*)this->config;
 	if (config != NULL) {
 		// We don't have anything special to dealloc besides the config
-		free((void*)config->word);
+		__FREE(config->word);
 		__FREE(config);
 	}
 	if (this!=NULL) {__FREE(this->name)};
@@ -2290,7 +2291,6 @@ int Grammar__assignElementIDs(Element* e, int step, void* nothing) {
 int Grammar__registerElement(Element* e, int step, void* grammar) {
 	Reference* r  = (Reference*)e;
 	Grammar*   g  = (Grammar*)grammar;
-	r->id         = r->id;
 	Element*   ge = g->elements[r->id];
 	if (ge == NULL) {
 		TRACE("Grammar__registerElement:  %3d %c %s", r->id, r->type, r->name);
@@ -2445,26 +2445,9 @@ int Processor_process (Processor* this, Match* match, int step) {
 //
 // ----------------------------------------------------------------------------
 
-void Utilities_indent( ParsingElement* this, ParsingContext* context ) {
-	//int depth = ParsingContext_getVariable("indent", 0, sizeof(int)).asInt;
-	//ParsingContext_setVariable("indent", depth + 1,     sizeof(int));
-}
-
-void Utilities_dedent( ParsingElement* this, ParsingContext* context ) {
-	//int depth = ParsingContext_getVariable("indent", 0, sizeof(int)).asInt;
-	//ParsingContext_setVariable("indent", depth - 1,     sizeof(int));
-}
-
-bool Utilites_checkIndent( ParsingElement *this, ParsingContext* context ) {
-	// Variable tabs = ParsingContext_getVariable("tabs", NULL, sizeof(int));
-	// // TokenMatch_group(0)
-	// int depth     = ParsingContext_getVariable("indent", 0, sizeof(int)).asInt;
-	// if (depth != tabs_count) {
-	// 	return FAILURE;
-	// } else {
-	// 	return Match_Success();
-	// }
-	return TRUE;
-}
+// Unimplemented stub functions - kept for API compatibility
+void Utilities_indent( ParsingElement* this, ParsingContext* context ) {}
+void Utilities_dedent( ParsingElement* this, ParsingContext* context ) {}
+bool Utilites_checkIndent( ParsingElement *this, ParsingContext* context ) { return TRUE; }
 
 // EOF

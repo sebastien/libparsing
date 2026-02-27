@@ -1,6 +1,13 @@
 /* Additional header file required by CFFI */
 
-typedef char bool;
+/* Define bool for older C standards (C99/C11).
+ * C23+ has bool as a built-in keyword, so we must not typedef it.
+ */
+#if !defined(__STDC_VERSION__) || (__STDC_VERSION__ < 202311L)
+#ifndef bool
+#include <stdbool.h>
+#endif
+#endif
 
 /* PCRE */
 #define PCRE_CASELESS           0x00000001  /* C1       */

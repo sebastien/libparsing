@@ -224,6 +224,6 @@ int main( int argc, char* argv[]) {
 		}
 	}
 	Grammar_free(g);
-	//printf ("[OK]");
-	return 1;
+	printf("[OK]");
+	return 0;
 }

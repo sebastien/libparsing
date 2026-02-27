@@ -98,11 +98,11 @@ int main (int argc, char** argv) {
 		"group01", "group0N", "group1N"
 	};
 
-	const char** types = argc > 1 ? argv : all;
+	const char* const* types = argc > 1 ? (const char* const*)argv : all;
 	int   count        = argc > 1 ? argc : 10;
 
 	for (int i=1 ; i<count ; i++) {
-		char* type    = types[i];
+		const char* type    = types[i];
 		const char* s = getText(type);
 		Grammar* g    = createGrammar(type);
 		Grammar_setVerbose(g);

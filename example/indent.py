@@ -1,6 +1,10 @@
-#!/usr/bin/env python2.7
+#!/usr/bin/env python3
 # encoding: utf8
-import os, sys ; sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + "/src/python")
+import os, sys
+
+sys.path.insert(
+	0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + "/src/python"
+)
 from libparsing import *
 
 __doc__ = """
@@ -18,65 +22,80 @@ NAME:
 ```
 """
 
+
 def check_indent(element, context):
 	"""Checks that the last match has the same length as the current indent."""
 	indent = context.get("indent") or 0
-	o      = context.offset
-	so     = max(o - indent, 0)
-	eo     = o
-	tabs   = 0
+	o = context.offset
+	so = max(o - indent, 0)
+	eo = o
+	tabs = 0
 	for i in range(so, eo):
-		if context[i] == b"\t":
+		c = context[i]
+		if isinstance(c, int):
+			c = bytes([c])
+		if c == b"\t":
 			tabs += 1
 	return tabs == indent
+
 
 def indent(element, context):
 	"""Increases the required indentation"""
 	context.set("indent", 1 + (context.get("indent") or 0))
+
 
 def dedent(element, context):
 	"""Decreases the required indentation"""
 	indent = context.get("indent") or 0
 	context.set("indent", indent - 1)
 
-def grammarIndent( grammar ):
+
+def grammarIndent(grammar):
 	"""Augments this grammar with indentation rules. This is extracted
 	as a function to favor reuse."""
-	g = grammar ; s= grammar.symbols
+	g = grammar
+	s = grammar.symbols
 	if not s.TABS:
-		g.token    ("TABS",        "\s*")
-	g.procedure("INDENT",       indent)
-	g.procedure("DEDENT",       dedent)
+		g.token("TABS", "\s*")
+	g.procedure("INDENT", indent)
+	g.procedure("DEDENT", dedent)
 	g.condition("CHECK_INDENT", check_indent)
 	g.rule("Indent", s.TABS, s.CHECK_INDENT)
 
+
 def grammar(verbose=False):
-	g = Grammar(isVerbose = verbose)
+	g = Grammar(isVerbose=verbose)
 	s = g.symbols
-	g.token    ("NAME",        "\w+")
-	g.token    ("VALUE",       "[^\s\n]+")
-	g.token    ("INDENT",      "\t*")
-	g.token    ("WHITESPACE",  "\s+")
-	g.token    ("TABS",        "\s*")
-	g.word     ("EQUALS",      "=")
-	g.word     ("COLON",       ":")
-	g.word     ("EOL",         "\n")
+	g.token("NAME", "\w+")
+	g.token("VALUE", "[^\s\n]+")
+	g.token("INDENT", "\t*")
+	g.token("WHITESPACE", "\s+")
+	g.token("TABS", "\s*")
+	g.word("EQUALS", "=")
+	g.word("COLON", ":")
+	g.word("EOL", "\n")
 
 	grammarIndent(g)
 
-	g.rule("Value",  s.NAME,   s.EQUALS, s.VALUE)
-	g.rule("Line",   s.Indent, s.Value, s.EOL)
+	g.rule("Value", s.NAME, s.EQUALS, s.VALUE)
+	g.rule("Line", s.Indent, s.Value, s.EOL)
 	g.group("Content")
-	g.rule("Block",  s.Indent, s.NAME, s.COLON, s.EOL,
+	g.rule(
+		"Block",
+		s.Indent,
+		s.NAME,
+		s.COLON,
+		s.EOL,
 		s.INDENT,
-			g.agroup(s.Content).oneOrMore(),
-		s.DEDENT
+		g.agroup(s.Content).oneOrMore(),
+		s.DEDENT,
 	)
 	s.Content.set(s.Block, s.Line)
 	g.axiom = s.Content
-	g.skip  = s.WHITESPACE
+	g.skip = s.WHITESPACE
 
 	return g
+
 
 # -----------------------------------------------------------------------------
 #
@@ -107,8 +126,8 @@ property=value
 if __name__ == "__main__":
 	g = grammar(True)
 	r = g.parseString(EXAMPLE2)
-	#print (r.describe())
-	#r.match.toJSON(1)
+	# print (r.describe())
+	# r.match.toJSON(1)
 
 
 # EOF - vim: ts=4 sw=4 noet
