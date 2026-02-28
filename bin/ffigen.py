@@ -1,12 +1,14 @@
 #!/usr/bin/env python
-import sys, os
+import sys
+import os
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import cparse
 
 path = sys.argv[1] if len(sys.argv) > 1 else "src/h/parsing.h"
 clib = cparse.Library(path)
 
-O    = ("type", "constructor", "operation", "method", "destructor")
+OPERATION_TYPES = ("type", "constructor", "operation", "method", "destructor")
 # NOTE: We need to generate a little bit of preample before outputting
 # the types.
 cdef = (
@@ -20,32 +22,32 @@ cdef = (
 	"typedef struct Grammar Grammar;\n"
 	"typedef struct TokenMatchGroup TokenMatchGroup;\n"
 ) + clib.getCode(
-	("ConditionCallback",      None),
-	("ProcedureCallback",      None),
-	("ContextCallback",        None),
+	("ConditionCallback", None),
+	("ProcedureCallback", None),
+	("ContextCallback", None),
 	("ElementWalkingCallback", None),
-	("MatchWalkingCallback",   None),
-	("Element*",               O),
-	("Reference*",             O),
-	("Match*",                 O),
-	("Iterator*",              O),
-	("ParsingContext*",        O),
-	("ParsingElement*",        O),
-	("ParsingResult*",         O),
-	("ParsingStats*",          O),
-	("Word*" ,                 O),
-	("Token",                  O),
-	("TokenMatch",             O),
-	("Token_*",                O),
-	("TokenMatch_*",           O),
-	("Group*",                 O),
-	("Rule*",                  O),
-	("Procedure*",             O),
-	("Condition*",             O),
-	("Grammar*",               O),
+	("MatchWalkingCallback", None),
+	("Element*", OPERATION_TYPES),
+	("Reference*", OPERATION_TYPES),
+	("Match*", OPERATION_TYPES),
+	("Iterator*", OPERATION_TYPES),
+	("ParsingContext*", OPERATION_TYPES),
+	("ParsingElement*", OPERATION_TYPES),
+	("ParsingResult*", OPERATION_TYPES),
+	("ParsingStats*", OPERATION_TYPES),
+	("Word*", OPERATION_TYPES),
+	("Token", OPERATION_TYPES),
+	("TokenMatch", OPERATION_TYPES),
+	("Token_*", OPERATION_TYPES),
+	("TokenMatch_*", OPERATION_TYPES),
+	("Group*", OPERATION_TYPES),
+	("Rule*", OPERATION_TYPES),
+	("Procedure*", OPERATION_TYPES),
+	("Condition*", OPERATION_TYPES),
+	("Grammar*", OPERATION_TYPES),
 )
 cdef = "\n".join(_ for _ in cdef.split("\n") if _.strip())
 
-print (cdef)
+print(cdef)
 
 # EOF

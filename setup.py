@@ -5,8 +5,11 @@
 # Create source distribution: python setup.py sdist
 # Upload using twine: twine upload dist/*
 # Upload using setup.py: setup.py sdist bdist_wheel upload
-from setuptools import setup, Extension
-import sys, os, tempfile, subprocess
+from setuptools import setup
+import sys
+import os
+import tempfile
+import subprocess
 
 # We make sure `build_libparsing` is within the path
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "bin"))

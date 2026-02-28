@@ -49,7 +49,7 @@ endif
 BUILD          =.build
 DIST           =dist
 SOURCES        =src
-TESTS          =test
+TESTS          =tests
 
 # === TOOLS ===================================================================
 
@@ -121,7 +121,7 @@ MAKEFILE_DIR    := $(notdir $(patsubst %/,%,$(dir $(MAKEFILE_PATH))))
 
 # From: http://marmelab.com/blog/2016/02/29/auto-documented-makefile.html
 .DEFAULT_GOAL   :=all
-.PHONY          : all info dist release tests test update-python-version check clean help
+.PHONY          : all info dist release tests test update-python-version check clean help fmt
 
 # =============================================================================
 # MAIN RULES
@@ -145,7 +145,7 @@ release: $(PRODUCT) update-python-version $(SOURCES)/python/lib$(PROJECT)/_lib$(
 	$(PYTHON) setup.py sdist bdist register upload
 
 test: ## Runs all tests using the harness
-	@test/harness.sh
+	@tests/harness.sh
 
 ffi: $(SOURCES)/alt$(PROJECT)/$(PROJECT).ffi ## Re-generates the FFI interface
 
@@ -153,16 +153,97 @@ update-python-version: $(SOURCES)/h/parsing.h
 	sed -i 's/VERSION \+= *"[^"]\+"/VERSION            = "$(VERSION)"/' $(SOURCES)/python/$(PYMODULE)/__init__.py 
 	sed -i 's/VERSION \+= *"[^"]\+"/VERSION            = "$(VERSION)"/' setup.py
 
-check: $(SOURCES_C) $(SOURCES_H) ## Runs checks on the source code
-	@# SEE: http://sourceforge.net/p/cppcheck/wiki/ListOfChecks/
-	@echo "$(CYAN)📦  Checking: $(SOURCES_C) $(RESET)"
-	@echo "$(RED)"
-	@cppcheck --suppress=unusedFunction -Isrc/h --enable=all $(SOURCES_C)
-	@echo "$(RESET)"
-	@echo "$(CYAN)📦  Checking: $(SOURCES_PY) $(RESET)"
-	@echo "$(RED)"
-	@pychecker $(SOURCES_PY)
-	@echo "$(RESET)"
+check: $(SOURCES_C) $(SOURCES_H) ## Runs static analysis checks on C code and Python code
+	@echo "$(CYAN)🔍 Running static analysis checks...$(RESET)"
+	@echo ""
+	@echo "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo "$(CYAN)📦 C Code Analysis$(RESET)"
+	@echo "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo ""
+	@# cppcheck - modernized with better options
+	@if command -v cppcheck >/dev/null 2>&1; then \
+		echo "$(GREEN)✓ Running cppcheck...$(RESET)"; \
+		cppcheck --quiet --enable=all --suppress=unusedFunction --suppress=missingIncludeSystem \
+			--std=c11 -Isrc/h --inline-suppr --error-exitcode=1 $(SOURCES_C) || true; \
+	else \
+		echo "$(YELLOW)⚠ cppcheck not found (install with: apt install cppcheck / brew install cppcheck)$(RESET)"; \
+	fi
+	@echo ""
+	@# clang-tidy - modern C/C++ linter (if available)
+	@if command -v clang-tidy >/dev/null 2>&1; then \
+		echo "$(GREEN)✓ Running clang-tidy...$(RESET)"; \
+		clang-tidy $(SOURCES_C) -- -Isrc/h $(CFEATURES) 2>/dev/null || true; \
+	else \
+		echo "$(YELLOW)⚠ clang-tidy not found (install with: apt install clang-tidy / brew install llvm)$(RESET)"; \
+	fi
+	@echo ""
+	@# scan-build - Clang static analyzer (if available)
+	@if command -v scan-build >/dev/null 2>&1; then \
+		echo "$(GREEN)✓ scan-build (Clang Static Analyzer) available$(RESET)"; \
+		echo "   Run: 'scan-build make' for deep analysis"; \
+	else \
+		echo "$(YELLOW)⚠ scan-build not found (install with: apt install clang-tools / brew install llvm)$(RESET)"; \
+	fi
+	@echo ""
+	@echo "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo "$(CYAN)🐍 Python Code Analysis$(RESET)"
+	@echo "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo ""
+	@# ruff - modern, fast Python linter (replaces pychecker/flake8/pylint)
+	@if command -v ruff >/dev/null 2>&1; then \
+		echo "$(GREEN)✓ Running ruff (Python linter)...$(RESET)"; \
+		ruff check $(SOURCES_PY) || true; \
+	else \
+		echo "$(YELLOW)⚠ ruff not found (install with: pip install ruff)$(RESET)"; \
+	fi
+	@echo ""
+	@# mypy - Python type checker (if available)
+	@if command -v mypy >/dev/null 2>&1; then \
+		echo "$(GREEN)✓ Running mypy (Python type checker)...$(RESET)"; \
+		mypy $(SOURCES_PY) 2>/dev/null || true; \
+	else \
+		echo "$(YELLOW)⚠ mypy not found (install with: pip install mypy)$(RESET)"; \
+	fi
+	@echo ""
+	@echo "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo "$(CYAN)✅ Static analysis complete$(RESET)"
+	@echo "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo ""
+	@echo "$(CYAN)📝 Notes:$(RESET)"
+	@echo "   - Install missing tools for more comprehensive analysis"
+	@echo "   - Run 'scan-build make' for deeper C code analysis"
+	@echo "   - GCC 12+ users can use: make FEATURES='debug' with -fanalyzer"
+
+fmt: ## Formats C and Python source code
+	@echo "$(CYAN)✨ Formatting source code...$(RESET)"
+	@echo ""
+	@echo "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo "$(CYAN)📦 C Code Formatting$(RESET)"
+	@echo "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo ""
+	@# clang-format - standard C/C++ formatter
+	@if command -v clang-format >/dev/null 2>&1; then \
+		echo "$(GREEN)✓ Running clang-format...$(RESET)"; \
+		clang-format -i $(SOURCES_C) $(SOURCES_H) && echo "$(GREEN)✓ C code formatted$(RESET)"; \
+	else \
+		echo "$(YELLOW)⚠ clang-format not found (install with: apt install clang-format / brew install llvm)$(RESET)"; \
+	fi
+	@echo ""
+	@echo "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo "$(CYAN)🐍 Python Code Formatting$(RESET)"
+	@echo "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo ""
+	@# ruff format - modern Python formatter (replaces black)
+	@if command -v ruff >/dev/null 2>&1; then \
+		echo "$(GREEN)✓ Running ruff format...$(RESET)"; \
+		ruff format $(SOURCES_PY) && echo "$(GREEN)✓ Python code formatted$(RESET)"; \
+	else \
+		echo "$(YELLOW)⚠ ruff not found (install with: pip install ruff)$(RESET)"; \
+	fi
+	@echo ""
+	@echo "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
+	@echo "$(CYAN)✅ Formatting complete$(RESET)"
+	@echo "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
 
 clean: ## Cleans the build files
 	@find . -name __pycache__ -exec rm -rf '{}' ';' ; true

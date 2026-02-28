@@ -352,13 +352,13 @@ size_t FileInput_preload( Iterator* this ) {
 		this->buffer[this->capacity] = '\0';
 		// We want to read as much as possible so that we fill the buffer
 		size_t to_read         = this->capacity - left;
-		size_t read            = fread((char*)this->buffer + this->available, sizeof(char), to_read, input->file);
-		this->available        += read;
-		left                   += read;
-		DEBUG("<<< FileInput: read %zu bytes from input, available %zu, remaining %zu", read, this->available, Iterator_remaining(this));
+		size_t bytes_read      = fread((char*)this->buffer + this->available, sizeof(char), to_read, input->file);
+		this->available        += bytes_read;
+		left                   += bytes_read;
+		DEBUG("<<< FileInput: read %zu bytes from input, available %zu, remaining %zu", bytes_read, this->available, Iterator_remaining(this));
 		assert(Iterator_remaining(this) == left);
-		assert(Iterator_remaining(this) >= read);
-		if (read == 0) {
+		assert(Iterator_remaining(this) >= bytes_read);
+		if (bytes_read == 0) {
 			 DEBUG("FileInput_preload: End of file reached with %zu bytes available", this->available);
 			this->status = STATUS_INPUT_ENDED;
 		}
@@ -438,7 +438,7 @@ void Grammar_setSilent ( Grammar* this ) {
 	this->isVerbose = FALSE;
 }
 
-int Grammar_symbolsCount(Grammar* this) {
+int Grammar_symbolsCount(const Grammar* this) {
 	return this->axiomCount + this->skipCount;
 }
 
@@ -523,7 +523,7 @@ Match* Match_new(void) {
 	return this;
 }
 
-inline void Match_free__specialized(Match* this, ParsingElement* element) {
+inline void Match_free__specialized(Match* this, const ParsingElement* element) {
 	assert(ParsingElement_Is(this->element));
 	if (element!=NULL && this!=NULL){
 		switch (element->type) {
@@ -538,7 +538,7 @@ inline void Match_free__specialized(Match* this, ParsingElement* element) {
 // fewer allocs.
 void* Match_free(Match* this) {
 	if (this!=NULL && this!=FAILURE) {
-		TRACE("Match_free(%c:%d@%s,%lu-%lu):%p", ((ParsingElement*)this->element)->type, ((ParsingElement*)this->element)->id, ((ParsingElement*)this->element)->name, this->offset, this->offset + this->length, this)
+		TRACE("Match_free(%c:%d@%s,%zu-%zu):%p", ((ParsingElement*)this->element)->type, ((ParsingElement*)this->element)->id, ((ParsingElement*)this->element)->name, this->offset, this->offset + this->length, this)
 
 		// We free the children
 		assert(this->children != this);
@@ -610,22 +610,22 @@ const char* Match_getElementName(Match* this) {
 	}
 }
 
-int Match_getOffset(Match *this) {
+int Match_getOffset(const Match* this) {
 	if (this == NULL) {return -1;}
 	return (int)this->offset;
 }
 
-int Match_getLength(Match *this) {
+int Match_getLength(const Match* this) {
 	if (this == NULL) {return 0;}
 	return (int)this->length;
 }
 
-int Match_getEndOffset(Match *this) {
+int Match_getEndOffset(const Match* this) {
 	if (this == NULL) {return -1;}
 	return (int)(this->length + this->offset);
 }
 
-bool Match_isSuccess(Match* this) {
+bool Match_isSuccess(const Match* this) {
 	return (this != NULL && this != FAILURE && this->status == STATUS_MATCHED);
 }
 
@@ -641,7 +641,7 @@ int Match__walk(Match* this, MatchWalkingCallback callback, int step, void* cont
 }
 
 
-bool Match_hasNext(Match* this) {
+bool Match_hasNext(const Match* this) {
 	return this != NULL && this->next != NULL;
 }
 
@@ -649,7 +649,7 @@ Match* Match_getNext(Match* this) {
 	return this != NULL ? this->next : NULL;
 }
 
-bool Match_hasChildren(Match* this) {
+bool Match_hasChildren(const Match* this) {
 	return this != NULL && this->children != NULL;
 }
 
@@ -727,7 +727,6 @@ void Match__writeJSON(Match* match, int fd, int flags) {
 		}
 	}
 	else if (element->type != TYPE_REFERENCE) {
-		//printf("{\"type\":\"%c\",\"name\":%s,\"start\":%l ,\"length\":%l ,\"value\":", element->type, element->name, match->offset, match->length);
 		int i     = 0;
 		int count = 0;
 		char* word = NULL;
@@ -783,8 +782,6 @@ void Match__writeJSON(Match* match, int fd, int flags) {
 			default:
 				WRITEF("\"ERROR:undefined element type=%c\"", element->type);
 		}
-	} else {
-		WRITEF("\"ERROR:unsupported element type=%c\"", element->type);
 	}
 }
 
@@ -920,9 +917,7 @@ void Match__writeXML(Match* match, int fd, int flags) {
 				break;
 			default:
 				WRITEF("<error value=\"Undefined element type\" type=\"%c\" />", element->type);
-		}
-	} else {
-		WRITEF("<error t=\"Unsupported element type\" type=\"%c\" />", element->type);
+	}
 	}
 }
 
@@ -1095,11 +1090,11 @@ ParsingElement* ParsingElement_clear(ParsingElement* this) {
 	return this;
 }
 
-Match* ParsingElement_process( ParsingElement* this, Match* match ) {
+Match* ParsingElement_process( const ParsingElement* this, Match* match ) {
 	return match;
 }
 
-size_t ParsingElement_skip( ParsingElement* this, ParsingContext* context) {
+size_t ParsingElement_skip( const ParsingElement* this, ParsingContext* context) {
 	if (this == NULL || context == NULL || context->grammar->skip == NULL || context->flags & FLAG_SKIPPING) {return 0;}
 	SET_FLAG(context->flags, FLAG_SKIPPING);
 	ParsingElement* skip = context->grammar->skip;
@@ -1122,7 +1117,7 @@ ParsingElement* ParsingElement_name( ParsingElement* this, const char* name ) {
 	return this;
 }
 
-const char* ParsingElement_getName( ParsingElement* this ) {
+const char* ParsingElement_getName( const ParsingElement* this ) {
 	return this == NULL ? NULL : (const char*)this->name;
 }
 
@@ -1225,15 +1220,15 @@ void Reference_free(Reference* this) {
 	__FREE(this)
 }
 
-bool Reference_hasElement(Reference* this) {
+bool Reference_hasElement(const Reference* this) {
 	return this->element != NULL;
 }
 
-bool Reference_hasNext(Reference* this) {
+bool Reference_hasNext(const Reference* this) {
 	return this->next != NULL;
 }
 
-bool Reference_isMany(Reference* this) {
+bool Reference_isMany(const Reference* this) {
 	// NOTE: This is redundant wit Reference_IsMany
 	return this != NULL && (this->cardinality == CARDINALITY_MANY || this->cardinality == CARDINALITY_MANY_OPTIONAL);
 }
@@ -1710,7 +1705,7 @@ Match* Group_recognize(ParsingElement* this, ParsingContext* context){
 	} else {
 		// If no child has succeeded, the whole group fails
 		OUT_STEP(" !  %s╘═⇒ Group " BOLDRED "%s" RESET "#%d[%d] failed at %zu:%zu-%zu[→%d]", context->indent, this->name, this->id, step, context->iterator->lines, context->iterator->offset, offset, context->depth)
-		result = Match_fail(result);
+		Match_fail(result);
 		if (context->iterator->offset != offset ) {
 			Iterator_backtrack(context->iterator, offset, lines);
 			assert( context->iterator->offset == offset );
@@ -1938,7 +1933,7 @@ int ParsingVariable_getDepth(ParsingVariable* this) {
 	return this == NULL ? -1 : this->depth;
 }
 
-const char* ParsingVariable_getName(ParsingVariable* this) {
+const char* ParsingVariable_getName(const ParsingVariable* this) {
 	return (const char*)this->key;
 }
 
@@ -1947,7 +1942,7 @@ void* ParsingVariable_get(ParsingVariable* this, const char* name) {
 	return found != NULL ? found->value : NULL;
 }
 
-bool ParsingVariable_is(ParsingVariable* this, const char* key) {
+bool ParsingVariable_is(const ParsingVariable* this, const char* key) {
 	if (this == NULL || key == NULL) {return FALSE;}
 	return (key == this->key || strcmp(this->key, key)) == 0 ? TRUE : FALSE;
 }
@@ -2080,8 +2075,8 @@ void* ParsingContext_get(ParsingContext* this, const char* name) {
 	return ParsingVariable_get(this->variables, name);
 }
 
-int ParsingContext_getInt(ParsingContext* this, const char* name) {
-	return (int)(long)(ParsingVariable_get(this->variables, name));
+intptr_t ParsingContext_getInt(ParsingContext* this, const char* name) {
+	return (intptr_t)(ParsingVariable_get(this->variables, name));
 }
 
 void ParsingContext_set(ParsingContext*  this, const char* name, void* value) {
@@ -2154,7 +2149,7 @@ void ParsingStats_setSymbolsCount(ParsingStats* this, size_t t) {
 	this->symbolsCount    = t;
 }
 
-Match* ParsingStats_registerMatch(ParsingStats* this, Element* e, Match* m) {
+Match* ParsingStats_registerMatch(ParsingStats* this, const Element* e, Match* m) {
 	// FIXME: This is broken!
 	// We can convert ParsingElements to Reference and vice-versa as they
 	// have the same start sequence (char type, int id).
@@ -2205,15 +2200,15 @@ ParsingResult* ParsingResult_new(Match* match, ParsingContext* context) {
 }
 
 
-bool ParsingResult_isFailure(ParsingResult* this) {
+bool ParsingResult_isFailure(const ParsingResult* this) {
 	return this->status == STATUS_FAILED;
 }
 
-bool ParsingResult_isPartial(ParsingResult* this) {
+bool ParsingResult_isPartial(const ParsingResult* this) {
 	return this->status == STATUS_PARTIAL;
 }
 
-bool ParsingResult_isSuccess(ParsingResult* this) {
+bool ParsingResult_isSuccess(const ParsingResult* this) {
 	return this->status == STATUS_SUCCESS;
 }
 
@@ -2324,7 +2319,7 @@ void Grammar_prepare ( Grammar* this ) {
 		}
 
 		// Now we register the elements
-		__ARRAY_NEW(elements, Element*, this->skipCount + this->axiomCount + 1);
+		__ARRAY_NEW(elements, Element*, (size_t)this->skipCount + (size_t)this->axiomCount + 1);
 		this->elements = elements;
 
 		count = ParsingElement_walk(this->axiom, Grammar__registerElement, this);

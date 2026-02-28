@@ -1,10 +1,11 @@
 from __future__ import print_function
-import sys, os
+import sys
+import os
 
 sys.path.insert(
 	0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + "/src/python"
 )
-from libparsing import *
+from libparsing import *  # noqa: F403, F405
 import unittest
 
 __doc__ = """
@@ -167,7 +168,6 @@ class TestProcessor(unittest.TestCase):
 		that both the *lazy* and *eager* strategies return the same
 		results."""
 		g = grammar()
-		s = g.symbols
 		n = len(EXAMPLES) // 2
 		for i in range(n):
 			source = EXAMPLES[i * 2]

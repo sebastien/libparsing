@@ -1,5 +1,5 @@
 # encoding: utf8
-from libparsing import *
+from libparsing import *  # noqa: F403, F405
 
 __doc__ = """
 Defines a grammar that can parse grammar definitions and generate both

@@ -1,18 +1,12 @@
 #!/usr/bin/env python3
 # encoding: utf8
-import sys, os
+import sys
+import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + "/src")
 from libparsing import (
 	Grammar,
-	Token,
-	Word,
-	Rule,
-	Group,
-	Condition,
-	Procedure,
 	Processor,
-	NOTHING,
 )
 
 

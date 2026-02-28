@@ -1,0 +1,14 @@
+# Ruff configuration for libparsing
+
+[lint.per-file-ignores]
+# Allow star imports in examples and tests (intentional design)
+"examples/*" = ["F403", "F405"]
+"test/*" = ["F403", "F405"]
+
+[lint]
+exclude = [
+    ".build",
+    "dist",
+    "__pycache__",
+    "*.egg-info",
+]

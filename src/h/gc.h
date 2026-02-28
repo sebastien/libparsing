@@ -77,9 +77,9 @@ char* gc_strdup(const char* s);
 
 void* gc_calloc(size_t count, size_t size);
 
-void gc_acquire( void* ptr );
+void gc_acquire( const void* ptr );
 
-void gc_release( void* ptr );
+void gc_release( const void* ptr );
 
 #ifdef __cplusplus
 }

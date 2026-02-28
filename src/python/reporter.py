@@ -8,7 +8,12 @@
 # Last mod  : 04-Nov-2010
 # -----------------------------------------------------------------------------
 
-import sys, smtplib, json, time, socket, io
+import sys
+import smtplib
+import json
+import time
+import socket
+import io
 
 # TODO: Add info
 # TODO: Add better message formatting
@@ -87,7 +92,7 @@ class Reporter:
 
 	def register(self, *reporters):
 		for reporter in reporters:
-			assert not (reporter in self.delegates)
+			assert reporter not in self.delegates
 			self.delegates.append(reporter)
 
 	def unregister(self, *reporters):
@@ -177,7 +182,7 @@ class FileReporter(Reporter):
 			self.fd = open(path, "a", encoding="utf-8")
 		else:
 			assert path is None
-			assert not (fd is None)
+			assert fd is not None
 			assert isinstance(fd, io.TextIOBase)
 			self.fd = fd
 
@@ -312,8 +317,8 @@ class SMTPReporter(Reporter):
 	def _send(self, level, message):
 		if self.level > level:
 			return
-		server = smtplib.SMTP(host)
-		server.sendmail(self.origin, [user], message)
+		server = smtplib.SMTP(self.host)
+		server.sendmail(self.origin, [self.recipient], message)
 		server.quit()
 
 
@@ -379,7 +384,7 @@ class BeanstalkReporter(Reporter):
 		self.beanstalk = None
 		try:
 			self.connect()
-		except socket.error as e:
+		except socket.error:
 			print("[!] BeanstalkWorker cannot connect to beanstalkd server")
 
 	def connect(self):
@@ -438,24 +443,21 @@ class BeanstalkWorker:
 		try:
 			job = self.beanstalk.reserve()
 		except (
-			(
-				self.beanstalkc.DeadlineSoon,
-				self.beanstalkc.CommandFailed,
-				self.beanstalkc.UnexpectedResponse,
-			),
-			e,
-		):
-			reporter.error(str(e), "beanstalkc")
+			self.beanstalkc.DeadlineSoon,
+			self.beanstalkc.CommandFailed,
+			self.beanstalkc.UnexpectedResponse,
+		) as e:
+			Reporter.error(str(e), "beanstalkc")
 			return False
 		# We make sure that the job is JSON
 		try:
 			data = json.loads(job.body)
-		except:
+		except Exception:
 			job.release()
 			return False
 		if (
 			not data
-			or not (type(data) is dict)
+			or not isinstance(data, dict)
 			or not (data.get("type") == "reporter.Message")
 		):
 			return False
@@ -482,9 +484,9 @@ def register(*reporter):
 	return REPORTER.register(*reporter)
 
 
-def unregister(*repporter):
+def unregister(*reporters):
 	"""Unegisters the reporter instance(s) in the `REPORTER` singleton."""
-	return REPORTER.unregister(*reporter)
+	return REPORTER.unregister(*reporters)
 
 
 def debug(message, component, code=None):

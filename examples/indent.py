@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 # encoding: utf8
-import os, sys
+import os
+import sys
 
 sys.path.insert(
 	0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + "/src/python"
 )
-from libparsing import *
+from libparsing import *  # noqa: F403, F405
 
 __doc__ = """
 Shows how to implement an indentation-based syntax using

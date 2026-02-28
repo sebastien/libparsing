@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from libparsing import *
+from libparsing import *  # noqa: F403, F405
 
 __doc__ = """
 Shows how to reference named parsing element children in the `Processor`

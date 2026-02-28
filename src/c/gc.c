@@ -122,13 +122,13 @@ void gc_free( void* ptr ) {
 #endif
 }
 
-void gc_acquire( void* ptr ) {
+void gc_acquire( const void* ptr ) {
 #ifndef GC_TRANSPARENT
 	gc_Reference_acquire(gc_ref(ptr));
 #endif
 }
 
-void gc_release( void* ptr ) {
+void gc_release( const void* ptr ) {
 #ifndef GC_TRANSPARENT
 	gc_Reference_release(gc_ref(ptr));
 #endif

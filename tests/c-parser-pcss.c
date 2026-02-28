@@ -213,7 +213,7 @@ int main( int argc, char* argv[]) {
 	// MAIN
 	// ========================================================================
 
-	const char* path = "test/c-parser-pcss.pcss";
+	const char* path = "tests/c-parser-pcss.pcss";
 	Grammar* g = createGrammar();
 
 	if (argc == 1) {

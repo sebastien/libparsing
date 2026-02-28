@@ -24,6 +24,7 @@ extern "C" {
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
+#include <stdint.h>
 #include <errno.h>
 #include <time.h>
 #include <string.h>
@@ -344,7 +345,7 @@ void Grammar_setVerbose ( Grammar* this );
 void Grammar_setSilent ( Grammar* this );
 
 // @method
-int Grammar_symbolsCount ( Grammar* this );
+int Grammar_symbolsCount ( const Grammar* this );
 
 // @method
 ParsingResult* Grammar_parseIterator( Grammar* this, Iterator* iterator );
@@ -487,28 +488,28 @@ void* Match_free(Match* this);
 void* Match_fail(Match* this);
 
 // @method
-bool Match_isSuccess(Match* this);
+bool Match_isSuccess(const Match* this);
 
 // @method
-bool Match_hasNext(Match* this);
+bool Match_hasNext(const Match* this);
 
 // @method
 Match* Match_getNext(Match* this);
 
 // @method
-bool Match_hasChildren(Match* this);
+bool Match_hasChildren(const Match* this);
 
 // @method
 Match* Match_getChildren(Match* this);
 
 // @method
-int Match_getOffset(Match* this);
+int Match_getOffset(const Match* this);
 
 // @method
-int Match_getLength(Match* this);
+int Match_getLength(const Match* this);
 
 // @method
-int Match_getEndOffset(Match* this);
+int Match_getEndOffset(const Match* this);
 
 // @method
 // Returns the parsing element for this match. Keep in mind that matches
@@ -610,13 +611,13 @@ ParsingElement* ParsingElement_clear(ParsingElement* this);
 // @method
 // Applies the grammar's skip property *once* , returning
 // the resulting change in the parsing offset.
-size_t ParsingElement_skip(ParsingElement* this, ParsingContext* context);
+size_t ParsingElement_skip(const ParsingElement* this, ParsingContext* context);
 
 // @method
 // Processes the given match once the parsing element has fully succeeded. This
 // is where user-bound actions will be applied, and where you're most likely
 // to do things such as construct an AST.
-Match* ParsingElement_process( ParsingElement* this, Match* match );
+Match* ParsingElement_process( const ParsingElement* this, Match* match );
 
 // FIXME: Maybe should inline
 // @method
@@ -624,7 +625,7 @@ Match* ParsingElement_process( ParsingElement* this, Match* match );
 ParsingElement* ParsingElement_name( ParsingElement* this, const char* name );
 
 // @method
-const char* ParsingElement_getName( ParsingElement* this );
+const char* ParsingElement_getName( const ParsingElement* this );
 
 // @method
 int ParsingElement_walk( ParsingElement* this, ElementWalkingCallback callback, void* context);
@@ -783,13 +784,13 @@ Reference* Reference_cardinality(Reference* this, char cardinality);
 Reference* Reference_name(Reference* this, const char* name);
 
 // @method
-bool Reference_hasNext(Reference* this);
+bool Reference_hasNext(const Reference* this);
 
 // @method
-bool Reference_hasElement(Reference* this);
+bool Reference_hasElement(const Reference* this);
 
 // @method
-bool Reference_isMany(Reference* this);
+bool Reference_isMany(const Reference* this);
 
 // @method
 int Reference__walk( Reference* this, ElementWalkingCallback callback, int step, void* nothing );
@@ -898,7 +899,7 @@ void ParsingStats_free(ParsingStats* this);
 void ParsingStats_setSymbolsCount(ParsingStats* this, size_t t);
 
 // @method
-Match* ParsingStats_registerMatch(ParsingStats* this, Element* e, Match* m);
+Match* ParsingStats_registerMatch(ParsingStats* this, const Element* e, Match* m);
 
 /**
  * 1. Parsing variables
@@ -929,7 +930,7 @@ void ParsingVariable_free(ParsingVariable* this);
 void ParsingVariable_freeAll(ParsingVariable* this);
 
 // @method
-bool ParsingVariable_is(ParsingVariable* this, const char* key);
+bool ParsingVariable_is(const ParsingVariable* this, const char* key);
 
 // @method
 ParsingVariable* ParsingVariable_set(ParsingVariable* this, const char* name, void* value);
@@ -944,7 +945,7 @@ ParsingVariable* ParsingVariable_find(ParsingVariable* this, const char* key, bo
 int ParsingVariable_getDepth(ParsingVariable* this);
 
 // @method
-const char* ParsingVariable_getName(ParsingVariable* this);
+const char* ParsingVariable_getName(const ParsingVariable* this);
 
 // @method
 int  ParsingVariable_count(ParsingVariable* this);
@@ -1009,7 +1010,7 @@ void ParsingContext_pop ( ParsingContext* this );
 void*  ParsingContext_get(ParsingContext*  this, const char* name);
 
 // @method
-int  ParsingContext_getInt(ParsingContext*  this, const char* name);
+intptr_t ParsingContext_getInt(ParsingContext*  this, const char* name);
 
 // @method
 void  ParsingContext_set(ParsingContext*  this, const char* name, void* value);
@@ -1041,13 +1042,13 @@ ParsingResult* ParsingResult_new(Match* match, ParsingContext* context);
 void ParsingResult_free(ParsingResult* this);
 
 // @method
-bool ParsingResult_isSuccess(ParsingResult* this);
+bool ParsingResult_isSuccess(const ParsingResult* this);
 
 // @method
-bool ParsingResult_isFailure(ParsingResult* this);
+bool ParsingResult_isFailure(const ParsingResult* this);
 
 // @method
-bool ParsingResult_isPartial(ParsingResult* this);
+bool ParsingResult_isPartial(const ParsingResult* this);
 
 // @method
 char* ParsingResult_text(ParsingResult* this);
