@@ -614,6 +614,10 @@ ParsingElement* ParsingElement_clear(ParsingElement* this);
 size_t ParsingElement_skip(const ParsingElement* this, ParsingContext* context);
 
 // @method
+// Fast skip that avoids Match allocation. Returns the number of bytes skipped.
+size_t ParsingElement_skipFast(const ParsingElement* this, ParsingContext* context);
+
+// @method
 // Processes the given match once the parsing element has fully succeeded. This
 // is where user-bound actions will be applied, and where you're most likely
 // to do things such as construct an AST.
@@ -689,6 +693,9 @@ typedef struct TokenConfig {
 typedef struct TokenMatch {
 	int             count;
 	const char**    groups;
+	int*            ovector;     // PCRE offset vector for lazy extraction
+	const char*     input;       // Pointer to input at match time
+	bool            extracted;   // Whether groups have been extracted from ovector
 } TokenMatch;
 
 
@@ -876,6 +883,62 @@ Match*          Condition_recognize(ParsingElement* this, ParsingContext* contex
  * will be applied to advance the iterator.
 */
 
+/**
+ * Arena Allocator
+ * ---------------
+ *
+ * The arena provides fast bump-pointer allocation for Match objects
+ * during parsing. All allocations are freed in bulk when the arena
+ * is destroyed, eliminating per-object malloc/free overhead.
+*/
+
+#define ARENA_BLOCK_SIZE (64 * 1024)
+
+// @type
+typedef struct ArenaBlock {
+	struct ArenaBlock* next;
+	size_t used;
+	size_t capacity;
+	char data[];
+} ArenaBlock;
+
+// @type
+typedef struct Arena {
+	ArenaBlock* current;
+	ArenaBlock* first;
+} Arena;
+
+// @constructor
+Arena* Arena_new(void);
+
+// @method
+// Allocates `size` bytes from the arena (8-byte aligned).
+void* Arena_alloc(Arena* arena, size_t size);
+
+// @destructor
+// Frees the entire arena and all its blocks.
+void Arena_free(Arena* arena);
+
+/**
+ * Packrat Memoization
+ * -------------------
+ *
+ * The memo table caches parsing results at each (offset, element_id) pair,
+ * guaranteeing O(n * |grammar|) time complexity for PEG parsing.
+*/
+
+#define MEMO_EMPTY   0
+#define MEMO_SUCCESS 1
+#define MEMO_FAILURE 2
+
+// @type
+typedef struct MemoEntry {
+	char       status;       // MEMO_EMPTY, MEMO_SUCCESS, or MEMO_FAILURE
+	Match*     match;        // Cached match result (or NULL for failure)
+	size_t     end_offset;   // Iterator offset after the match
+	size_t     end_lines;    // Iterator lines after the match
+} MemoEntry;
+
 // @type
 typedef struct ParsingStats {
 	size_t   bytesRead;
@@ -897,9 +960,6 @@ void ParsingStats_free(ParsingStats* this);
 
 // @method
 void ParsingStats_setSymbolsCount(ParsingStats* this, size_t t);
-
-// @method
-Match* ParsingStats_registerMatch(ParsingStats* this, const Element* e, Match* m);
 
 /**
  * 1. Parsing variables
@@ -974,6 +1034,10 @@ typedef struct ParsingContext {
 	const char*             indent;
 	int                     flags;
 	bool                    freeIterator;
+	Arena*                  arena;        // Arena allocator for Match objects
+	MemoEntry*              memoTable;    // Packrat memoization table
+	size_t                  memoCapacity; // Capacity of memo hash table
+	size_t                  inputLength;  // Total input length (for memo table sizing)
 } ParsingContext;
 
 
@@ -1025,7 +1089,17 @@ void ParsingContext_on(ParsingContext* this, ContextCallback callback);
 int  ParsingContext_getVariableCount(ParsingContext* this);
 
 // @method
+// Tracks the deepest successful match for error reporting.
+// Called by the MATCH_STATS macro on every recognize return.
 Match* ParsingContext_registerMatch(ParsingContext* this, Element* e, Match* m);
+
+// @method
+// Memoization lookup: returns a cached match if available, or NULL.
+Match* ParsingContext_memoGet(ParsingContext* this, int elementId, size_t offset);
+
+// @method
+// Memoization store: caches a match result for the given element and offset.
+void ParsingContext_memoSet(ParsingContext* this, int elementId, size_t offset, Match* match, size_t endOffset, size_t endLines);
 
 // @type
 typedef struct ParsingResult {
@@ -1309,6 +1383,24 @@ bool Utilites_checkIndent( ParsingElement* this, ParsingContext* context );
  *
  * [END]
 */
+
+// @type
+// Flat representation of a match tree node for efficient FFI processing.
+// Used by Match_flatten to produce a pre-order traversal array.
+typedef struct MatchFlatNode {
+    char        type;           // Element type (W, T, G, R, #, c, p)
+    int         id;             // Element id
+    int         numChildren;    // Number of direct children
+    char        isMany;         // 1 if reference is MANY/MANY_OPTIONAL, 0 otherwise
+    const char* wordValue;      // For Word matches: the matched string (NULL otherwise)
+    Match*      match;          // Pointer to original match (for token group extraction)
+} MatchFlatNode;
+
+// @method
+// Flatten a match tree into a pre-order traversal array.
+// Returns the number of nodes written. The caller must provide a buffer
+// of sufficient size (use Match_countAll to determine the size).
+int Match_flatten(Match* this, MatchFlatNode* buffer, int bufferSize);
 
 #ifdef __cplusplus
 }

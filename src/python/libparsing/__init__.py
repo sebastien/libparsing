@@ -250,7 +250,7 @@ def ensure_str(v):
 
 def ensure_unicode(v):
     """Ensures the result is an unicode string(str)"""
-    return ensure_str(v)
+    return v.decode("utf8") if isinstance(v, bytes) else v
 
 
 def ensure_string(v):
@@ -260,6 +260,102 @@ def ensure_string(v):
 
 def is_string(v):
     return isinstance(v, str) or isinstance(v, bytes)
+
+
+# -----------------------------------------------------------------------------
+#
+# FAST MATCH (lightweight wrapper for the processing hot path)
+#
+# -----------------------------------------------------------------------------
+
+
+class _FastMatch:
+    """Ultra-lightweight Match wrapper for the processing hot path.
+
+    No inheritance, no __dict__, no __del__. Uses __slots__ for minimal
+    memory footprint and fast attribute access. Only provides the methods
+    that handlers actually need: group() and __getitem__.
+    """
+
+    __slots__ = ("_cobject", "_result", "_cached_group")
+
+    def __init__(self, cobject, result_ref):
+        self._cobject = cobject
+        self._result = result_ref
+
+    def group(self, index=0):
+        # Fast path: return cached groups if available (set by _fastHandled)
+        try:
+            return self._cached_group
+        except AttributeError:
+            pass
+        # Slow path: extract from C
+        t = self._cobject.element.type
+        if t == b"T":
+            n = lib.TokenMatch_count(self._cobject)
+            groups = [
+                ensure_unicode(ffi.string(lib.TokenMatch_group(self._cobject, i)))
+                for i in range(n)
+            ]
+            self._cached_group = groups
+            return groups
+        elif t == b"W":
+            v = lib.WordMatch_group(self._cobject)
+            groups = [ensure_unicode(ffi.string(v))] if v != ffi.NULL else []
+            self._cached_group = groups
+            return groups
+        elif t == b"R" or t == b"G":
+            result = []
+            child = self._cobject.children
+            while child != ffi.NULL:
+                child_match = _FastMatch(child, self._result)
+                result.extend(child_match.group())
+                child = child.next
+            return result
+        elif t == b"#":
+            child = self._cobject.children
+            if child != ffi.NULL:
+                child_match = _FastMatch(child, self._result)
+                return child_match.group()
+            return []
+        return []
+
+    def __getitem__(self, index):
+        if isinstance(index, int):
+            if index < 0:
+                # Count children first for negative index
+                count = 0
+                child = self._cobject.children
+                while child != ffi.NULL:
+                    count += 1
+                    child = child.next
+                index = count + index
+            i = 0
+            child = self._cobject.children
+            while child != ffi.NULL:
+                if i == index:
+                    return _FastMatch(child, self._result)
+                child = child.next
+                i += 1
+            raise IndexError("Index {0} out of range".format(index))
+        raise TypeError(
+            "_FastMatch indices must be integers, not {0}".format(type(index).__name__)
+        )
+
+    def __iter__(self):
+        child = self._cobject.children
+        while child != ffi.NULL:
+            yield _FastMatch(child, self._result)
+            child = child.next
+
+    @property
+    def name(self):
+        name = lib.Match_getElementName(self._cobject)
+        return ensure_str(ffi.string(name)) if name else None
+
+    @property
+    def element(self):
+        return self._cobject.element
 
 
 # -----------------------------------------------------------------------------
@@ -333,6 +429,7 @@ class CObject(object):
     `Reuse(pointer)`.
     """
 
+    __slots__ = ("_cobject",)
     _TYPE = None
     _RECYCLER = None
     _RECYCLABLE = False
@@ -413,6 +510,7 @@ class CObject(object):
 
 
 class ParsingElement(CObject):
+    __slots__ = ("_name",)
     _TYPE = "ParsingElement*"
 
     @classmethod
@@ -560,6 +658,8 @@ class ParsingElement(CObject):
 
 
 class Word(ParsingElement):
+    __slots__ = ("_word",)
+
     def _new(self, word):
         self._word = ensure_bytes(word)
         return lib.Word_new(self._word)
@@ -573,6 +673,8 @@ class Word(ParsingElement):
 
 
 class Token(ParsingElement):
+    __slots__ = ("_token",)
+
     def _new(self, token):
         self._token = ensure_bytes(token)
         return lib.Token_new(self._token)
@@ -586,6 +688,8 @@ class Token(ParsingElement):
 
 
 class Group(ParsingElement):
+    __slots__ = ()
+
     def _new(self, *children):
         self._cobject = lib.Group_new(ffi.NULL)
         self.add(*children)
@@ -599,6 +703,8 @@ class Group(ParsingElement):
 
 
 class Rule(ParsingElement):
+    __slots__ = ()
+
     def _new(self, *children):
         self._cobject = lib.Rule_new(ffi.NULL)
         self.add(*children)
@@ -612,6 +718,8 @@ class Rule(ParsingElement):
 
 
 class Condition(ParsingElement):
+    __slots__ = ("_callback",)
+
     @classmethod
     def WrapCallback(cls, callback):
         # SEE: http://stackoverflow.com/questions/34392109/use-extern-python-style-cffi-callbacks-with-embedded-pypy
@@ -639,6 +747,8 @@ class Condition(ParsingElement):
 
 
 class Procedure(ParsingElement):
+    __slots__ = ("_callback",)
+
     @classmethod
     def WrapCallback(cls, callback):
         def c(e, ctx):
@@ -661,6 +771,8 @@ class Procedure(ParsingElement):
 
 
 class Reference(CObject):
+    __slots__ = ("_element", "_name")
+
     @classmethod
     def IsCType(self, element):
         return isinstance(element, FFI.CData) and lib.Reference_Is(element)
@@ -778,6 +890,7 @@ class Reference(CObject):
 
 
 class Match(CObject):
+    __slots__ = ("_result", "_cached_group")
     _TYPE = ffi.typeof("Match*")
     _RECYCLABLE = False
 
@@ -788,6 +901,14 @@ class Match(CObject):
             % (cobject.status, cobject.offset, cobject.length)
         )
         return cls.Reuse(cobject) or Match(cobject, wrap=cls._TYPE, result=result)
+
+    @classmethod
+    def _FastWrap(cls, cobject, result_ref):
+        """Fast factory for the processing hot path. Skips asserts and kwargs parsing."""
+        obj = cls.__new__(cls)
+        obj._cobject = cobject
+        obj._result = result_ref
+        return obj
 
     def _new(self, o, **kwargs):
         return ffi.cast(self._TYPE, o)
@@ -857,6 +978,10 @@ class Match(CObject):
         return None
 
     def group(self, index=0):
+        # Fast path: return cached groups if available (set by _fastHandled)
+        cached = getattr(self, "_cached_group", None)
+        if cached is not None:
+            return cached
         # Return list of matched values for this element
         # For backwards compatibility, return a list containing just the value
         t = self.type
@@ -997,9 +1122,9 @@ class Match(CObject):
             )
 
     def __del__(self):
-        super().__del__()
-        # Matches are managed by ParsingResult, so we don't need to
-        # free  them.
+        # Matches are managed by ParsingResult (arena allocated), so we don't
+        # need to free them. This is intentionally a no-op to avoid the
+        # overhead of the parent class recyclable check.
         pass
 
 
@@ -1021,6 +1146,8 @@ ReferenceMatch = Match
 
 
 class MatchResult(object):
+    __slots__ = ("value", "match")
+
     def __init__(self, value, match):
         assert not isinstance(value, MatchResult)
         self.value = value
@@ -1090,6 +1217,7 @@ class Symbols:
 
 
 class ParsingContext(CObject):
+    __slots__ = ()
     _TYPE = ffi.typeof("ParsingContext*")
 
     def __init__(self, text=None, path=None):
@@ -1146,6 +1274,7 @@ class ParsingContext(CObject):
 
 
 class ParsingResult(CObject):
+    __slots__ = ("_text", "_path", "_grammar", "_context")
     _TYPE = ffi.typeof("ParsingResult*")
 
     @classmethod
@@ -1351,6 +1480,8 @@ class ParsingResult(CObject):
 
 
 class ParsingStats(CObject):
+    __slots__ = ()
+
     def bytesRead(self):
         return self._cobject.bytesRead
 
@@ -1428,6 +1559,7 @@ class ParsingStats(CObject):
 
 
 class Grammar(CObject):
+    __slots__ = ("name", "symbols", "_prepared", "_anonymous")
     _TYPE = ffi.typeof("Grammar*")
 
     def _new(self, name=None, isVerbose=False, axiom=None):
@@ -1646,6 +1778,8 @@ class Processor:
         self._handler = None
         self.isStrict = strict
         self.strategy = self.LAZY
+        # Check if postProcess is overridden (if not, we can skip calling it)
+        self._hasPostProcess = type(self).postProcess is not Processor.postProcess
         self.setGrammar(self.ensureGrammar(grammar))
         self._defaults = dict(
             (k, getattr(self, v) if hasattr(self, v) else None)
@@ -1706,6 +1840,11 @@ class Processor:
             self.symbolByID[s.id] = s
 
     def _bindHandlers(self):
+        self._handlerInfo = {}  # {element_id: (raw_handler, slots_tuple)}
+        self._fastByID = {}  # {element_id: fast_wrapper} for handlers with kwargs
+        self._passthroughIDs = (
+            set()
+        )  # IDs of Group handlers that are pure pass-throughs
         for k in dir(self):
             if not k.startswith("on"):
                 continue
@@ -1719,9 +1858,38 @@ class Processor:
             )
             symbol = self.symbolByName.get(name)
             if symbol:
-                self.handlerByID[symbol.id] = self._createHandler(
-                    getattr(self, k), symbol
-                )
+                raw_handler = getattr(self, k)
+                # Store raw handler + slot info for flat buffer processing
+                sig = inspect.getfullargspec(raw_handler)
+                params = sig.args[0 : -len(sig.defaults)] if sig.defaults else sig.args
+                params = params[1:] if params[0] == "self" else params
+                slots = tuple((_, symbol.indexForKey(_)) for _ in params[1:])
+                valid = tuple(_ for _ in slots if _[1] >= 0)
+                self._handlerInfo[symbol.id] = (raw_handler, valid)
+                # Detect pass-through Group handlers: signature (self, match) with
+                # body that just returns self.process(match[0])
+                if symbol.type == TYPE_GROUP and len(params) == 1:
+                    try:
+                        src = inspect.getsource(raw_handler)
+                        # Strip decorators and def line, check body
+                        lines = [
+                            l.strip()
+                            for l in src.split("\n")
+                            if l.strip()
+                            and not l.strip().startswith(
+                                ("def ", "@", "#", '"""', "'''")
+                            )
+                        ]
+                        if len(lines) == 1 and "self.process(match[0])" in lines[0]:
+                            self._passthroughIDs.add(symbol.id)
+                    except (OSError, TypeError):
+                        pass
+                h = self._createHandler(raw_handler, symbol)
+                self.handlerByID[symbol.id] = h
+                # Pre-extract fast wrapper for handlers with kwargs
+                fast = getattr(h, "_fast", None)
+                if fast is not None:
+                    self._fastByID[symbol.id] = fast
 
     def _createHandler(self, handler, symbol):
         # We only bind the arguments listed
@@ -1738,26 +1906,593 @@ class Processor:
                 )
             )
         elif valid:
+            # Fast path: extract children from C pointer directly
+            _pp = self._hasPostProcess
 
             def wrapper(match):
                 kwargs = dict(
                     (name, self.process(match[index])) for (name, index) in valid
                 )
-                return self.postProcess(match, handler(match, **kwargs))
+                res = handler(match, **kwargs)
+                return self.postProcess(match, res) if _pp else res
 
+            # Also store a fast wrapper that can work on raw C pointers
+            max_index = max(idx for _, idx in valid)
+
+            # Generate a specialized positional-arg caller to avoid kwargs dict creation.
+            # For handler(match, key, value) with valid=((key,0),(value,2)), we generate:
+            #   handler(wrapped, children_values[0], children_values[2])
+            # using compile/exec to create a direct positional call.
+            _indices = tuple(idx for _, idx in valid)
+            _n_valid = len(valid)
+
+            if _n_valid == 1:
+                _idx0 = _indices[0]
+
+                if _pp:
+
+                    def fast_wrapper(cobj, result_ref):
+                        children = [None] * (max_index + 1)
+                        child = cobj.children
+                        ci = 0
+                        while child != ffi.NULL and ci <= max_index:
+                            children[ci] = child
+                            child = child.next
+                            ci += 1
+                        c = children[_idx0]
+                        v0 = (
+                            self._fastProcess(c, result_ref)
+                            if c is not None and c != ffi.NULL
+                            else None
+                        )
+                        wrapped = _FastMatch(cobj, result_ref)
+                        return self.postProcess(wrapped, handler(wrapped, v0))
+                else:
+
+                    def fast_wrapper(cobj, result_ref):
+                        children = [None] * (max_index + 1)
+                        child = cobj.children
+                        ci = 0
+                        while child != ffi.NULL and ci <= max_index:
+                            children[ci] = child
+                            child = child.next
+                            ci += 1
+                        c = children[_idx0]
+                        v0 = (
+                            self._fastProcess(c, result_ref)
+                            if c is not None and c != ffi.NULL
+                            else None
+                        )
+                        wrapped = _FastMatch(cobj, result_ref)
+                        return handler(wrapped, v0)
+
+            elif _n_valid == 2:
+                _idx0 = _indices[0]
+                _idx1 = _indices[1]
+
+                if _pp:
+
+                    def fast_wrapper(cobj, result_ref):
+                        children = [None] * (max_index + 1)
+                        child = cobj.children
+                        ci = 0
+                        while child != ffi.NULL and ci <= max_index:
+                            children[ci] = child
+                            child = child.next
+                            ci += 1
+                        c = children[_idx0]
+                        v0 = (
+                            self._fastProcess(c, result_ref)
+                            if c is not None and c != ffi.NULL
+                            else None
+                        )
+                        c = children[_idx1]
+                        v1 = (
+                            self._fastProcess(c, result_ref)
+                            if c is not None and c != ffi.NULL
+                            else None
+                        )
+                        wrapped = _FastMatch(cobj, result_ref)
+                        return self.postProcess(wrapped, handler(wrapped, v0, v1))
+                else:
+
+                    def fast_wrapper(cobj, result_ref):
+                        children = [None] * (max_index + 1)
+                        child = cobj.children
+                        ci = 0
+                        while child != ffi.NULL and ci <= max_index:
+                            children[ci] = child
+                            child = child.next
+                            ci += 1
+                        c = children[_idx0]
+                        v0 = (
+                            self._fastProcess(c, result_ref)
+                            if c is not None and c != ffi.NULL
+                            else None
+                        )
+                        c = children[_idx1]
+                        v1 = (
+                            self._fastProcess(c, result_ref)
+                            if c is not None and c != ffi.NULL
+                            else None
+                        )
+                        wrapped = _FastMatch(cobj, result_ref)
+                        return handler(wrapped, v0, v1)
+
+            elif _n_valid == 3:
+                _idx0 = _indices[0]
+                _idx1 = _indices[1]
+                _idx2 = _indices[2]
+
+                if _pp:
+
+                    def fast_wrapper(cobj, result_ref):
+                        children = [None] * (max_index + 1)
+                        child = cobj.children
+                        ci = 0
+                        while child != ffi.NULL and ci <= max_index:
+                            children[ci] = child
+                            child = child.next
+                            ci += 1
+                        c = children[_idx0]
+                        v0 = (
+                            self._fastProcess(c, result_ref)
+                            if c is not None and c != ffi.NULL
+                            else None
+                        )
+                        c = children[_idx1]
+                        v1 = (
+                            self._fastProcess(c, result_ref)
+                            if c is not None and c != ffi.NULL
+                            else None
+                        )
+                        c = children[_idx2]
+                        v2 = (
+                            self._fastProcess(c, result_ref)
+                            if c is not None and c != ffi.NULL
+                            else None
+                        )
+                        wrapped = _FastMatch(cobj, result_ref)
+                        return self.postProcess(wrapped, handler(wrapped, v0, v1, v2))
+                else:
+
+                    def fast_wrapper(cobj, result_ref):
+                        children = [None] * (max_index + 1)
+                        child = cobj.children
+                        ci = 0
+                        while child != ffi.NULL and ci <= max_index:
+                            children[ci] = child
+                            child = child.next
+                            ci += 1
+                        c = children[_idx0]
+                        v0 = (
+                            self._fastProcess(c, result_ref)
+                            if c is not None and c != ffi.NULL
+                            else None
+                        )
+                        c = children[_idx1]
+                        v1 = (
+                            self._fastProcess(c, result_ref)
+                            if c is not None and c != ffi.NULL
+                            else None
+                        )
+                        c = children[_idx2]
+                        v2 = (
+                            self._fastProcess(c, result_ref)
+                            if c is not None and c != ffi.NULL
+                            else None
+                        )
+                        wrapped = _FastMatch(cobj, result_ref)
+                        return handler(wrapped, v0, v1, v2)
+
+            else:
+                # Generic fallback for 4+ kwargs (rare)
+                if _pp:
+
+                    def fast_wrapper(cobj, result_ref):
+                        children = [None] * (max_index + 1)
+                        child = cobj.children
+                        ci = 0
+                        while child != ffi.NULL and ci <= max_index:
+                            children[ci] = child
+                            child = child.next
+                            ci += 1
+                        vals = []
+                        for _, index in valid:
+                            c = children[index]
+                            if c is not None and c != ffi.NULL:
+                                vals.append(self._fastProcess(c, result_ref))
+                            else:
+                                vals.append(None)
+                        wrapped = _FastMatch(cobj, result_ref)
+                        return self.postProcess(wrapped, handler(wrapped, *vals))
+                else:
+
+                    def fast_wrapper(cobj, result_ref):
+                        children = [None] * (max_index + 1)
+                        child = cobj.children
+                        ci = 0
+                        while child != ffi.NULL and ci <= max_index:
+                            children[ci] = child
+                            child = child.next
+                            ci += 1
+                        vals = []
+                        for _, index in valid:
+                            c = children[index]
+                            if c is not None and c != ffi.NULL:
+                                vals.append(self._fastProcess(c, result_ref))
+                            else:
+                                vals.append(None)
+                        wrapped = _FastMatch(cobj, result_ref)
+                        return handler(wrapped, *vals)
+
+            wrapper._fast = fast_wrapper
+            # Store metadata for flat buffer processing
+            wrapper._raw_handler = handler
+            wrapper._slots = valid
             return wrapper
         else:
             return handler
 
     def process(self, match):
+        # Fast path: already-processed primitive values (most common case when
+        # handlers call self.process(value) on pre-processed kwargs).
+        # Avoids isinstance checks, depth tracking, and MatchResult check.
+        if match is None or type(match) in (str, int, float, bool, dict, list, tuple):
+            return match
         self.depth += 1
         match = match.match if isinstance(match, ParsingResult) else match
-        result = self._processMatch(match) if isinstance(match, Match) else match
+        if isinstance(match, (Match, _FastMatch)):
+            result = self._fastProcess(match._cobject, match._result)
+        else:
+            result = match
         self.depth -= 1
         return result.value if isinstance(result, MatchResult) else result
 
     def postProcess(self, match, result):
         return result
+
+    # =========================================================================
+    # FLAT BUFFER PROCESSING
+    # =========================================================================
+
+    def _processFlatBuffer(self, cobj, result_ref):
+        """Process a match tree using a flat buffer from C, minimizing FFI crossings.
+
+        Flattens the C match tree into a contiguous array via a single C call,
+        reads all node metadata into Python lists (batch FFI), then iteratively
+        processes the pre-order traversal WITHOUT any further FFI struct access.
+
+        Handlers are called with pre-processed children values using positional
+        args, avoiding kwargs dict creation and handler re-entry overhead.
+        """
+        # Get the total node count (Match_countAll returns N-1, so add 1)
+        nodeCount = lib.Match_countAll(cobj) + 1
+        if nodeCount <= 1:
+            return self._fastProcess(cobj, result_ref)
+
+        # Allocate flat buffer and fill in one C call
+        buf = ffi.new("MatchFlatNode[]", nodeCount)
+        actual = lib.Match_flatten(cobj, buf, nodeCount)
+
+        # Batch-read all node data into Python lists (one FFI crossing per field)
+        types = [None] * actual
+        ids = [None] * actual
+        nchildren = [None] * actual
+        isMany = [None] * actual
+        wordValues = [None] * actual
+        matches = [None] * actual
+
+        _NULL = ffi.NULL
+        for i in range(actual):
+            node = buf[i]
+            types[i] = node.type
+            ids[i] = node.id
+            nchildren[i] = node.numChildren
+            isMany[i] = node.isMany != b"\x00"
+            wordValues[i] = node.wordValue
+            matches[i] = node.match
+
+        # Pre-extract token groups for all Token nodes (batch the FFI calls)
+        _TMcount = lib.TokenMatch_count
+        _TMgroup = lib.TokenMatch_group
+        _eu = ensure_unicode
+        _fs = ffi.string
+        token_groups = [None] * actual
+        for i in range(actual):
+            if types[i] == b"T":
+                m = matches[i]
+                n = _TMcount(m)
+                if n > 0:
+                    token_groups[i] = [_eu(_fs(_TMgroup(m, j))) for j in range(n)]
+
+        # Pre-extract word values for all Word nodes
+        word_strs = [None] * actual
+        for i in range(actual):
+            if types[i] == b"W":
+                wv = wordValues[i]
+                if wv != _NULL:
+                    word_strs[i] = _eu(_fs(wv))
+
+        # Cache lookups
+        handlerInfo = self._handlerInfo
+        passthroughIDs = self._passthroughIDs
+        _hasPostProcess = self._hasPostProcess
+
+        def process_node(idx):
+            """Process node at index idx, return (result, next_index)."""
+            t = types[idx]
+            nc = nchildren[idx]
+
+            if t == b"#":
+                # Reference — unwrap (never has handlers)
+                if nc == 0:
+                    return None, idx + 1
+                if not isMany[idx]:
+                    return process_node(idx + 1)
+                else:
+                    result = []
+                    ci = idx + 1
+                    for _ in range(nc):
+                        r, ci = process_node(ci)
+                        result.append(r)
+                    return result, ci
+
+            nid = ids[idx]
+
+            if t == b"W":
+                r = word_strs[idx]
+                info = handlerInfo.get(nid)
+                if info:
+                    raw_handler, slots = info
+                    wrapped = _FastMatch(matches[idx], result_ref)
+                    ph = self._handler
+                    self._handler = raw_handler
+                    r = raw_handler(wrapped)
+                    self._handler = ph
+                return r, idx + 1
+
+            if t == b"T":
+                r = token_groups[idx]
+                info = handlerInfo.get(nid)
+                if info:
+                    raw_handler, slots = info
+                    wrapped = _FastMatch(matches[idx], result_ref)
+                    wrapped._cached_group = r if r else []
+                    ph = self._handler
+                    self._handler = raw_handler
+                    r = raw_handler(wrapped)
+                    self._handler = ph
+                return r, idx + 1
+
+            if t == b"c" or t == b"p":
+                return True, idx + 1
+
+            if t == b"G":
+                # Group — process the single child first
+                if nc == 0:
+                    child_r = None
+                    next_idx = idx + 1
+                else:
+                    child_r, next_idx = process_node(idx + 1)
+
+                # Check for pass-through group (e.g., onValue)
+                if nid in passthroughIDs:
+                    return child_r, next_idx
+
+                info = handlerInfo.get(nid)
+                if info:
+                    raw_handler, slots = info
+                    wrapped = _FastMatch(matches[idx], result_ref)
+                    ph = self._handler
+                    self._handler = raw_handler
+                    r = raw_handler(wrapped)
+                    self._handler = ph
+                    return r, next_idx
+                return [child_r], next_idx
+
+            if t == b"R":
+                # Rule — process all children first, then call handler with
+                # pre-processed values as positional args
+                child_results = []
+                ci = idx + 1
+                for _ in range(nc):
+                    child_r, ci = process_node(ci)
+                    child_results.append(child_r)
+
+                info = handlerInfo.get(nid)
+                if info:
+                    raw_handler, slots = info
+                    wrapped = _FastMatch(matches[idx], result_ref)
+                    ph = self._handler
+                    self._handler = raw_handler
+                    if slots:
+                        # Handler with kwargs — extract slot values from children
+                        # and pass as positional args
+                        args = []
+                        for param_name, slot_idx in slots:
+                            if slot_idx < len(child_results):
+                                args.append(child_results[slot_idx])
+                            else:
+                                args.append(None)
+                        if _hasPostProcess:
+                            r = self.postProcess(wrapped, raw_handler(wrapped, *args))
+                        else:
+                            r = raw_handler(wrapped, *args)
+                    else:
+                        # Simple handler (no kwargs)
+                        r = raw_handler(wrapped)
+                    self._handler = ph
+                    return r, ci
+                return child_results, ci
+
+            raise Exception("Unsupported match type: {0}".format(t))
+
+        result, _ = process_node(0)
+        return result
+
+    # =========================================================================
+    # FAST PATH: Process raw C match pointers without creating Match wrappers
+    # =========================================================================
+
+    def _fastProcess(self, cobj, result_ref):
+        """Process a raw C match pointer, dispatching by element type."""
+        elem = cobj.element
+        t = elem.type
+
+        # Inline reference handling (most common type, ~47% of calls)
+        # References never have handlers, so skip handler lookup entirely
+        if t == b"#":
+            if not lib.Reference_IsMany(elem):
+                child = cobj.children
+                if child != ffi.NULL:
+                    return self._fastProcess(child, result_ref)
+                return None
+            else:
+                result = []
+                child = cobj.children
+                _fp = self._fastProcess
+                while child != ffi.NULL:
+                    result.append(_fp(child, result_ref))
+                    child = child.next
+                return result
+
+        # For Groups detected as pass-throughs, skip handler entirely
+        # and return child result directly (same as what the handler does).
+        # Clear _handler to allow nested handlers of the same type to fire.
+        if t == b"G" and elem.id in self._passthroughIDs:
+            child = cobj.children
+            if child != ffi.NULL:
+                saved_handler = self._handler
+                self._handler = None
+                r = self._fastProcess(child, result_ref)
+                self._handler = saved_handler
+                return r
+            return None
+
+        h = self.handlerByID.get(elem.id)
+
+        if h and self._handler != h:
+            # Handler registered — inline handler dispatch
+            ph = self._handler
+            self._handler = h
+            fast = self._fastByID.get(elem.id)
+            if fast is not None:
+                res = fast(cobj, result_ref)
+            else:
+                # Simple handler (no kwargs) — wrap and call directly
+                wrapped = _FastMatch(cobj, result_ref)
+                # For TOKEN matches, pre-cache the group() result
+                if t == b"T":
+                    n = lib.TokenMatch_count(cobj)
+                    if n > 0:
+                        groups = [
+                            ensure_unicode(ffi.string(lib.TokenMatch_group(cobj, i)))
+                            for i in range(n)
+                        ]
+                    else:
+                        groups = []
+                    wrapped._cached_group = groups
+                res = h(wrapped)
+            self._handler = ph
+            return res
+
+        # No handler — inline the eager processing logic
+        if t == b"W":
+            return ensure_unicode(ffi.string(lib.WordMatch_group(cobj)))
+        elif t == b"T":
+            n = lib.TokenMatch_count(cobj)
+            if n == 0:
+                return None
+            _tmg = lib.TokenMatch_group
+            _eu = ensure_unicode
+            _fs = ffi.string
+            return [_eu(_fs(_tmg(cobj, i))) for i in range(n)]
+        elif t == b"c" or t == b"p":
+            return True
+        elif t == b"G":
+            child = cobj.children
+            if child == ffi.NULL:
+                return [None]
+            return [self._fastProcess(child, result_ref)]
+        elif t == b"R":
+            result = []
+            child = cobj.children
+            _fp = self._fastProcess
+            while child != ffi.NULL:
+                result.append(_fp(child, result_ref))
+                child = child.next
+            return result
+        else:
+            raise Exception("Unsupported match type: {0}".format(t))
+
+    def _fastHandled(self, cobj, t, h, result_ref):
+        """Process a match that has a registered handler."""
+        ph = self._handler
+        self._handler = h
+        # Check if handler has a fast wrapper (for handlers with kwargs)
+        fast = getattr(h, "_fast", None)
+        if fast is not None:
+            res = fast(cobj, result_ref)
+        else:
+            # Simple handler (no kwargs) — wrap and call directly
+            wrapped = _FastMatch(cobj, result_ref)
+            # For TOKEN matches, pre-cache the group() result to avoid
+            # redundant FFI calls when the handler accesses match.group()
+            if t == b"T":
+                n = lib.TokenMatch_count(cobj)
+                if n > 0:
+                    groups = [
+                        ensure_unicode(ffi.string(lib.TokenMatch_group(cobj, i)))
+                        for i in range(n)
+                    ]
+                else:
+                    groups = []
+                wrapped._cached_group = groups
+            res = h(wrapped)
+        self._handler = ph
+        return res
+
+    def _fastWord(self, cobj):
+        group_str = lib.WordMatch_group(cobj)
+        return ensure_unicode(ffi.string(group_str))
+
+    def _fastToken(self, cobj):
+        n = lib.TokenMatch_count(cobj)
+        if n == 0:
+            return None
+        return [
+            ensure_unicode(ffi.string(lib.TokenMatch_group(cobj, i))) for i in range(n)
+        ]
+
+    def _fastGroup(self, cobj, result_ref):
+        child = cobj.children
+        if child == ffi.NULL:
+            return [None]
+        return [self._fastProcess(child, result_ref)]
+
+    def _fastRule(self, cobj, result_ref):
+        result = []
+        child = cobj.children
+        while child != ffi.NULL:
+            result.append(self._fastProcess(child, result_ref))
+            child = child.next
+        return result
+
+    def _fastReference(self, cobj, result_ref):
+        element = cobj.element
+        if not lib.Reference_IsMany(element):
+            child = cobj.children
+            if child != ffi.NULL:
+                return self._fastProcess(child, result_ref)
+            return None
+        else:
+            result = []
+            child = cobj.children
+            while child != ffi.NULL:
+                result.append(self._fastProcess(child, result_ref))
+                child = child.next
+            return result
 
     def _processMatch(self, match):
         if self.strategy == self.EAGER:

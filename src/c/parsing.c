@@ -107,6 +107,62 @@ char* String_escape(const char* string) {
 //
 // ----------------------------------------------------------------------------
 
+// ----------------------------------------------------------------------------
+//
+// ARENA ALLOCATOR
+//
+// ----------------------------------------------------------------------------
+
+Arena* Arena_new(void) {
+	Arena* arena = (Arena*)malloc(sizeof(Arena));
+	assert(arena != NULL);
+	ArenaBlock* block = (ArenaBlock*)malloc(sizeof(ArenaBlock) + ARENA_BLOCK_SIZE);
+	assert(block != NULL);
+	block->next = NULL;
+	block->used = 0;
+	block->capacity = ARENA_BLOCK_SIZE;
+	arena->current = block;
+	arena->first = block;
+	return arena;
+}
+
+void* Arena_alloc(Arena* arena, size_t size) {
+	// Align to 8 bytes
+	size = (size + 7) & ~((size_t)7);
+	ArenaBlock* block = arena->current;
+	if (block->used + size > block->capacity) {
+		size_t cap = ARENA_BLOCK_SIZE > size ? ARENA_BLOCK_SIZE : size;
+		ArenaBlock* new_block = (ArenaBlock*)malloc(sizeof(ArenaBlock) + cap);
+		assert(new_block != NULL);
+		new_block->next = NULL;
+		new_block->used = 0;
+		new_block->capacity = cap;
+		block->next = new_block;
+		arena->current = new_block;
+		block = new_block;
+	}
+	void* ptr = block->data + block->used;
+	block->used += size;
+	return ptr;
+}
+
+void Arena_free(Arena* arena) {
+	if (arena == NULL) {return;}
+	ArenaBlock* block = arena->first;
+	while (block != NULL) {
+		ArenaBlock* next = block->next;
+		free(block);
+		block = next;
+	}
+	free(arena);
+}
+
+// ----------------------------------------------------------------------------
+//
+// ITERATOR
+//
+// ----------------------------------------------------------------------------
+
 Iterator* Iterator_Open(const char* path) {
 	NEW(Iterator,result);
 	result->freeBuffer = TRUE;
@@ -484,7 +540,8 @@ void Grammar_free(Grammar* this) {
 // ----------------------------------------------------------------------------
 
 Match* Match__Success(size_t length, Element* element, ParsingContext* context) {
-	NEW(Match,this);
+	// Allocate from the arena for fast bump-pointer allocation
+	Match* this = (Match*)Arena_alloc(context->arena, sizeof(Match));
 	assert( element != NULL );
 	this->status   = STATUS_MATCHED;
 	this->offset   = context->iterator->offset;
@@ -496,6 +553,7 @@ Match* Match__Success(size_t length, Element* element, ParsingContext* context) 
 	this->next     = NULL;
 	this->children = NULL;
 	this->parent   = NULL;
+	this->result   = NULL;
 	return this;
 }
 
@@ -534,8 +592,8 @@ inline void Match_free__specialized(Match* this, const ParsingElement* element) 
 	}
 }
 
-// TODO: We might want to recycle the objects for better performance and
-// fewer allocs.
+// Arena-aware Match_free: cleans up TokenMatch data but does NOT free the
+// Match struct itself (the arena handles bulk deallocation).
 void* Match_free(Match* this) {
 	if (this!=NULL && this!=FAILURE) {
 		TRACE("Match_free(%c:%d@%s,%zu-%zu):%p", ((ParsingElement*)this->element)->type, ((ParsingElement*)this->element)->id, ((ParsingElement*)this->element)->name, this->offset, this->offset + this->length, this)
@@ -550,7 +608,7 @@ void* Match_free(Match* this) {
 		Match_free(this->next);
 		this->next = NULL;
 
-		// If the match is from a parsing element
+		// Free specialized data (TokenMatch with PCRE substrings)
 		if (ParsingElement_Is(this->element)) {
 			ParsingElement* element = ((ParsingElement*)this->element);
 			Match_free__specialized(this,element);
@@ -559,8 +617,8 @@ void* Match_free(Match* this) {
 			ParsingElement* element = ((Reference*)this->element)->element;
 			Match_free__specialized(this,element);
 		}
-		// We deallocate this one
-		__FREE(this);
+		// NOTE: Do NOT free the Match struct - it's arena-allocated.
+		// The arena is freed in bulk when the ParsingContext is freed.
 	}
 	return NULL;
 }
@@ -1095,14 +1153,46 @@ Match* ParsingElement_process( const ParsingElement* this, Match* match ) {
 }
 
 size_t ParsingElement_skip( const ParsingElement* this, ParsingContext* context) {
+	return ParsingElement_skipFast(this, context);
+}
+
+// Fast skip that computes match length without allocating a Match object.
+// For Token-based skip elements, this calls pcre_exec directly.
+// For other skip elements, falls back to recognize + free.
+size_t ParsingElement_skipFast( const ParsingElement* this, ParsingContext* context) {
 	if (this == NULL || context == NULL || context->grammar->skip == NULL || context->flags & FLAG_SKIPPING) {return 0;}
 	SET_FLAG(context->flags, FLAG_SKIPPING);
 	ParsingElement* skip = context->grammar->skip;
 	size_t offset        = context->iterator->offset;
-	// We don't care about the result, just the offset change.
-	Match* match = skip->recognize(skip, context);
-	match = Match_free(match);
-	size_t skipped = context->iterator->offset - offset;
+	size_t skipped       = 0;
+
+#ifdef WITH_PCRE
+	// Fast path for token-based skip: call pcre_exec directly without
+	// creating any Match or TokenMatch objects.
+	if (skip->type == TYPE_TOKEN && skip->config != NULL) {
+		TokenConfig* config = (TokenConfig*)skip->config;
+		int vector[30];
+		const char* line = (const char*)context->iterator->current;
+		int r = pcre_exec(
+			config->regexp, config->extra,
+			line,
+			context->iterator->available - (context->iterator->current - context->iterator->buffer),
+			0,
+			PCRE_ANCHORED | PCRE_NO_UTF8_CHECK | PCRE_NO_UTF16_CHECK | PCRE_NO_UTF32_CHECK,
+			vector, 30);
+		if (r > 0 && vector[1] > 0) {
+			context->iterator->move(context->iterator, vector[1]);
+			skipped = vector[1];
+		}
+	} else
+#endif
+	{
+		// Fallback for non-token skip elements
+		Match* match = skip->recognize(skip, context);
+		match = Match_free(match);
+		skipped = context->iterator->offset - offset;
+	}
+
 	if (skipped > 0) {
 		OUT_IF(context->grammar->isVerbose, " %s   ►►►skipped %zu", context->indent, skipped)
 	}
@@ -1575,22 +1665,22 @@ Match* Token_recognize(ParsingElement* this, ParsingContext* context) {
 		result = Match_Success(vector[1], this, context);
 		OUT_STEP("[✓] %s└ Token " BOLDGREEN "%s" RESET "#%d:" CYAN "`%s`" RESET " matched " BOLDGREEN "%zu:%zu-%zu" RESET, context->indent, this->name, this->id, config->expr, context->iterator->lines, context->iterator->offset, context->iterator->offset + result->length);
 
-		// We create the token match
-		__NEW(TokenMatch, data);
-		data->count    = r;
-		__ARRAY_NEW(groups, const char*, r);
-		data->groups   = groups;
-		// NOTE: We do this here, but it's probably better to do it later
-		// once the token is recognized, although this poses the problem
-		// of preserving the input.
-		for (int j=0 ; j<r ; j++) {
-			const char* substring;
-			// This function copies the data into a freshly allocated
-			// substring.
-			pcre_get_substring(line, vector, r, j, &(substring));
-			data->groups[j] = substring;
+		// Lazy token extraction: store the PCRE ovector instead of
+		// extracting substrings immediately. Substrings are extracted
+		// on-demand in TokenMatch_group(). This avoids allocating
+		// substrings for matches that are later discarded by backtracking.
+		TokenMatch* data = (TokenMatch*)Arena_alloc(context->arena, sizeof(TokenMatch));
+		data->count     = r;
+		data->groups    = NULL;
+		data->extracted = FALSE;
+		// Store ovector in arena for lazy extraction
+		int ovector_size = r * 2;
+		data->ovector = (int*)Arena_alloc(context->arena, sizeof(int) * ovector_size);
+		for (int j = 0; j < ovector_size; j++) {
+			data->ovector[j] = vector[j];
 		}
-		result->data = data;
+		data->input   = line;
+		result->data  = data;
 		context->iterator->move(context->iterator,result->length);
 		assert (result->data != NULL);
 		assert(Match_isSuccess(result));
@@ -1607,7 +1697,18 @@ const char* TokenMatch_group(Match* match, int index) {
 	if (m) {
 		assert (index >= 0);
 		assert (index < m->count);
-		return m->groups[index];
+		// Lazy extraction: extract substrings from ovector on first access
+		if (!m->extracted && m->ovector != NULL) {
+#ifdef WITH_PCRE
+			m->groups = (const char**)calloc(m->count, sizeof(const char*));
+			assert(m->groups != NULL);
+			for (int j = 0; j < m->count; j++) {
+				pcre_get_substring(m->input, m->ovector, m->count, j, &(m->groups[j]));
+			}
+#endif
+			m->extracted = TRUE;
+		}
+		return m->groups != NULL ? m->groups[index] : NULL;
 	} else {
 		return NULL;
 	}
@@ -1639,16 +1740,21 @@ void TokenMatch_free(Match* match) {
 	TRACE("TokenMatch_free: %p, match->data=%p", match, match->data);
 	if (match->data != NULL) {
 		TokenMatch* m = (TokenMatch*)match->data;
-		if (m != NULL ) {
+		if (m != NULL && m->extracted && m->groups != NULL) {
+			// Only free PCRE substrings if they were actually extracted
 			for (int j=0 ; j<m->count ; j++) {
 				pcre_free_substring(m->groups[j]);
 			}
+			// groups array was malloc'd in lazy extraction
+			free((void*)m->groups);
+			m->groups = NULL;
 		}
-		__FREE(m->groups);
+		// NOTE: The TokenMatch struct itself and the ovector are arena-allocated,
+		// so we don't free them here.
 	}
 #endif
-	__FREE(match->data);
-
+	// NOTE: match->data (TokenMatch*) is arena-allocated, don't free it.
+	match->data = NULL;
 }
 
 // ----------------------------------------------------------------------------
@@ -1665,6 +1771,16 @@ ParsingElement* Group_new(Reference* children[]) {
 }
 
 Match* Group_recognize(ParsingElement* this, ParsingContext* context){
+
+	// --- Packrat memoization: check cache first ---
+	size_t memo_offset = context->iterator->offset;
+	size_t memo_lines  = context->iterator->lines;
+	Match* cached = ParsingContext_memoGet(context, this->id, memo_offset);
+	if (cached == FAILURE) {
+		return MATCH_STATS(FAILURE);
+	} else if (cached != NULL) {
+		return MATCH_STATS(cached);
+	}
 
 	// The goal is to find ONE (and only one) matching element.
 	OUT_STEP("??? %s┌── Group " BOLDYELLOW "%s" RESET ":#%d at %zu:%zu[→%d]", context->indent, this->name, this->id, context->iterator->lines, context->iterator->offset, context->depth);
@@ -1701,6 +1817,8 @@ Match* Group_recognize(ParsingElement* this, ParsingContext* context){
 	// We've either found one element, or nothing
 	if (Match_isSuccess(result)) {
 		OUT_STEP( "[✓] %s╘═⇒ Group " BOLDGREEN "%s" RESET "#%d[%d] matched" BOLDGREEN "%zu:%zu-%zu" RESET "[%zu][→%d]", context->indent, this->name, this->id, step,  context->iterator->lines, result->offset, context->iterator->offset, result->length, context->depth)
+		// Cache successful result
+		ParsingContext_memoSet(context, this->id, memo_offset, result, context->iterator->offset, context->iterator->lines);
 		return MATCH_STATS(result);
 	} else {
 		// If no child has succeeded, the whole group fails
@@ -1710,6 +1828,8 @@ Match* Group_recognize(ParsingElement* this, ParsingContext* context){
 			Iterator_backtrack(context->iterator, offset, lines);
 			assert( context->iterator->offset == offset );
 		}
+		// Cache failure
+		ParsingContext_memoSet(context, this->id, memo_offset, FAILURE, memo_offset, memo_lines);
 		return MATCH_STATS(FAILURE);
 	}
 
@@ -1731,6 +1851,16 @@ ParsingElement* Rule_new(Reference* children[]) {
 }
 
 Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
+
+	// --- Packrat memoization: check cache first ---
+	size_t memo_offset = context->iterator->offset;
+	size_t memo_lines  = context->iterator->lines;
+	Match* cached = ParsingContext_memoGet(context, this->id, memo_offset);
+	if (cached == FAILURE) {
+		return MATCH_STATS(FAILURE);
+	} else if (cached != NULL) {
+		return MATCH_STATS(cached);
+	}
 
 	// An empty rule will fail. Not sure if this is the right thing to do, but
 	// if we don't set the result, it will return NULL and break assertions
@@ -1832,6 +1962,8 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 		// In case of a success, we update the length based on the last
 		// match.
 		result->length = last->offset - result->offset + last->length;
+		// --- Packrat memoization: cache successful result ---
+		ParsingContext_memoSet(context, this->id, memo_offset, result, context->iterator->offset, context->iterator->lines);
 	} else {
 		OUT_STEP(" !  %s╘ Rule " BOLDRED "%s" RESET "#%d failed on step %d=%s at %zu:%zu-%zu[→%d]",
 				context->indent, this->name, this->id, step, step_name == NULL ? "-" : step_name, context->iterator->lines, offset, context->iterator->offset, context->depth)
@@ -1841,6 +1973,8 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 			Iterator_backtrack(context->iterator, offset, lines);
 			assert( context->iterator->offset == offset );
 		}
+		// --- Packrat memoization: cache failure ---
+		ParsingContext_memoSet(context, this->id, memo_offset, FAILURE, memo_offset, memo_lines);
 	}
 
 	return MATCH_STATS(result);
@@ -2027,6 +2161,26 @@ ParsingContext* ParsingContext_new( Grammar* g, Iterator* iterator ) {
 	this->lastMatchOffset = 0;
 	this->lastMatchLength = 0;
 	this->lastMatchElementID = -1;
+	// Initialize arena allocator
+	this->arena     = Arena_new();
+	// Initialize packrat memoization table
+	// Use a hash table sized to ~2x the expected number of entries.
+	// For typical grammars, (input_length * symbol_count) is the max entries.
+	this->inputLength  = iterator != NULL ? iterator->available : 0;
+	size_t symbolCount = g != NULL ? (size_t)(g->axiomCount + g->skipCount) : 0;
+	// Cap memo table size to avoid excessive memory usage
+	size_t memoSize    = symbolCount > 0 ? MIN(this->inputLength * symbolCount, 1024 * 1024) : 0;
+	// Use next power of 2 for efficient modulo via bitmask
+	if (memoSize < 4096) { memoSize = 4096; }
+	size_t power = 1;
+	while (power < memoSize) { power <<= 1; }
+	this->memoCapacity = power;
+	if (this->memoCapacity > 0) {
+		this->memoTable = (MemoEntry*)calloc(this->memoCapacity, sizeof(MemoEntry));
+		assert(this->memoTable != NULL);
+	} else {
+		this->memoTable = NULL;
+	}
 	return this;
 }
 
@@ -2036,6 +2190,11 @@ void ParsingContext_free( ParsingContext* this ) {
 		if (this->freeIterator) {Iterator_free(this->iterator);}
 		ParsingVariable_freeAll(this->variables);
 		ParsingStats_free(this->stats);
+		// Free memo table before arena (memo entries reference arena memory)
+		if (this->memoTable != NULL) { free(this->memoTable); this->memoTable = NULL; }
+		// Free arena last - this bulk-frees all Match structs and TokenMatch data
+		Arena_free(this->arena);
+		this->arena = NULL;
 		__FREE(this);
 	}
 }
@@ -2102,10 +2261,8 @@ size_t ParsingContext_getOffset(ParsingContext* this) {
 Match* ParsingContext_registerMatch(ParsingContext* this, Element* e, Match* m) {
 	// We don't register skipping matches, as they'll be discarded right away
 	if (HAS_FLAG(this->flags, FLAG_SKIPPING)) {return m;}
-	ParsingStats_registerMatch(this->stats, e, m);
-	// NOTE: We make sure to only register the deepest match, as the grammar
-	// is likely to backtack and yield a partial match, erasing where the error
-	// actually lies. We skip empty matches.
+	// NOTE: ParsingStats_registerMatch was removed (body was empty/broken).
+	// We track the deepest match directly for error reporting.
 	if (m != NULL && Match_isSuccess(m)) {
 		if ( (this->lastMatchOffset + this->lastMatchLength) < (m->offset + m->length) && m->length > 0) {
 			this->lastMatchOffset    = m->offset;
@@ -2114,6 +2271,76 @@ Match* ParsingContext_registerMatch(ParsingContext* this, Element* e, Match* m) 
 		}
 	}
 	return m;
+}
+
+// ============================================================================
+// PACKRAT MEMOIZATION
+// ============================================================================
+
+// Hash function for (elementId, offset) -> memo table index.
+// Uses FNV-1a-style mixing for good distribution.
+static inline size_t memo_hash(int elementId, size_t offset, size_t mask) {
+	size_t h = (size_t)elementId * 2654435761u;
+	h ^= offset;
+	h *= 2246822519u;
+	h ^= h >> 16;
+	return h & mask;
+}
+
+Match* ParsingContext_memoGet(ParsingContext* this, int elementId, size_t offset) {
+	if (this->memoTable == NULL || elementId < 0) { return NULL; }
+	size_t mask = this->memoCapacity - 1;
+	size_t idx  = memo_hash(elementId, offset, mask);
+	// Linear probing with limited search
+	for (int probe = 0; probe < 8; probe++) {
+		MemoEntry* e = &this->memoTable[(idx + probe) & mask];
+		if (e->status == MEMO_EMPTY) {
+			return NULL; // Not found
+		}
+		// Check if this entry matches our (elementId, offset)
+		if (e->match != NULL && e->match->element != NULL &&
+		    e->match->element->id == elementId &&
+		    e->match->offset == offset &&
+		    e->status == MEMO_SUCCESS) {
+			// Restore iterator position to after the cached match
+			Iterator_backtrack(this->iterator, e->end_offset, e->end_lines);
+			return e->match;
+		}
+		if (e->status == MEMO_FAILURE &&
+		    e->end_offset == offset &&
+		    e->end_lines == (size_t)elementId) {
+			// Failure sentinel: end_offset stores the original offset,
+			// end_lines stores the elementId for identification
+			return FAILURE;
+		}
+	}
+	return NULL; // Not found after probing
+}
+
+void ParsingContext_memoSet(ParsingContext* this, int elementId, size_t offset,
+                           Match* match, size_t endOffset, size_t endLines) {
+	if (this->memoTable == NULL || elementId < 0) { return; }
+	size_t mask = this->memoCapacity - 1;
+	size_t idx  = memo_hash(elementId, offset, mask);
+	// Linear probing to find an empty slot
+	for (int probe = 0; probe < 8; probe++) {
+		MemoEntry* e = &this->memoTable[(idx + probe) & mask];
+		if (e->status == MEMO_EMPTY) {
+			if (Match_isSuccess(match)) {
+				e->status     = MEMO_SUCCESS;
+				e->match      = match;
+				e->end_offset = endOffset;
+				e->end_lines  = endLines;
+			} else {
+				e->status     = MEMO_FAILURE;
+				e->match      = NULL;
+				e->end_offset = offset;     // Store original offset for identification
+				e->end_lines  = (size_t)elementId; // Store elementId for identification
+			}
+			return;
+		}
+	}
+	// Table full in this probe region - just skip memoization for this entry
 }
 
 // ----------------------------------------------------------------------------
@@ -2147,28 +2374,6 @@ void ParsingStats_setSymbolsCount(ParsingStats* this, size_t t) {
 	__ARRAY_RESIZE(this->successBySymbol, size_t, t);
 	__ARRAY_RESIZE(this->failureBySymbol, size_t, t);
 	this->symbolsCount    = t;
-}
-
-Match* ParsingStats_registerMatch(ParsingStats* this, const Element* e, Match* m) {
-	// FIXME: This is broken!
-	// We can convert ParsingElements to Reference and vice-versa as they
-	// have the same start sequence (char type, int id).
-	// Reference* r = (Reference*)e;
-	// if (m!=NULL && Match_isSuccess(m)) {
-	// 	this->successBySymbol[r->id] += 1;
-	// 	if (m->offset >= this->matchOffset) {
-	// 		this->matchOffset = m->offset;
-	// 		this->matchLength = m->length;
-	// 	}
-	// } else {
-	// 	this->failureBySymbol[r->id] += 1;
-	// 	// We register the deepest failure
-	// 	if(m != NULL && m->offset >= this->failureOffset) {
-	// 		this->failureOffset  = m->offset;
-	// 		this->failureElement = m->element;
-	// 	}
-	// }
-	return m;
 }
 
 // ----------------------------------------------------------------------------
@@ -2227,7 +2432,10 @@ int ParsingResult_textOffset(ParsingResult* this) {
 
 void ParsingResult_free(ParsingResult* this) {
 	if (this != NULL) {
+		// Match_free cleans up extracted PCRE substrings but does NOT free
+		// the Match structs themselves (they're arena-allocated).
 		this->match = Match_free(this->match);
+		// ParsingContext_free will free the arena (bulk-freeing all Match structs)
 		ParsingContext_free(this->context);
 	}
 	__FREE(this);
@@ -2444,5 +2652,57 @@ int Processor_process (Processor* this, Match* match, int step) {
 void Utilities_indent( ParsingElement* this, ParsingContext* context ) {}
 void Utilities_dedent( ParsingElement* this, ParsingContext* context ) {}
 bool Utilites_checkIndent( ParsingElement *this, ParsingContext* context ) { return TRUE; }
+
+// ----------------------------------------------------------------------------
+//
+// MATCH FLATTEN
+//
+// ----------------------------------------------------------------------------
+
+static int Match_flatten_recursive(Match* match, MatchFlatNode* buffer, int offset, int bufferSize) {
+	if (!match || offset >= bufferSize) { return offset; }
+
+	MatchFlatNode* node = &buffer[offset];
+	node->type = match->element->type;
+	node->id   = match->element->id;
+	node->match = match;
+	node->wordValue = NULL;
+	node->isMany = 0;
+
+	// Count children
+	int childCount = 0;
+	Match* child = match->children;
+	while (child) { childCount++; child = child->next; }
+	node->numChildren = childCount;
+
+	// Set reference many flag
+	if (node->type == TYPE_REFERENCE) {
+		node->isMany = Reference_isMany((Reference*)match->element) ? 1 : 0;
+	}
+
+	// Set word value for Word matches
+	if (node->type == TYPE_WORD) {
+		WordConfig* config = (WordConfig*)((ParsingElement*)match->element)->config;
+		if (config && match->data) {
+			node->wordValue = (const char*)match->data;
+		}
+	}
+
+	offset++;
+
+	// Recurse into children
+	child = match->children;
+	while (child && offset < bufferSize) {
+		offset = Match_flatten_recursive(child, buffer, offset, bufferSize);
+		child = child->next;
+	}
+
+	return offset;
+}
+
+int Match_flatten(Match* this, MatchFlatNode* buffer, int bufferSize) {
+	if (!this || !buffer || bufferSize <= 0) { return 0; }
+	return Match_flatten_recursive(this, buffer, 0, bufferSize);
+}
 
 // EOF

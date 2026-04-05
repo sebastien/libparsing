@@ -7,6 +7,8 @@ typedef struct ParsingContext ParsingContext;
 typedef struct Match Match;
 typedef struct Grammar Grammar;
 typedef struct TokenMatchGroup TokenMatchGroup;
+typedef struct Arena          Arena;
+typedef struct MemoEntry      MemoEntry;
 typedef bool (*ConditionCallback)(ParsingElement*, ParsingContext*);
 typedef void (*ProcedureCallback)(ParsingElement* this, ParsingContext* context);
 typedef void (*ContextCallback)(ParsingContext* context, char op );
@@ -116,6 +118,10 @@ typedef struct ParsingContext {
 	const char*             indent;
 	int                     flags;
 	bool                    freeIterator;
+	Arena*                  arena;        // Arena allocator for Match objects
+	MemoEntry*              memoTable;    // Packrat memoization table
+	size_t                  memoCapacity; // Capacity of memo hash table
+	size_t                  inputLength;  // Total input length (for memo table sizing)
 } ParsingContext;
 ParsingContext* ParsingContext_new( Grammar* g, Iterator* iterator );
 char* ParsingContext_text( ParsingContext* this );
@@ -131,6 +137,8 @@ void  ParsingContext_setInt(ParsingContext*  this, const char* name, int value);
 void ParsingContext_on(ParsingContext* this, ContextCallback callback);
 int  ParsingContext_getVariableCount(ParsingContext* this);
 Match* ParsingContext_registerMatch(ParsingContext* this, Element* e, Match* m);
+Match* ParsingContext_memoGet(ParsingContext* this, int elementId, size_t offset);
+void ParsingContext_memoSet(ParsingContext* this, int elementId, size_t offset, Match* match, size_t endOffset, size_t endLines);
 typedef struct ParsingElement {
 	char           type;       // Type is used du differentiate ParsingElement from Reference
 	int            id;         // The ID, assigned by the grammar, as the relative distance to the axiom
@@ -151,6 +159,7 @@ ParsingElement* ParsingElement_replace(ParsingElement* this, int index, Referenc
 ParsingElement* ParsingElement_add(ParsingElement* this, Reference* child);
 ParsingElement* ParsingElement_clear(ParsingElement* this);
 size_t ParsingElement_skip(const ParsingElement* this, ParsingContext* context);
+size_t ParsingElement_skipFast(const ParsingElement* this, ParsingContext* context);
 Match* ParsingElement_process( const ParsingElement* this, Match* match );
 ParsingElement* ParsingElement_name( ParsingElement* this, const char* name );
 const char* ParsingElement_getName( const ParsingElement* this );
@@ -188,7 +197,6 @@ typedef struct ParsingStats {
 ParsingStats* ParsingStats_new(void);
 void ParsingStats_free(ParsingStats* this);
 void ParsingStats_setSymbolsCount(ParsingStats* this, size_t t);
-Match* ParsingStats_registerMatch(ParsingStats* this, const Element* e, Match* m);
 typedef struct WordConfig {
 	char*   word;
 	size_t  length;
@@ -200,6 +208,9 @@ const char* WordMatch_group(Match* match);
 typedef struct TokenMatch {
 	int             count;
 	const char**    groups;
+	int*            ovector;     // PCRE offset vector for lazy extraction
+	const char*     input;       // Pointer to input at match time
+	bool            extracted;   // Whether groups have been extracted from ovector
 } TokenMatch;
 ParsingElement* Token_new(const char* expr);
 void Token_free(ParsingElement*);
@@ -230,3 +241,12 @@ ParsingResult* Grammar_parseIterator( Grammar* this, Iterator* iterator );
 ParsingResult* Grammar_parsePath( Grammar* this, const char* path );
 ParsingResult* Grammar_parseString( Grammar* this, const char* text );
 void Grammar_freeElements(Grammar* this);
+typedef struct MatchFlatNode {
+    char        type;
+    int         id;
+    int         numChildren;
+    char        isMany;
+    const char* wordValue;
+    Match*      match;
+} MatchFlatNode;
+int Match_flatten(Match* this, MatchFlatNode* buffer, int bufferSize);

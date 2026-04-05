@@ -13,7 +13,7 @@
 
 PROJECT        :=parsing
 PYMODULE       :=lib$(PROJECT)
-FEATURES       :=pcre fortify gc
+FEATURES       :=pcre gc
 ALL_FEATURES   :=pcre memcheck debug trace fortify gc assert
 
 # === FEATURES ================================================================
@@ -38,7 +38,7 @@ endif
 ifneq (,$(findstring debug,$(FEATURES)))
 	CFLAGS+=-Og
 else
-	CFLAGS+=-O3
+	CFLAGS+=-O3 -flto
 endif
 ifneq (,$(findstring fortify,$(FEATURES)))
 	CFLAGS+= -U_FORTIFY_SOURCE -fstack-protector-all
@@ -68,12 +68,14 @@ TESTS_PY       =$(wildcard $(TESTS)/*.py)
 BUILD_SOURCES_O =$(SOURCES_C:$(SOURCES)/c/%.c=$(BUILD)/%.o)
 BUILD_TESTS_O   =$(TESTS_C:$(TESTS)/%.c=$(BUILD)/%.o)
 BUILD_O         =$(BUILD_SOURCES_O) $(BUILD_TESTS_O)
-BUILD_PY_SO        =$(SOURCES)/python/lib$(PROJECT)/lib$(PROJECT).so   \
-                 $(SOURCES)/python/lib$(PROJECT)/_lib$(PROJECT).so  \
+BUILD_PY_SO     =$(SOURCES)/python/lib$(PROJECT)/lib$(PROJECT).so   \
+                  $(SOURCES)/python/lib$(PROJECT)/_lib$(PROJECT).so  \
 
-BUILD_PY_FFI       =$(SOURCES)/python/lib$(PROJECT)/_lib$(PROJECT).ffi \
-                 $(SOURCES)/python/lib$(PROJECT)/_lib$(PROJECT).c
-BUILD_ALL       =$(BUILD_O) $(BUILD_PY_SO) $(BUILD_PY_FFI)
+# NOTE: The .ffi file is auto-generated but committed to git as a stable interface.
+# It should NOT be removed by make clean. Only the .c file is a true build artifact.
+SOURCE_PY_FFI   =$(SOURCES)/python/lib$(PROJECT)/_lib$(PROJECT).ffi
+BUILD_PY_C      =$(SOURCES)/python/lib$(PROJECT)/_lib$(PROJECT).c
+BUILD_ALL       =$(BUILD_O) $(BUILD_PY_SO) $(BUILD_PY_C)
 
 # === DIST FILES ==============================================================
 
@@ -147,7 +149,7 @@ release: $(PRODUCT) update-python-version $(SOURCES)/python/lib$(PROJECT)/_lib$(
 test: ## Runs all tests using the harness
 	@tests/harness.sh
 
-ffi: $(SOURCES)/alt$(PROJECT)/$(PROJECT).ffi ## Re-generates the FFI interface
+ffi: $(SOURCE_PY_FFI) ## Ensures FFI interface is available (auto-generated if missing)
 
 update-python-version: $(SOURCES)/h/parsing.h
 	sed -i 's/VERSION \+= *"[^"]\+"/VERSION            = "$(VERSION)"/' $(SOURCES)/python/$(PYMODULE)/__init__.py 
@@ -262,7 +264,7 @@ $(DIST)/lib$(PROJECT).so: $(BUILD_SOURCES_O)
 	@echo "$(GREEN)📝  $@ [SO]$(RESET)"
 	@mkdir -p `dirname $@`
 	@echo "$(CYAN)→ " $(BUILD_SOURCES_O) "$(RESET)"
-	$(LD) -shared $(LDFLAGS) $(BUILD_SOURCES_O) -o $@
+	$(CC) -shared $(CFLAGS) $(LDFLAGS) $(BUILD_SOURCES_O) -o $@
 
 $(DIST)/lib$(PROJECT).so.$(VERSION): $(DIST)/lib$(PROJECT).so
 	@echo "$(GREEN)📝  $@ [SO $(VERSION)]$(RESET)"
@@ -291,7 +293,7 @@ $(SOURCES)/python/lib$(PROJECT)/_libparsing.ffi: $(SOURCES)/h/$(PROJECT).h
 		PYTHONPATH=$(SOURCES)/python:bin $(PYTHON) bin/ffigen.py $< > $@ || true; \
 	fi
 
-$(SOURCES)/python/lib$(PROJECT)/_libparsing.c: $(SOURCES_C) $(SOURCES_H)
+$(SOURCES)/python/lib$(PROJECT)/_libparsing.c: $(SOURCES_C) $(SOURCES_H) $(SOURCE_PY_FFI)
 	@echo "$(GREEN)📝  $@ [C SOURCE]$(RESET)"
 	@echo 'typedef struct gc_Reference { char guard; size_t size; int count; void* previous; void* next; } gc_Reference;' > $@
 	@echo 'void gc_Reference_acquire( gc_Reference* ref );' >> $@
@@ -300,7 +302,7 @@ $(SOURCES)/python/lib$(PROJECT)/_libparsing.c: $(SOURCES_C) $(SOURCES_H)
 	@echo 'gc_Reference* gc_ref( void* ptr );' >> $@
 	$(CC) -E -DNDEBUG -O3 -DWITH_CFFI $(CFLAGS) $(SOURCES_C) | grep -v '^#' >> $@
 
-$(SOURCES)/python/lib$(PROJECT)/_libparsing.so: $(BUILD_PY_FFI)
+$(SOURCES)/python/lib$(PROJECT)/_libparsing.so: $(SOURCE_PY_FFI) $(BUILD_PY_C)
 	@if [ -n "$(PYTHON)" ] && [ -x "$$(command -v $(PYTHON))" ]; then \
 		$(PYTHON) $(SOURCES)/python/lib$(PROJECT)/_buildext.py $@; \
 	else \

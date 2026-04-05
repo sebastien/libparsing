@@ -455,6 +455,10 @@ size_t ParsingElement_skip(const ParsingElement* this, ParsingContext* context);
 
 
 
+size_t ParsingElement_skipFast(const ParsingElement* this, ParsingContext* context);
+
+
+
 
 
 Match* ParsingElement_process( const ParsingElement* this, Match* match );
@@ -504,6 +508,9 @@ typedef struct TokenConfig {
 typedef struct TokenMatch {
  int count;
  const char** groups;
+ int* ovector;
+ const char* input;
+ bool extracted;
 } TokenMatch;
 
 
@@ -610,6 +617,37 @@ ParsingElement* Condition_new(ConditionCallback c);
 
 
 Match* Condition_recognize(ParsingElement* this, ParsingContext* context);
+typedef struct ArenaBlock {
+ struct ArenaBlock* next;
+ size_t used;
+ size_t capacity;
+ char data[];
+} ArenaBlock;
+
+
+typedef struct Arena {
+ ArenaBlock* current;
+ ArenaBlock* first;
+} Arena;
+
+
+Arena* Arena_new(void);
+
+
+
+void* Arena_alloc(Arena* arena, size_t size);
+
+
+
+void Arena_free(Arena* arena);
+typedef struct MemoEntry {
+ char status;
+ Match* match;
+ size_t end_offset;
+ size_t end_lines;
+} MemoEntry;
+
+
 typedef struct ParsingStats {
  size_t bytesRead;
  double parseTime;
@@ -630,9 +668,6 @@ void ParsingStats_free(ParsingStats* this);
 
 
 void ParsingStats_setSymbolsCount(ParsingStats* this, size_t t);
-
-
-Match* ParsingStats_registerMatch(ParsingStats* this, const Element* e, Match* m);
 typedef struct ParsingVariable {
  int depth;
  char* key;
@@ -685,6 +720,10 @@ typedef struct ParsingContext {
  const char* indent;
  int flags;
  bool freeIterator;
+ Arena* arena;
+ MemoEntry* memoTable;
+ size_t memoCapacity;
+ size_t inputLength;
 } ParsingContext;
 
 
@@ -736,7 +775,17 @@ void ParsingContext_on(ParsingContext* this, ContextCallback callback);
 int ParsingContext_getVariableCount(ParsingContext* this);
 
 
+
+
 Match* ParsingContext_registerMatch(ParsingContext* this, Element* e, Match* m);
+
+
+
+Match* ParsingContext_memoGet(ParsingContext* this, int elementId, size_t offset);
+
+
+
+void ParsingContext_memoSet(ParsingContext* this, int elementId, size_t offset, Match* match, size_t endOffset, size_t endLines);
 
 
 typedef struct ParsingResult {
@@ -812,6 +861,20 @@ void Utilities_dedent( ParsingElement* this, ParsingContext* context );
 
 
 bool Utilites_checkIndent( ParsingElement* this, ParsingContext* context );
+typedef struct MatchFlatNode {
+    char type;
+    int id;
+    int numChildren;
+    char isMany;
+    const char* wordValue;
+    Match* match;
+} MatchFlatNode;
+
+
+
+
+
+int Match_flatten(Match* this, MatchFlatNode* buffer, int bufferSize);
 typedef struct gc_Reference {
  char guard;
  size_t size;
@@ -919,6 +982,56 @@ char* String_escape(const char* string) {
  res[l + n] = '\0';
  return res;
 }
+Arena* Arena_new(void) {
+ Arena* arena = (Arena*)malloc(sizeof(Arena));
+ assert(arena != NULL);
+ ArenaBlock* block = (ArenaBlock*)malloc(sizeof(ArenaBlock) + (64 * 1024));
+ assert(block != NULL);
+ block->next = NULL;
+ block->used = 0;
+ block->capacity = (64 * 1024);
+ arena->current = block;
+ arena->first = block;
+ return arena;
+}
+
+void* Arena_alloc(Arena* arena, size_t size) {
+
+ size = (size + 7) & ~((size_t)7);
+ ArenaBlock* block = arena->current;
+ if (block->used + size > block->capacity) {
+  size_t cap = (64 * 1024) > size ? (64 * 1024) : size;
+  ArenaBlock* new_block = (ArenaBlock*)malloc(sizeof(ArenaBlock) + cap);
+  assert(new_block != NULL);
+  new_block->next = NULL;
+  new_block->used = 0;
+  new_block->capacity = cap;
+  block->next = new_block;
+  arena->current = new_block;
+  block = new_block;
+ }
+ void* ptr = block->data + block->used;
+ block->used += size;
+ return ptr;
+}
+
+void Arena_free(Arena* arena) {
+ if (arena == NULL) {return;}
+ ArenaBlock* block = arena->first;
+ while (block != NULL) {
+  ArenaBlock* next = block->next;
+  free(block);
+  block = next;
+ }
+ free(arena);
+}
+
+
+
+
+
+
+
 Iterator* Iterator_Open(const char* path) {
  Iterator* result = Iterator_new();
  result->freeBuffer = 1;
@@ -1287,7 +1400,8 @@ void Grammar_free(Grammar* this) {
 
 
 Match* Match__Success(size_t length, Element* element, ParsingContext* context) {
- Match* this = Match_new();
+
+ Match* this = (Match*)Arena_alloc(context->arena, sizeof(Match));
  assert( element != NULL );
  this->status = 'M';
  this->offset = context->iterator->offset;
@@ -1299,6 +1413,7 @@ Match* Match__Success(size_t length, Element* element, ParsingContext* context) 
  this->next = NULL;
  this->children = NULL;
  this->parent = NULL;
+ this->result = NULL;
  return this;
 }
 
@@ -1363,7 +1478,7 @@ void* Match_free(Match* this) {
    Match_free__specialized(this,element);
   }
 
-  if (this!=NULL) {; gc_free(this); } ;
+
  }
  return NULL;
 }
@@ -1879,14 +1994,46 @@ Match* ParsingElement_process( const ParsingElement* this, Match* match ) {
 }
 
 size_t ParsingElement_skip( const ParsingElement* this, ParsingContext* context) {
+ return ParsingElement_skipFast(this, context);
+}
+
+
+
+
+size_t ParsingElement_skipFast( const ParsingElement* this, ParsingContext* context) {
  if (this == NULL || context == NULL || context->grammar->skip == NULL || context->flags & 0x1) {return 0;}
  context->flags=context->flags|0x1;;
  ParsingElement* skip = context->grammar->skip;
  size_t offset = context->iterator->offset;
+ size_t skipped = 0;
 
- Match* match = skip->recognize(skip, context);
- match = Match_free(match);
- size_t skipped = context->iterator->offset - offset;
+
+
+
+ if (skip->type == 'T' && skip->config != NULL) {
+  TokenConfig* config = (TokenConfig*)skip->config;
+  int vector[30];
+  const char* line = (const char*)context->iterator->current;
+  int r = pcre_exec(
+   config->regexp, config->extra,
+   line,
+   context->iterator->available - (context->iterator->current - context->iterator->buffer),
+   0,
+   PCRE_ANCHORED | PCRE_NO_UTF8_CHECK | PCRE_NO_UTF16_CHECK | PCRE_NO_UTF32_CHECK,
+   vector, 30);
+  if (r > 0 && vector[1] > 0) {
+   context->iterator->move(context->iterator, vector[1]);
+   skipped = vector[1];
+  }
+ } else
+
+ {
+
+  Match* match = skip->recognize(skip, context);
+  match = Match_free(match);
+  skipped = context->iterator->offset - offset;
+ }
+
  if (skipped > 0) {
   if(context->grammar->isVerbose){fprintf(stdout, " %s   ►►►skipped %zu", context->indent, skipped);fprintf(stdout, "\n");;}
  }
@@ -2360,20 +2507,20 @@ Match* Token_recognize(ParsingElement* this, ParsingContext* context) {
   if(context->grammar->isVerbose && !(context->flags & 0x1)){fprintf(stdout, "[✓] %s└ Token " "\033[1m\033[32m" "%s" "\033[0m" "#%d:" "\033[36m" "`%s`" "\033[0m" " matched " "\033[1m\033[32m" "%zu:%zu-%zu" "\033[0m", context->indent, this->name, this->id, config->expr, context->iterator->lines, context->iterator->offset, context->iterator->offset + result->length);fprintf(stdout, "\n");;};
 
 
-  TokenMatch* data = (TokenMatch*) gc_new(sizeof(TokenMatch)); assert (data!=NULL); ;
+
+
+
+  TokenMatch* data = (TokenMatch*)Arena_alloc(context->arena, sizeof(TokenMatch));
   data->count = r;
-  const char** groups = (const char**) gc_calloc(r, sizeof(const char*)) ; assert (groups!=NULL); ;
-  data->groups = groups;
+  data->groups = NULL;
+  data->extracted = 0;
 
-
-
-  for (int j=0 ; j<r ; j++) {
-   const char* substring;
-
-
-   pcre_get_substring(line, vector, r, j, &(substring));
-   data->groups[j] = substring;
+  int ovector_size = r * 2;
+  data->ovector = (int*)Arena_alloc(context->arena, sizeof(int) * ovector_size);
+  for (int j = 0; j < ovector_size; j++) {
+   data->ovector[j] = vector[j];
   }
+  data->input = line;
   result->data = data;
   context->iterator->move(context->iterator,result->length);
   assert (result->data != NULL);
@@ -2391,7 +2538,18 @@ const char* TokenMatch_group(Match* match, int index) {
  if (m) {
   assert (index >= 0);
   assert (index < m->count);
-  return m->groups[index];
+
+  if (!m->extracted && m->ovector != NULL) {
+
+   m->groups = (const char**)calloc(m->count, sizeof(const char*));
+   assert(m->groups != NULL);
+   for (int j = 0; j < m->count; j++) {
+    pcre_get_substring(m->input, m->ovector, m->count, j, &(m->groups[j]));
+   }
+
+   m->extracted = 1;
+  }
+  return m->groups != NULL ? m->groups[index] : NULL;
  } else {
   return NULL;
  }
@@ -2423,16 +2581,21 @@ void TokenMatch_free(Match* match) {
  ;;
  if (match->data != NULL) {
   TokenMatch* m = (TokenMatch*)match->data;
-  if (m != NULL ) {
+  if (m != NULL && m->extracted && m->groups != NULL) {
+
    for (int j=0 ; j<m->count ; j++) {
     pcre_free_substring(m->groups[j]);
    }
+
+   free((void*)m->groups);
+   m->groups = NULL;
   }
-  if (m->groups!=NULL) {; gc_free(m->groups); } ;
+
+
  }
 
- if (match->data!=NULL) {; gc_free(match->data); } ;
 
+ match->data = NULL;
 }
 
 
@@ -2449,6 +2612,16 @@ ParsingElement* Group_new(Reference* children[]) {
 }
 
 Match* Group_recognize(ParsingElement* this, ParsingContext* context){
+
+
+ size_t memo_offset = context->iterator->offset;
+ size_t memo_lines = context->iterator->lines;
+ Match* cached = ParsingContext_memoGet(context, this->id, memo_offset);
+ if (cached == FAILURE) {
+  return ParsingContext_registerMatch(context, (Element*)this, FAILURE);
+ } else if (cached != NULL) {
+  return ParsingContext_registerMatch(context, (Element*)this, cached);
+ }
 
 
  if(context->grammar->isVerbose && !(context->flags & 0x1)){fprintf(stdout, "??? %s┌── Group " "\033[1m\033[33m" "%s" "\033[0m" ":#%d at %zu:%zu[→%d]", context->indent, this->name, this->id, context->iterator->lines, context->iterator->offset, context->depth);fprintf(stdout, "\n");;};
@@ -2485,6 +2658,8 @@ Match* Group_recognize(ParsingElement* this, ParsingContext* context){
 
  if (Match_isSuccess(result)) {
   if(context->grammar->isVerbose && !(context->flags & 0x1)){fprintf(stdout, "[✓] %s╘═⇒ Group " "\033[1m\033[32m" "%s" "\033[0m" "#%d[%d] matched" "\033[1m\033[32m" "%zu:%zu-%zu" "\033[0m" "[%zu][→%d]", context->indent, this->name, this->id, step, context->iterator->lines, result->offset, context->iterator->offset, result->length, context->depth);fprintf(stdout, "\n");;}
+
+  ParsingContext_memoSet(context, this->id, memo_offset, result, context->iterator->offset, context->iterator->lines);
   return ParsingContext_registerMatch(context, (Element*)this, result);
  } else {
 
@@ -2494,6 +2669,8 @@ Match* Group_recognize(ParsingElement* this, ParsingContext* context){
    Iterator_backtrack(context->iterator, offset, lines);
    assert( context->iterator->offset == offset );
   }
+
+  ParsingContext_memoSet(context, this->id, memo_offset, FAILURE, memo_offset, memo_lines);
   return ParsingContext_registerMatch(context, (Element*)this, FAILURE);
  }
 
@@ -2507,6 +2684,16 @@ ParsingElement* Rule_new(Reference* children[]) {
 }
 
 Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
+
+
+ size_t memo_offset = context->iterator->offset;
+ size_t memo_lines = context->iterator->lines;
+ Match* cached = ParsingContext_memoGet(context, this->id, memo_offset);
+ if (cached == FAILURE) {
+  return ParsingContext_registerMatch(context, (Element*)this, FAILURE);
+ } else if (cached != NULL) {
+  return ParsingContext_registerMatch(context, (Element*)this, cached);
+ }
 
 
 
@@ -2608,6 +2795,8 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
 
 
   result->length = last->offset - result->offset + last->length;
+
+  ParsingContext_memoSet(context, this->id, memo_offset, result, context->iterator->offset, context->iterator->lines);
  } else {
   if(context->grammar->isVerbose && !(context->flags & 0x1)){fprintf(stdout, " !  %s╘ Rule " "\033[1m\033[31m" "%s" "\033[0m" "#%d failed on step %d=%s at %zu:%zu-%zu[→%d]", context->indent, this->name, this->id, step, step_name == NULL ? "-" : step_name, context->iterator->lines, offset, context->iterator->offset, context->depth);fprintf(stdout, "\n");;}
 
@@ -2617,6 +2806,8 @@ Match* Rule_recognize (ParsingElement* this, ParsingContext* context){
    Iterator_backtrack(context->iterator, offset, lines);
    assert( context->iterator->offset == offset );
   }
+
+  ParsingContext_memoSet(context, this->id, memo_offset, FAILURE, memo_offset, memo_lines);
  }
 
  return ParsingContext_registerMatch(context, (Element*)this, result);
@@ -2803,6 +2994,26 @@ ParsingContext* ParsingContext_new( Grammar* g, Iterator* iterator ) {
  this->lastMatchOffset = 0;
  this->lastMatchLength = 0;
  this->lastMatchElementID = -1;
+
+ this->arena = Arena_new();
+
+
+
+ this->inputLength = iterator != NULL ? iterator->available : 0;
+ size_t symbolCount = g != NULL ? (size_t)(g->axiomCount + g->skipCount) : 0;
+
+ size_t memoSize = symbolCount > 0 ? (this->inputLength * symbolCount < 1024 * 1024 ? this->inputLength * symbolCount : 1024 * 1024) : 0;
+
+ if (memoSize < 4096) { memoSize = 4096; }
+ size_t power = 1;
+ while (power < memoSize) { power <<= 1; }
+ this->memoCapacity = power;
+ if (this->memoCapacity > 0) {
+  this->memoTable = (MemoEntry*)calloc(this->memoCapacity, sizeof(MemoEntry));
+  assert(this->memoTable != NULL);
+ } else {
+  this->memoTable = NULL;
+ }
  return this;
 }
 
@@ -2812,6 +3023,11 @@ void ParsingContext_free( ParsingContext* this ) {
   if (this->freeIterator) {Iterator_free(this->iterator);}
   ParsingVariable_freeAll(this->variables);
   ParsingStats_free(this->stats);
+
+  if (this->memoTable != NULL) { free(this->memoTable); this->memoTable = NULL; }
+
+  Arena_free(this->arena);
+  this->arena = NULL;
   if (this!=NULL) {; gc_free(this); } ;
  }
 }
@@ -2878,8 +3094,6 @@ size_t ParsingContext_getOffset(ParsingContext* this) {
 Match* ParsingContext_registerMatch(ParsingContext* this, Element* e, Match* m) {
 
  if ((this->flags & 0x1)) {return m;}
- ParsingStats_registerMatch(this->stats, e, m);
-
 
 
  if (m != NULL && Match_isSuccess(m)) {
@@ -2890,6 +3104,76 @@ Match* ParsingContext_registerMatch(ParsingContext* this, Element* e, Match* m) 
   }
  }
  return m;
+}
+
+
+
+
+
+
+
+static inline size_t memo_hash(int elementId, size_t offset, size_t mask) {
+ size_t h = (size_t)elementId * 2654435761u;
+ h ^= offset;
+ h *= 2246822519u;
+ h ^= h >> 16;
+ return h & mask;
+}
+
+Match* ParsingContext_memoGet(ParsingContext* this, int elementId, size_t offset) {
+ if (this->memoTable == NULL || elementId < 0) { return NULL; }
+ size_t mask = this->memoCapacity - 1;
+ size_t idx = memo_hash(elementId, offset, mask);
+
+ for (int probe = 0; probe < 8; probe++) {
+  MemoEntry* e = &this->memoTable[(idx + probe) & mask];
+  if (e->status == 0) {
+   return NULL;
+  }
+
+  if (e->match != NULL && e->match->element != NULL &&
+      e->match->element->id == elementId &&
+      e->match->offset == offset &&
+      e->status == 1) {
+
+   Iterator_backtrack(this->iterator, e->end_offset, e->end_lines);
+   return e->match;
+  }
+  if (e->status == 2 &&
+      e->end_offset == offset &&
+      e->end_lines == (size_t)elementId) {
+
+
+   return FAILURE;
+  }
+ }
+ return NULL;
+}
+
+void ParsingContext_memoSet(ParsingContext* this, int elementId, size_t offset,
+                           Match* match, size_t endOffset, size_t endLines) {
+ if (this->memoTable == NULL || elementId < 0) { return; }
+ size_t mask = this->memoCapacity - 1;
+ size_t idx = memo_hash(elementId, offset, mask);
+
+ for (int probe = 0; probe < 8; probe++) {
+  MemoEntry* e = &this->memoTable[(idx + probe) & mask];
+  if (e->status == 0) {
+   if (Match_isSuccess(match)) {
+    e->status = 1;
+    e->match = match;
+    e->end_offset = endOffset;
+    e->end_lines = endLines;
+   } else {
+    e->status = 2;
+    e->match = NULL;
+    e->end_offset = offset;
+    e->end_lines = (size_t)elementId;
+   }
+   return;
+  }
+ }
+
 }
 
 
@@ -2923,10 +3207,6 @@ void ParsingStats_setSymbolsCount(ParsingStats* this, size_t t) {
  this->successBySymbol=gc_realloc(this->successBySymbol,t * sizeof(size_t)); ;
  this->failureBySymbol=gc_realloc(this->failureBySymbol,t * sizeof(size_t)); ;
  this->symbolsCount = t;
-}
-
-Match* ParsingStats_registerMatch(ParsingStats* this, const Element* e, Match* m) {
- return m;
 }
 
 
@@ -2985,7 +3265,10 @@ int ParsingResult_textOffset(ParsingResult* this) {
 
 void ParsingResult_free(ParsingResult* this) {
  if (this != NULL) {
+
+
   this->match = Match_free(this->match);
+
   ParsingContext_free(this->context);
  }
  if (this!=NULL) {; gc_free(this); } ;
@@ -3180,3 +3463,55 @@ int Processor_process (Processor* this, Match* match, int step) {
 void Utilities_indent( ParsingElement* this, ParsingContext* context ) {}
 void Utilities_dedent( ParsingElement* this, ParsingContext* context ) {}
 bool Utilites_checkIndent( ParsingElement *this, ParsingContext* context ) { return 1; }
+
+
+
+
+
+
+
+static int Match_flatten_recursive(Match* match, MatchFlatNode* buffer, int offset, int bufferSize) {
+ if (!match || offset >= bufferSize) { return offset; }
+
+ MatchFlatNode* node = &buffer[offset];
+ node->type = match->element->type;
+ node->id = match->element->id;
+ node->match = match;
+ node->wordValue = NULL;
+ node->isMany = 0;
+
+
+ int childCount = 0;
+ Match* child = match->children;
+ while (child) { childCount++; child = child->next; }
+ node->numChildren = childCount;
+
+
+ if (node->type == '#') {
+  node->isMany = Reference_isMany((Reference*)match->element) ? 1 : 0;
+ }
+
+
+ if (node->type == 'W') {
+  WordConfig* config = (WordConfig*)((ParsingElement*)match->element)->config;
+  if (config && match->data) {
+   node->wordValue = (const char*)match->data;
+  }
+ }
+
+ offset++;
+
+
+ child = match->children;
+ while (child && offset < bufferSize) {
+  offset = Match_flatten_recursive(child, buffer, offset, bufferSize);
+  child = child->next;
+ }
+
+ return offset;
+}
+
+int Match_flatten(Match* this, MatchFlatNode* buffer, int bufferSize) {
+ if (!this || !buffer || bufferSize <= 0) { return 0; }
+ return Match_flatten_recursive(this, buffer, 0, bufferSize);
+}
