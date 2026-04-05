@@ -4,10 +4,13 @@
 JSON Parser Benchmark
 =====================
 
-Compares parsing performance of three JSON parsers:
-  1. libparsing  (examples/json_parser.py)
-  2. lark        (deps/lark/examples/json_parser.py)
-  3. json.loads  (Python stdlib baseline)
+Compares parsing performance of JSON parsers across implementations:
+  - json.loads      (Python stdlib C extension - baseline)
+  - libparsing/C    (examples/json_parser.c  - pure C with libparsing)
+  - libparsing/py   (examples/json_parser.py - CPython with libparsing)
+  - lark/py         (deps/lark/examples/json_parser.py - CPython)
+  - libparsing/pypy (examples/json_parser.py - PyPy with libparsing)
+  - lark/pypy       (deps/lark/examples/json_parser.py - PyPy)
 
 Generates synthetic JSON datasets of ~1KB, ~100KB, and ~1MB, then runs each
 parser multiple times and reports timing statistics.
@@ -15,6 +18,7 @@ parser multiple times and reports timing statistics.
 Usage:
     python examples/benchmark_json.py
     python examples/benchmark_json.py --iterations 20
+    python examples/benchmark_json.py --no-pypy       # skip PyPy benchmarks
 """
 
 import sys
@@ -23,7 +27,10 @@ import json
 import time
 import random
 import string
+import shutil
 import argparse
+import subprocess
+import tempfile
 
 # ---------------------------------------------------------------------------
 # Path setup
@@ -32,6 +39,11 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 _ROOT = os.path.dirname(_HERE)
 sys.path.insert(0, os.path.join(_ROOT, "src", "python"))
 sys.path.insert(0, os.path.join(_ROOT, "deps", "lark"))
+
+# C binary path
+_C_BINARY = os.path.join(_ROOT, "dist", "json_parser")
+# Bench runner script (for subprocess-based benchmarks)
+_BENCH_RUNNER = os.path.join(_HERE, "_bench_runner.py")
 
 
 # ---------------------------------------------------------------------------
@@ -49,7 +61,6 @@ def random_string(min_len=1, max_len=20):
 def random_value(depth=0, max_depth=4):
     """Generate a random JSON value, limiting nesting depth."""
     if depth >= max_depth:
-        # At max depth, only produce scalars
         choice = random.randint(0, 4)
     else:
         choice = random.randint(0, 6)
@@ -65,11 +76,9 @@ def random_value(depth=0, max_depth=4):
     elif choice == 4:
         return None
     elif choice == 5:
-        # Generate array
         n = random.randint(0, 6)
         return [random_value(depth + 1, max_depth) for _ in range(n)]
     else:
-        # Generate object
         n = random.randint(0, 6)
         return {
             random_string(3, 12): random_value(depth + 1, max_depth) for _ in range(n)
@@ -77,10 +86,7 @@ def random_value(depth=0, max_depth=4):
 
 
 def generate_json(target_bytes):
-    """Generate a JSON string of approximately `target_bytes` size.
-
-    Builds an array of random objects until the target size is reached.
-    """
+    """Generate a JSON string of approximately `target_bytes` size."""
     items = []
     current = "[]"
     while len(current) < target_bytes:
@@ -94,35 +100,118 @@ def generate_json(target_bytes):
 
 
 # ---------------------------------------------------------------------------
-# Parser loading
+# C binary helpers
 # ---------------------------------------------------------------------------
 
 
-def load_libparsing_parser():
-    """Load the libparsing JSON parser."""
-    from examples.json_parser import parse
+def ensure_c_binary():
+    """Compile the C JSON parser if the binary doesn't exist or is outdated."""
+    c_source = os.path.join(_ROOT, "examples", "json_parser.c")
+    parsing_c = os.path.join(_ROOT, "src", "c", "parsing.c")
 
-    # Warm up (triggers grammar construction + preparation)
-    parse('{"a": 1}')
-    return parse
+    if os.path.exists(_C_BINARY):
+        bin_mtime = os.path.getmtime(_C_BINARY)
+        src_mtime = max(os.path.getmtime(c_source), os.path.getmtime(parsing_c))
+        if bin_mtime > src_mtime:
+            return True
 
+    print("  Compiling C JSON parser ...")
+    try:
+        pcre_cflags = subprocess.check_output(
+            ["pkg-config", "--cflags", "libpcre"], text=True
+        ).strip()
+        pcre_libs = subprocess.check_output(
+            ["pkg-config", "--libs", "libpcre"], text=True
+        ).strip()
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        pcre_cflags = ""
+        pcre_libs = "-lpcre"
 
-def load_lark_parser():
-    """Load the lark JSON parser."""
-    from examples.json_parser import parse
+    cmd = (
+        "gcc -O3 -DNDEBUG -I {includes} {pcre_cflags} -DWITH_PCRE "
+        "{source} {parsing_c} {pcre_libs} -o {output}"
+    ).format(
+        includes=os.path.join(_ROOT, "src", "h"),
+        pcre_cflags=pcre_cflags,
+        source=c_source,
+        parsing_c=parsing_c,
+        pcre_libs=pcre_libs,
+        output=_C_BINARY,
+    )
 
-    # Warm up (triggers LALR table generation)
-    parse('{"a": 1}')
-    return parse
+    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    if result.returncode != 0:
+        print("  WARNING: Failed to compile C parser:")
+        print("  " + result.stderr.strip())
+        return False
 
-
-def load_stdlib_parser():
-    """Return json.loads as a parser."""
-    return json.loads
+    print("  Compiled: {}".format(_C_BINARY))
+    return True
 
 
 # ---------------------------------------------------------------------------
-# Benchmarking
+# Subprocess benchmark runners
+# ---------------------------------------------------------------------------
+
+
+def _parse_runner_output(stdout):
+    """Parse output from _bench_runner.py or json_parser --benchmark.
+
+    Returns list of per-iteration times.
+    """
+    parts = stdout.strip().split()
+    avg_time = float(parts[0])
+    n = int(parts[2])
+    # If per-iteration times are provided (parts[4:]), use them
+    if len(parts) > 4:
+        return [float(t) for t in parts[4:]]
+    # Otherwise replicate the average
+    return [avg_time] * n
+
+
+def bench_c_binary(filepath, iterations):
+    """Run the C binary in --benchmark mode."""
+    env = os.environ.copy()
+    ld_path = os.path.join(_ROOT, "dist")
+    env["LD_LIBRARY_PATH"] = ld_path + ":" + env.get("LD_LIBRARY_PATH", "")
+
+    result = subprocess.run(
+        [_C_BINARY, "--benchmark", str(iterations), filepath],
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=600,
+    )
+    if result.returncode != 0:
+        raise RuntimeError("C parser failed: {}".format(result.stderr.strip()))
+    return _parse_runner_output(result.stdout)
+
+
+def bench_subprocess(interpreter, parser_name, filepath, iterations):
+    """Run _bench_runner.py under the given interpreter."""
+    env = os.environ.copy()
+    ld_path = os.path.join(_ROOT, "dist")
+    env["LD_LIBRARY_PATH"] = ld_path + ":" + env.get("LD_LIBRARY_PATH", "")
+
+    result = subprocess.run(
+        [interpreter, _BENCH_RUNNER, parser_name, filepath, str(iterations)],
+        capture_output=True,
+        text=True,
+        env=env,
+        cwd=_ROOT,
+        timeout=600,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            "{} {} failed: {}".format(
+                interpreter, parser_name, result.stderr.strip()[:200]
+            )
+        )
+    return _parse_runner_output(result.stdout)
+
+
+# ---------------------------------------------------------------------------
+# In-process benchmarking
 # ---------------------------------------------------------------------------
 
 
@@ -137,6 +226,11 @@ def bench(parser_fn, data, iterations):
     return times
 
 
+# ---------------------------------------------------------------------------
+# Formatting helpers
+# ---------------------------------------------------------------------------
+
+
 def median(values):
     s = sorted(values)
     n = len(s)
@@ -146,7 +240,6 @@ def median(values):
 
 
 def format_time(seconds):
-    """Format seconds into a human-readable string."""
     if seconds < 0.001:
         return "{:8.1f} us".format(seconds * 1_000_000)
     elif seconds < 1.0:
@@ -156,7 +249,6 @@ def format_time(seconds):
 
 
 def format_throughput(byte_count, seconds):
-    """Format throughput as MB/s or KB/s."""
     if seconds == 0:
         return "       inf"
     bps = byte_count / seconds
@@ -186,6 +278,11 @@ def main():
         default=42,
         help="Random seed for reproducible datasets (default: 42)",
     )
+    ap.add_argument(
+        "--no-pypy",
+        action="store_true",
+        help="Skip PyPy benchmarks",
+    )
     args = ap.parse_args()
 
     random.seed(args.seed)
@@ -209,18 +306,55 @@ def main():
         )
     print()
 
-    # -- Correctness check
-    print("Verifying all parsers produce identical output ...")
+    # -- Prepare parsers
+    print("Preparing parsers ...")
+    has_c_parser = ensure_c_binary()
+
+    # Detect PyPy
+    pypy_bin = None
+    if not args.no_pypy:
+        for name in ("pypy3", "pypy3.11", "pypy3.10"):
+            path = shutil.which(name)
+            if path:
+                pypy_bin = path
+                break
+        if pypy_bin:
+            # Verify it works with our runner
+            try:
+                r = subprocess.run(
+                    [pypy_bin, "-c", "import cffi; print('ok')"],
+                    capture_output=True,
+                    text=True,
+                    timeout=15,
+                )
+                if r.returncode != 0:
+                    print(
+                        "  WARNING: PyPy3 found but cffi unavailable, skipping PyPy benchmarks"
+                    )
+                    pypy_bin = None
+                else:
+                    pypy_ver = (
+                        subprocess.check_output(
+                            [pypy_bin, "--version"], text=True, stderr=subprocess.STDOUT
+                        )
+                        .strip()
+                        .split("\n")[0]
+                    )
+                    print("  PyPy detected: {} ({})".format(pypy_bin, pypy_ver))
+            except Exception as e:
+                print("  WARNING: PyPy3 check failed ({}), skipping".format(e))
+                pypy_bin = None
+        else:
+            print("  PyPy3 not found, skipping PyPy benchmarks")
+
+    # -- Import CPython parsers (in-process)
     sys.path.insert(0, _ROOT)
 
-    # Import libparsing parser
     import examples.json_parser as lp_mod
 
     lp_parse = lp_mod.parse
     lp_parse('{"a":1}')  # warm up
 
-    # Import lark parser - needs separate import since module names collide
-    # We import lark's parser module directly
     import importlib.util
 
     lark_spec = importlib.util.spec_from_file_location(
@@ -234,26 +368,78 @@ def main():
 
     stdlib_parse = json.loads
 
+    # -- Correctness checks
+    print("\nVerifying parsers ...")
     for label, data in datasets:
         expected = stdlib_parse(data)
-        lp_result = lp_parse(data)
-        lark_result = lark_parse(data)
-        assert lp_result == expected, "libparsing mismatch on {}".format(label)
-        assert lark_result == expected, "lark mismatch on {}".format(label)
-    print("  All parsers agree.\n")
+        assert lp_parse(data) == expected, "libparsing/py mismatch on {}".format(label)
+        assert lark_parse(data) == expected, "lark mismatch on {}".format(label)
+    print("  CPython parsers: OK")
+
+    if has_c_parser:
+        env = os.environ.copy()
+        env["LD_LIBRARY_PATH"] = (
+            os.path.join(_ROOT, "dist") + ":" + env.get("LD_LIBRARY_PATH", "")
+        )
+        cr = subprocess.run(
+            [_C_BINARY, "--test"], capture_output=True, text=True, env=env
+        )
+        if cr.returncode == 0:
+            print("  C parser self-test: OK")
+        else:
+            print("  C parser self-test: FAILED")
+            has_c_parser = False
+
+    if pypy_bin:
+        # Quick correctness check via runner on small dataset
+        try:
+            r = subprocess.run(
+                [pypy_bin, _BENCH_RUNNER, "libparsing", "/dev/stdin", "1"],
+                input='{"test":true}',
+                capture_output=True,
+                text=True,
+                cwd=_ROOT,
+                timeout=30,
+            )
+            if r.returncode == 0:
+                print("  PyPy parsers: OK")
+            else:
+                print(
+                    "  WARNING: PyPy runner failed, skipping: " + r.stderr.strip()[:120]
+                )
+                pypy_bin = None
+        except Exception as e:
+            print("  WARNING: PyPy check failed ({}), skipping".format(e))
+            pypy_bin = None
+
+    print()
+
+    # -- Write datasets to temp files (needed for subprocess-based parsers)
+    temp_files = []
+    for label, data in datasets:
+        tf = tempfile.NamedTemporaryFile(
+            mode="w", suffix=".json", delete=False, prefix="bench_"
+        )
+        tf.write(data)
+        tf.close()
+        temp_files.append(tf.name)
+
+    # -- PyPy warm-up: run once on the largest dataset to trigger JIT compilation
+    if pypy_bin:
+        print("Warming up PyPy JIT (one pass on largest dataset) ...")
+        for parser_name in ("libparsing", "lark"):
+            try:
+                bench_subprocess(pypy_bin, parser_name, temp_files[-1], 1)
+            except Exception:
+                pass  # non-fatal
+        print()
 
     # -- Benchmark
-    parsers = [
-        ("json.loads", stdlib_parse),
-        ("libparsing", lp_parse),
-        ("lark", lark_parse),
-    ]
-
-    SEP = "-" * 78
+    SEP = "-" * 90
     print("Benchmark: {} iterations per parser per dataset".format(iterations))
     print(SEP)
     print(
-        "{:<10s} {:<12s} {:>12s} {:>12s} {:>12s} {:>10s}".format(
+        "{:<10s} {:<16s} {:>12s} {:>12s} {:>12s} {:>12s}".format(
             "Dataset",
             "Parser",
             "Median",
@@ -264,28 +450,77 @@ def main():
     )
     print(SEP)
 
-    for label, data in datasets:
+    for di, (label, data) in enumerate(datasets):
         byte_count = len(data)
         baseline_median = None
-        for pname, pfn in parsers:
-            times = bench(pfn, data, iterations)
-            med = median(times)
-            avg = sum(times) / len(times)
+
+        # Collect results: list of (name, times)
+        results = []
+
+        # 1) json.loads (CPython, in-process)
+        times = bench(stdlib_parse, data, iterations)
+        results.append(("json.loads", times))
+
+        # 2) libparsing/C
+        if has_c_parser:
+            try:
+                results.append(
+                    ("libparsing/C", bench_c_binary(temp_files[di], iterations))
+                )
+            except Exception as e:
+                print("  WARNING: C benchmark failed: {}".format(e))
+
+        # 3) libparsing/py (CPython, in-process)
+        results.append(("libparsing/py", bench(lp_parse, data, iterations)))
+
+        # 4) lark (CPython, in-process)
+        results.append(("lark/py", bench(lark_parse, data, iterations)))
+
+        # 5) libparsing/pypy (subprocess)
+        if pypy_bin:
+            try:
+                results.append(
+                    (
+                        "libparsing/pypy",
+                        bench_subprocess(
+                            pypy_bin, "libparsing", temp_files[di], iterations
+                        ),
+                    )
+                )
+            except Exception as e:
+                print("  WARNING: PyPy libparsing failed: {}".format(e))
+
+        # 6) lark/pypy (subprocess)
+        if pypy_bin:
+            try:
+                results.append(
+                    (
+                        "lark/pypy",
+                        bench_subprocess(pypy_bin, "lark", temp_files[di], iterations),
+                    )
+                )
+            except Exception as e:
+                print("  WARNING: PyPy lark failed: {}".format(e))
+
+        # Print results
+        for ri, (pname, ptimes) in enumerate(results):
+            med = median(ptimes)
+            avg = sum(ptimes) / len(ptimes)
             tp = format_throughput(byte_count, med)
 
             if pname == "json.loads":
                 baseline_median = med
-                ratio_str = "   1.00x"
+                ratio_str = "     1.00x"
             else:
                 if baseline_median and baseline_median > 0:
                     ratio = med / baseline_median
-                    ratio_str = "{:7.1f}x".format(ratio)
+                    ratio_str = "{:9.1f}x".format(ratio)
                 else:
-                    ratio_str = "     N/A"
+                    ratio_str = "       N/A"
 
             print(
-                "{:<10s} {:<12s} {:>12s} {:>12s} {:>12s} {:>10s}".format(
-                    label if pname == parsers[0][0] else "",
+                "{:<10s} {:<16s} {:>12s} {:>12s} {:>12s} {:>12s}".format(
+                    label if ri == 0 else "",
                     pname,
                     format_time(med),
                     format_time(avg),
@@ -295,11 +530,28 @@ def main():
             )
         print(SEP)
 
+    # -- Cleanup
+    for tf in temp_files:
+        try:
+            os.unlink(tf)
+        except OSError:
+            pass
+
     print()
-    print(
-        "Note: 'vs stdlib' shows how many times slower than json.loads (lower is better)."
-    )
-    print("      json.loads is a C extension and serves as baseline reference.")
+    print("Notes:")
+    print("  'vs stdlib' = times slower than json.loads (lower is better)")
+    print("  json.loads is a C extension and serves as baseline reference")
+    if has_c_parser:
+        print(
+            "  libparsing/C uses subprocess; overhead is negligible for large datasets"
+        )
+    if pypy_bin:
+        print("  PyPy benchmarks use subprocess with pre-warmed JIT")
+        print(
+            "  '/py' = CPython {}.{}, '/pypy' = PyPy".format(
+                sys.version_info.major, sys.version_info.minor
+            )
+        )
 
 
 if __name__ == "__main__":
