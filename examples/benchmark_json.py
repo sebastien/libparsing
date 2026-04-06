@@ -127,14 +127,16 @@ def ensure_c_binary():
         pcre_cflags = ""
         pcre_libs = "-lpcre"
 
+    gc_c = os.path.join(_ROOT, "src", "c", "gc.c")
     cmd = (
-        "gcc -O3 -DNDEBUG -I {includes} {pcre_cflags} -DWITH_PCRE "
-        "{source} {parsing_c} {pcre_libs} -o {output}"
+        "gcc -O3 -flto -DNDEBUG -I {includes} {pcre_cflags} -DWITH_PCRE "
+        "{source} {parsing_c} {gc_c} {pcre_libs} -lm -o {output}"
     ).format(
         includes=os.path.join(_ROOT, "src", "h"),
         pcre_cflags=pcre_cflags,
         source=c_source,
         parsing_c=parsing_c,
+        gc_c=gc_c,
         pcre_libs=pcre_libs,
         output=_C_BINARY,
     )
@@ -217,8 +219,10 @@ def bench_subprocess(interpreter, parser_name, filepath, iterations):
 
 def bench(parser_fn, data, iterations):
     """Run `parser_fn(data)` for `iterations` times, return list of elapsed times."""
+    fn_name = getattr(parser_fn, "__name__", "?")
+    fn_mod = getattr(parser_fn, "__module__", "?")
     times = []
-    for _ in range(iterations):
+    for i in range(iterations):
         t0 = time.perf_counter()
         parser_fn(data)
         t1 = time.perf_counter()

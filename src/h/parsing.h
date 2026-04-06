@@ -327,6 +327,8 @@ typedef struct Grammar {
 	int              skipCount;   // The count of parsing elements in skip
 	Element**        elements;    // The set of all elements in the grammar
 	bool             isVerbose;
+	bool             noMemo;      // Disable packrat memoization when true
+	bool             skipWhitespace; // Use hand-coded whitespace skip instead of PCRE
 } Grammar;
 
 // @constructor
@@ -340,6 +342,9 @@ void Grammar_prepare ( Grammar* this );
 
 // @method
 void Grammar_setVerbose ( Grammar* this );
+
+// @method
+void Grammar_setNoMemo ( Grammar* this );
 
 // @method
 void Grammar_setSilent ( Grammar* this );
@@ -683,6 +688,8 @@ const char* WordMatch_group(Match* match);
 // `Token` methods.
 typedef struct TokenConfig {
 	char* expr;
+	const char* literal;   // Non-NULL if expr is a pure literal (no regex metacharacters)
+	int         literalLen; // Length of literal string
 #ifdef WITH_PCRE
 	pcre*       regexp;
 	pcre_extra* extra;
@@ -1401,6 +1408,45 @@ typedef struct MatchFlatNode {
 // Returns the number of nodes written. The caller must provide a buffer
 // of sufficient size (use Match_countAll to determine the size).
 int Match_flatten(Match* this, MatchFlatNode* buffer, int bufferSize);
+
+// @type
+// Post-order flat node with references resolved. Used by Match_flattenPost
+// to produce a post-order traversal where references are inlined.
+// Children appear BEFORE their parent in the buffer, enabling stack-based
+// bottom-up processing without recursion in Python.
+typedef struct MatchPostNode {
+    char        type;           // Element type (W, T, G, R, c, p) — never '#'
+    int         id;             // Element id
+    int         numChildren;    // Number of resolved children (after ref inlining)
+    const char* wordValue;      // For Word matches: the matched string
+    Match*      match;          // For Token matches: pointer for group extraction
+} MatchPostNode;
+
+// @method
+// Flatten a match tree into a post-order traversal with references resolved.
+// References are inlined: a non-MANY ref passes through its child, a MANY ref
+// contributes its children directly (wrapped in a synthetic list marker node
+// with type='L' and numChildren = count of items).
+// Returns the number of nodes written.
+int Match_flattenPost(Match* this, MatchPostNode* buffer, int bufferSize);
+
+// @method
+// Like Match_flattenPost but writes to separate arrays for faster FFI access.
+// types[i] = element type char, ids[i] = element id, nchildren[i] = child count,
+// words[i] = word value string (or NULL), matches[i] = Match pointer (for tokens).
+// Returns the number of nodes written.
+int Match_flattenPostArrays(Match* this, char* types, int* ids, int* nchildren,
+                            const char** words, Match** matches, int bufferSize);
+
+// @method
+// Like Match_flattenPostArrays but remaps type bytes using action_codes[element_id].
+// action_codes is a char array of size max_id+1. If action_codes[id] != 0, it
+// replaces the default type byte for that element. Structural nodes (N, L for
+// null/list from references) are NOT remapped.
+// This allows encoding handler/passthrough info directly into the type byte.
+int Match_flattenPostArraysEx(Match* this, char* types, int* ids, int* nchildren,
+                              const char** words, Match** matches,
+                              const char* action_codes, int max_id, int bufferSize);
 
 #ifdef __cplusplus
 }

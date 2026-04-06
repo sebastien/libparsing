@@ -55,6 +55,16 @@ PACKAGE_PATH = dirname(abspath(__file__))
 
 MatchTuple = collections.namedtuple("MatchTuple", "offset length id element")
 
+# Sentinel object used to distinguish "optional slot did not match" from
+# "slot matched but the handler returned None" (e.g. JSON null).
+# Handlers should test `if slot is not UNMATCHED:` instead of `if slot is not None:`
+# when the grammar uses optional elements that can legitimately produce None.
+UNMATCHED = type(
+    "_Unmatched",
+    (),
+    {"__repr__": lambda self: "UNMATCHED", "__bool__": lambda self: False},
+)()
+
 # -----------------------------------------------------------------------------
 #
 # FFI
@@ -403,6 +413,7 @@ __all__ = [
     "STATUS_INPUT_ENDED",
     "STATUS_ENDED",
     "NOTHING",
+    "UNMATCHED",
     # Type aliases
     "RuleMatch",
     "TokenMatch",
@@ -1726,6 +1737,20 @@ class Grammar(CObject):
         e = ffi.cast("Grammar*", self._cobject)
         e.isVerbose = 1 if value else 0
 
+    def setNoMemo(self, noMemo=True):
+        """Disables packrat memoization. Use for grammars that don't benefit
+        from memoization (e.g., LL(1)-like grammars without significant backtracking)."""
+        e = ffi.cast("Grammar*", self._cobject)
+        e.noMemo = 1 if noMemo else 0
+        return self
+
+    def setSkipWhitespace(self, value=True):
+        """Uses hand-coded ASCII whitespace scanning instead of PCRE for skip.
+        Much faster when the skip pattern is simply \\s+."""
+        e = ffi.cast("Grammar*", self._cobject)
+        e.skipWhitespace = 1 if value else 0
+        return self
+
     def symbol(self, id):
         if type(id) is int:
             e = ffi.cast("Reference*", self._cobject.elements[id])
@@ -1890,6 +1915,314 @@ class Processor:
                 fast = getattr(h, "_fast", None)
                 if fast is not None:
                     self._fastByID[symbol.id] = fast
+        # Build _elemCache: maps element_id -> (type, handler, fast_handler, is_many, is_passthrough)
+        # This consolidates all per-element metadata into a single dict lookup,
+        # eliminating multiple FFI field reads and dict lookups per node in _fastProcess.
+        # Tuple indices: [0]=type, [1]=handler, [2]=fast_handler, [3]=is_many, [4]=is_passthrough
+        self._elemCache = ec = {}
+        if self.grammar:
+            gc = self.grammar._cobject
+            count = gc.axiomCount + gc.skipCount + 1
+            elems = gc.elements
+            handlerByID = self.handlerByID
+            fastByID = self._fastByID
+            passthroughIDs = self._passthroughIDs
+            for i in range(count):
+                elem = elems[i]
+                if elem == ffi.NULL:
+                    continue
+                eid = elem.id
+                t = elem.type
+                h = handlerByID.get(eid)
+                fast = fastByID.get(eid)
+                is_many = bool(lib.Reference_IsMany(elem)) if t == b"#" else False
+                is_pt = eid in passthroughIDs
+                ec[eid] = (t, h, fast, is_many, is_pt)
+        # Build _postOrderActionCodes: a C-level char array for
+        # Match_flattenPostArraysEx that remaps type bytes to encode
+        # handler/passthrough info. This eliminates dict lookups in the
+        # processing loop. Also build _postHandlers: a Python list indexed
+        # by element ID for O(1) handler lookup.
+        #
+        # Remapped type bytes:
+        #   'w' = Word with handler, 'W' = Word no handler (default)
+        #   't' = Token with handler, 'T' = Token no handler (default)
+        #   'V' = Token constant: `return True/False/None` (no _FastMatch needed)
+        #   'H' = Token group0 transform: `return f(match.group()[0])` (no _FastMatch needed)
+        #   'P' = Group passthrough (skipped in C), 'g' = Group with handler, 'G' = Group no handler
+        #   'S' = Rule with slots handler, 'r' = Rule handler no slots, 'R' = Rule no handler
+        #   'Q' = Rule slot passthrough: single slot, body is `return self.process(slot)`
+        #   'K' = Rule slot tuple: body is `return (self.process(s1), self.process(s2))`
+        #   'N', 'L' = structural (not remapped)
+        handlerInfo = self._handlerInfo
+        passthroughIDs = self._passthroughIDs
+        max_id = max(ec.keys()) if ec else 0
+        self._postMaxID = max_id
+        # action_codes: char array for C, indexed by element ID
+        action_codes = [0] * (max_id + 1)
+        # _postHandlers: list indexed by element ID -> (raw_handler, slots) or None
+        post_handlers = [None] * (max_id + 1)
+        for eid, (t, h, fast, is_many, is_pt) in ec.items():
+            if eid > max_id:
+                continue
+            raw_info = handlerInfo.get(eid)
+            if is_pt:
+                # Passthrough group
+                action_codes[eid] = ord("P")
+            elif raw_info:
+                raw_handler, slots = raw_info
+                post_handlers[eid] = (raw_handler, slots)
+                if t == b"W":
+                    action_codes[eid] = ord("w")
+                elif t == b"T":
+                    token_code = self._detectTokenPattern(raw_handler)
+                    action_codes[eid] = token_code
+                    if token_code == ord("V"):
+                        # Constant handler: post_handlers stores (value,) not (handler, slots)
+                        post_handlers[eid] = self._tokenPatternData
+                    elif token_code == ord("H"):
+                        # Group0 transform: post_handlers stores (transform_fn,) not (handler, slots)
+                        post_handlers[eid] = self._tokenPatternData
+                elif t == b"G":
+                    action_codes[eid] = ord("g")
+                elif t == b"R":
+                    if slots:
+                        # Detect optimizable Rule handler patterns via source analysis
+                        rule_code = self._detectRulePattern(raw_handler, slots)
+                        action_codes[eid] = rule_code
+                        if rule_code == ord("Q"):
+                            # Passthrough: just store slot index directly
+                            post_handlers[eid] = slots[0][1]  # int
+                        elif rule_code == ord("K"):
+                            # Tuple: store tuple of slot indices
+                            post_handlers[eid] = tuple(si for _, si in slots)
+                        elif rule_code == ord("D") or rule_code == ord("A"):
+                            # Dict/List collector: store (first_idx, rest_idx)
+                            post_handlers[eid] = self._rulePatternData
+                    else:
+                        action_codes[eid] = ord("r")
+            # else: no handler, no passthrough -> action_codes stays 0 (use default type)
+        self._postActionCodes = bytes(action_codes)
+        self._postHandlers = post_handlers
+
+        # Pre-cache Word values: build list indexed by element ID -> Python string.
+        # This eliminates cffi.string() calls in the hot loop for Word nodes (~40% of nodes).
+        word_cache = [None] * (max_id + 1)
+        for eid, (t, h, fast, is_many, is_pt) in ec.items():
+            if t == b"W" and eid <= max_id:
+                sym = self.grammar.symbol(eid)
+                if sym is not None and hasattr(sym, "_word"):
+                    word_cache[eid] = ensure_unicode(sym._word)
+        self._wordCache = word_cache
+
+    def _detectTokenPattern(self, handler):
+        """Detect optimizable Token handler patterns via source analysis.
+
+        Returns the action code byte (int):
+          'V' (86) = constant value: `return True/False/None/0/...`
+          'H' (72) = group0 transform: `return f(match.group()[0])`
+          't' (116) = general token handler (fallback)
+
+        Sets self._tokenPatternData to pattern-specific data:
+          'V': the constant value (as a tuple: (value,))
+          'H': the transform function (as a tuple: (fn,))
+        """
+        import re as _re
+
+        try:
+            src = inspect.getsource(handler)
+            lines = [
+                l.strip()
+                for l in src.split("\n")
+                if l.strip()
+                and not l.strip().startswith(("def ", "@", "#", '"""', "'''"))
+            ]
+            if len(lines) == 1:
+                line = lines[0]
+                # Pattern 1: constant return
+                # `return True`, `return False`, `return None`
+                if line == "return True":
+                    self._tokenPatternData = (True,)
+                    return ord("V")
+                if line == "return False":
+                    self._tokenPatternData = (False,)
+                    return ord("V")
+                if line == "return None":
+                    self._tokenPatternData = (None,)
+                    return ord("V")
+                # Pattern 2: group0 transform
+                # `return <func>(match.group()[0])`
+                m = _re.match(r"return\s+(\w[\w.]*)\(match\.group\(\)\[0\]\)$", line)
+                if m:
+                    func_name = m.group(1)
+                    # Resolve the function in the handler's globals
+                    func = handler.__globals__.get(func_name)
+                    if func is None:
+                        # Try builtins
+                        import builtins
+
+                        func = getattr(builtins, func_name, None)
+                    if func is not None and callable(func):
+                        self._tokenPatternData = (func,)
+                        return ord("H")
+        except (OSError, TypeError):
+            pass
+        return ord("t")
+
+    def _detectRulePattern(self, handler, slots):
+        """Detect optimizable Rule handler patterns via source analysis.
+
+        Returns the action code byte (int):
+          'Q' (81) = single-slot passthrough: `return self.process(slot)`
+          'K' (75) = tuple constructor: return tuple of self.process(slot_i)
+          'D' (68) = dict collector: collect first+rest into dict
+          'A' (65) = list collector: collect first+rest into list
+          'S' (83) = general handler with slots (fallback)
+        """
+        try:
+            src = inspect.getsource(handler)
+            lines = [
+                l.strip()
+                for l in src.split("\n")
+                if l.strip()
+                and not l.strip().startswith(("def ", "@", "#", '"""', "'''"))
+            ]
+            if len(lines) == 1:
+                line = lines[0]
+                # Pattern 1: single-slot passthrough
+                # `return self.process(param_name)` where param_name is a slot arg
+                if len(slots) == 1:
+                    param_name = slots[0][0]
+                    if line == "return self.process({0})".format(param_name):
+                        return ord("Q")
+                # Pattern 2: single-line tuple constructor
+                # `return (self.process(s1), self.process(s2))`
+                if len(slots) >= 2:
+                    parts = ", ".join("self.process({0})".format(s[0]) for s in slots)
+                    if line == "return ({0})".format(
+                        parts
+                    ) or line == "return {0}".format(parts):
+                        return ord("K")
+            # Pattern 3: multi-line tuple constructor
+            # Lines like: `v1 = self.process(param1)` ... `return (v1, v2)`
+            # Detect: each slot param has exactly one assignment `var = self.process(param)`
+            # and the last line is `return (var1, var2, ...)` or `return var1, var2, ...`
+            if len(slots) >= 2 and len(lines) == len(slots) + 1:
+                var_map = {}  # param_name -> assigned_var
+                ok = True
+                for line_idx in range(len(slots)):
+                    line = lines[line_idx]
+                    param_name = slots[line_idx][0]
+                    expected_rhs = "self.process({0})".format(param_name)
+                    if " = " in line:
+                        var_name, rhs = line.split(" = ", 1)
+                        var_name = var_name.strip()
+                        rhs = rhs.strip()
+                        if rhs == expected_rhs:
+                            var_map[param_name] = var_name
+                        else:
+                            ok = False
+                            break
+                    else:
+                        ok = False
+                        break
+                if ok and len(var_map) == len(slots):
+                    # Check return line
+                    ret_line = lines[-1]
+                    vars_tuple = ", ".join(var_map[s[0]] for s in slots)
+                    if ret_line == "return ({0})".format(
+                        vars_tuple
+                    ) or ret_line == "return {0}".format(vars_tuple):
+                        return ord("K")
+            # Pattern 4: collect first+rest into dict/list
+            # Detect handlers with exactly 2 slots (first, rest) that collect
+            # first + truthy rest into a list, optionally wrapped with dict().
+            #
+            # Supported handler shapes:
+            #
+            # Shape A (7 lines, UNMATCHED guard, inline append):
+            #   [0] <list> = []
+            #   [1] if <first> is not UNMATCHED:
+            #   [2] <list>.append(self.process(<first>))
+            #   [3] <r> = self.process(<rest>)
+            #   [4] if <r>:
+            #   [5] <list>.extend(<r>)
+            #   [6] return <list> | return dict(<list>)
+            #
+            # Shape B (8 lines, is not None guard, separate var):
+            #   [0] <list> = []
+            #   [1] <f> = self.process(<first>)
+            #   [2] if <f> is not None:
+            #   [3] <list>.append(<f>)
+            #   [4] <r> = self.process(<rest>)
+            #   [5] if <r>:
+            #   [6] <list>.extend(<r>)
+            #   [7] return <list> | return dict(<list>)
+            #
+            # Shape C (9 lines, UNMATCHED guard, separate var + extra filter):
+            #   [0] <list> = []
+            #   [1] if <first> is not UNMATCHED:
+            #   [2] <f> = self.process(<first>)
+            #   [3] if <f> is not None:
+            #   [4] <list>.append(<f>)
+            #   [5] <r> = self.process(<rest>)
+            #   [6] if <r>:
+            #   [7] <list>.extend(<r>)
+            #   [8] return <list> | return dict(<list>)
+            if len(slots) == 2:
+                first_name = slots[0][0]
+                rest_name = slots[1][0]
+                ret_line = lines[-1] if lines else ""
+                is_dict = ret_line.startswith("return dict(")
+                is_list = ret_line.startswith("return ") and "dict" not in ret_line
+
+                detected = False
+
+                # Shape A: 7 lines with UNMATCHED guard, inline append
+                if len(lines) == 7 and (is_dict or is_list):
+                    if (
+                        lines[0].endswith("= []")
+                        and "is not UNMATCHED" in lines[1]
+                        and ".append(self.process({0}))".format(first_name) in lines[2]
+                        and "self.process({0})".format(rest_name) in lines[3]
+                        and ".extend(" in lines[5]
+                    ):
+                        detected = True
+
+                # Shape B: 8 lines with is not None guard, separate var
+                if not detected and len(lines) == 8 and (is_dict or is_list):
+                    if (
+                        lines[0].endswith("= []")
+                        and "self.process({0})".format(first_name) in lines[1]
+                        and "is not None" in lines[2]
+                        and ".append(" in lines[3]
+                        and "self.process({0})".format(rest_name) in lines[4]
+                        and ".extend(" in lines[6]
+                    ):
+                        detected = True
+
+                # Shape C: 9 lines with UNMATCHED guard + extra filter
+                if not detected and len(lines) == 9 and (is_dict or is_list):
+                    if (
+                        lines[0].endswith("= []")
+                        and "is not UNMATCHED" in lines[1]
+                        and "self.process({0})".format(first_name) in lines[2]
+                        and ".append(" in lines[4]
+                        and "self.process({0})".format(rest_name) in lines[5]
+                        and ".extend(" in lines[7]
+                    ):
+                        detected = True
+
+                if detected:
+                    if is_dict:
+                        self._rulePatternData = (slots[0][1], slots[1][1])
+                        return ord("D")
+                    if is_list:
+                        self._rulePatternData = (slots[0][1], slots[1][1])
+                        return ord("A")
+        except (OSError, TypeError):
+            pass
+        return ord("S")
 
     def _createHandler(self, handler, symbol):
         # We only bind the arguments listed
@@ -1943,7 +2276,7 @@ class Processor:
                         v0 = (
                             self._fastProcess(c, result_ref)
                             if c is not None and c != ffi.NULL
-                            else None
+                            else UNMATCHED
                         )
                         wrapped = _FastMatch(cobj, result_ref)
                         return self.postProcess(wrapped, handler(wrapped, v0))
@@ -1961,7 +2294,7 @@ class Processor:
                         v0 = (
                             self._fastProcess(c, result_ref)
                             if c is not None and c != ffi.NULL
-                            else None
+                            else UNMATCHED
                         )
                         wrapped = _FastMatch(cobj, result_ref)
                         return handler(wrapped, v0)
@@ -1984,13 +2317,13 @@ class Processor:
                         v0 = (
                             self._fastProcess(c, result_ref)
                             if c is not None and c != ffi.NULL
-                            else None
+                            else UNMATCHED
                         )
                         c = children[_idx1]
                         v1 = (
                             self._fastProcess(c, result_ref)
                             if c is not None and c != ffi.NULL
-                            else None
+                            else UNMATCHED
                         )
                         wrapped = _FastMatch(cobj, result_ref)
                         return self.postProcess(wrapped, handler(wrapped, v0, v1))
@@ -2008,13 +2341,13 @@ class Processor:
                         v0 = (
                             self._fastProcess(c, result_ref)
                             if c is not None and c != ffi.NULL
-                            else None
+                            else UNMATCHED
                         )
                         c = children[_idx1]
                         v1 = (
                             self._fastProcess(c, result_ref)
                             if c is not None and c != ffi.NULL
-                            else None
+                            else UNMATCHED
                         )
                         wrapped = _FastMatch(cobj, result_ref)
                         return handler(wrapped, v0, v1)
@@ -2038,19 +2371,19 @@ class Processor:
                         v0 = (
                             self._fastProcess(c, result_ref)
                             if c is not None and c != ffi.NULL
-                            else None
+                            else UNMATCHED
                         )
                         c = children[_idx1]
                         v1 = (
                             self._fastProcess(c, result_ref)
                             if c is not None and c != ffi.NULL
-                            else None
+                            else UNMATCHED
                         )
                         c = children[_idx2]
                         v2 = (
                             self._fastProcess(c, result_ref)
                             if c is not None and c != ffi.NULL
-                            else None
+                            else UNMATCHED
                         )
                         wrapped = _FastMatch(cobj, result_ref)
                         return self.postProcess(wrapped, handler(wrapped, v0, v1, v2))
@@ -2068,19 +2401,19 @@ class Processor:
                         v0 = (
                             self._fastProcess(c, result_ref)
                             if c is not None and c != ffi.NULL
-                            else None
+                            else UNMATCHED
                         )
                         c = children[_idx1]
                         v1 = (
                             self._fastProcess(c, result_ref)
                             if c is not None and c != ffi.NULL
-                            else None
+                            else UNMATCHED
                         )
                         c = children[_idx2]
                         v2 = (
                             self._fastProcess(c, result_ref)
                             if c is not None and c != ffi.NULL
-                            else None
+                            else UNMATCHED
                         )
                         wrapped = _FastMatch(cobj, result_ref)
                         return handler(wrapped, v0, v1, v2)
@@ -2140,13 +2473,23 @@ class Processor:
         # Avoids isinstance checks, depth tracking, and MatchResult check.
         if match is None or type(match) in (str, int, float, bool, dict, list, tuple):
             return match
+        # UNMATCHED sentinel: an optional slot that didn't match.
+        # Return None to callers — only internal slot dispatch sees UNMATCHED.
+        if match is UNMATCHED:
+            return None
         self.depth += 1
         match = match.match if isinstance(match, ParsingResult) else match
         if isinstance(match, (Match, _FastMatch)):
-            result = self._fastProcess(match._cobject, match._result)
+            # Top-level: use post-order if at depth 1 (no re-entrancy)
+            if self.depth == 1:
+                result = self._processPostOrder(match._cobject, match._result)
+            else:
+                result = self._fastProcess(match._cobject, match._result)
         else:
             result = match
         self.depth -= 1
+        if result is UNMATCHED:
+            return None
         return result.value if isinstance(result, MatchResult) else result
 
     def postProcess(self, match, result):
@@ -2332,22 +2675,563 @@ class Processor:
         return result
 
     # =========================================================================
+    # POST-ORDER STACK-BASED PROCESSING
+    # =========================================================================
+
+    def _processPostOrder(self, cobj, result_ref):
+        """Process a match tree using a post-order flat buffer from C.
+
+        Uses Match_flattenPostArraysEx to produce separate arrays with type
+        bytes remapped to encode handler/passthrough info. This eliminates
+        all dict lookups in the processing loop — dispatch is purely on the
+        type byte.
+
+        Remapped type codes (from _postActionCodes):
+          N = null, L = list, c/p = condition/procedure
+          W = word no handler, w = word with handler
+          T = token no handler, t = token with handler
+          V = token constant handler (return True/False/None)
+          H = token group0 transform (return f(match.group()[0]))
+          P = group passthrough, G = group no handler, g = group with handler
+          R = rule no handler, S = rule with slots, r = rule without slots
+        """
+        # Get total node count for buffer sizing
+        nodeCount = lib.Match_countAll(cobj) + 1
+        if nodeCount <= 1:
+            return self._fastProcess(cobj, result_ref)
+
+        # Allocate separate arrays for each field
+        a_types = ffi.new("char[]", nodeCount)
+        a_ids = ffi.new("int[]", nodeCount)
+        a_nc = ffi.new("int[]", nodeCount)
+        a_words = ffi.new("const char*[]", nodeCount)
+        a_matches = ffi.new("Match*[]", nodeCount)
+
+        actual = lib.Match_flattenPostArraysEx(
+            cobj,
+            a_types,
+            a_ids,
+            a_nc,
+            a_words,
+            a_matches,
+            self._postActionCodes,
+            self._postMaxID,
+            nodeCount,
+        )
+        if actual <= 0:
+            return self._fastProcess(cobj, result_ref)
+
+        # Batch-read ALL integer arrays into Python lists.
+        # bytes() on ffi.buffer is near-instant; indexing returns int.
+        types_bytes = bytes(ffi.buffer(a_types, actual))
+        ncs = ffi.unpack(a_nc, actual)
+
+        # Cache lookups as locals for tight loop
+        _NULL = ffi.NULL
+        _fs = ffi.string
+        _TMgroup = lib.TokenMatch_group
+        _hasPostProcess = self._hasPostProcess
+        # Direct handler lookup by ID — O(1) list indexing, no dict
+        post_handlers = self._postHandlers
+
+        # Type constants (int, since bytes()[i] returns int)
+        # No-handler types (most common paths first):
+        _W = 87  # Word, no handler
+        _T = 84  # Token, no handler
+        _R = 82  # Rule, no handler
+        _G = 71  # Group, no handler
+        _N = 78  # Null
+        _L = 76  # List
+        # NOTE: _P (passthrough) is handled in C — skipped entirely, never reaches Python
+        _c = 99  # Condition
+        _p = 112  # Procedure
+        # Handler types:
+        _w = 119  # Word with handler
+        _t = 116  # Token with handler
+        _g = 103  # Group with handler
+        _S = 83  # Rule with slots
+        _r = 114  # Rule handler, no slots
+        _Q = 81  # Rule passthrough (single slot)
+        _K = 75  # Rule tuple constructor
+        _V = 86  # Token constant value (return True/False/None)
+        _H = 72  # Token group0 transform (return f(match.group()[0]))
+        _D = 68  # Rule dict collector (first+rest -> dict)
+        _A = 65  # Rule list collector (first+rest -> list)
+
+        stack = []
+        sa = stack.append
+        _FM = _FastMatch
+        _wc = self._wordCache
+
+        for i in range(actual):
+            t = types_bytes[i]
+
+            # ---- Ordered by frequency: W(37.5%), H(25%), Q(15.6%), K(9.4%), L(6.3%), S(6.3%) ----
+
+            if t == _W:
+                # Word, no handler: use pre-cached Python string
+                sa(_wc[a_ids[i]])
+                continue
+
+            if t == _H:
+                # Group0 transform token handler: return f(group0_string)
+                # post_handlers[id] = (transform_fn,)
+                wv = a_words[i]
+                g0 = _fs(wv).decode("utf8") if wv != _NULL else ""
+                sa(post_handlers[a_ids[i]][0](g0))
+                continue
+
+            if t == _Q:
+                # Rule passthrough: single slot, equivalent to returning the slot value
+                # post_handlers[id] = slot_index (int)
+                nc = ncs[i]
+                slot_idx = post_handlers[a_ids[i]]
+                if nc == 1:
+                    # Most common case: single child. If slot_idx is 0,
+                    # value is already on stack. Otherwise replace.
+                    if slot_idx != 0:
+                        stack[-1] = None
+                elif nc > 1:
+                    val = stack[-nc + slot_idx] if slot_idx < nc else None
+                    del stack[-nc:]
+                    sa(val)
+                else:
+                    sa(None)
+                continue
+
+            if t == _K:
+                # Rule tuple constructor: return tuple of slot values
+                # post_handlers[id] = tuple of slot indices
+                nc = ncs[i]
+                slot_indices = post_handlers[a_ids[i]]
+                if nc > 0:
+                    children = stack[-nc:]
+                    del stack[-nc:]
+                    sa(tuple(children[si] if si < nc else None for si in slot_indices))
+                else:
+                    sa(tuple(None for _ in slot_indices))
+                continue
+
+            if t == _L:
+                nc = ncs[i]
+                if nc == 1:
+                    # Single child: wrap in list in-place
+                    stack[-1] = [stack[-1]]
+                elif nc > 1:
+                    items = stack[-nc:]
+                    del stack[-nc:]
+                    sa(items)
+                else:
+                    sa([])
+                continue
+
+            if t == _D:
+                # Dict collector: collect first+rest into dict
+                # post_handlers[id] = (first_idx, rest_idx)
+                nc = ncs[i]
+                first_idx, rest_idx = post_handlers[a_ids[i]]
+                if nc > 0:
+                    children = stack[-nc:]
+                    del stack[-nc:]
+                    first = children[first_idx] if first_idx < nc else UNMATCHED
+                    rest = children[rest_idx] if rest_idx < nc else UNMATCHED
+                else:
+                    first = UNMATCHED
+                    rest = UNMATCHED
+                pairs = []
+                if first is not UNMATCHED:
+                    pairs.append(first)
+                if rest and rest is not UNMATCHED:
+                    pairs.extend(rest)
+                sa(dict(pairs))
+                continue
+
+            if t == _A:
+                # List collector: collect first+rest into list
+                # post_handlers[id] = (first_idx, rest_idx)
+                nc = ncs[i]
+                first_idx, rest_idx = post_handlers[a_ids[i]]
+                if nc > 0:
+                    children = stack[-nc:]
+                    del stack[-nc:]
+                    first = children[first_idx] if first_idx < nc else UNMATCHED
+                    rest = children[rest_idx] if rest_idx < nc else UNMATCHED
+                else:
+                    first = UNMATCHED
+                    rest = UNMATCHED
+                items = []
+                if first is not UNMATCHED:
+                    items.append(first)
+                if rest and rest is not UNMATCHED:
+                    items.extend(rest)
+                sa(items)
+                continue
+
+            if t == _S:
+                # Rule with slots handler
+                nc = ncs[i]
+                hi = post_handlers[a_ids[i]]
+                raw_handler, slots = hi
+                if nc > 0:
+                    children = stack[-nc:]
+                    del stack[-nc:]
+                else:
+                    children = []
+                wrapped = _FM(a_matches[i], result_ref)
+                nc_len = len(children)
+                args = [children[si] if si < nc_len else UNMATCHED for _, si in slots]
+                ph = self._handler
+                self._handler = raw_handler
+                val = raw_handler(wrapped, *args)
+                self._handler = ph
+                if _hasPostProcess:
+                    val = self.postProcess(wrapped, val)
+                sa(val)
+                continue
+
+            # ---- Rare types (< 1% frequency) ----
+
+            if t == _N:
+                sa(UNMATCHED)
+                continue
+
+            if t == _V:
+                # Constant token handler: return pre-computed value
+                sa(post_handlers[a_ids[i]][0])
+                continue
+
+            if t == _c or t == _p:
+                sa(True)
+                continue
+
+            if t == _t:
+                # Token with handler (general, not optimized by V/H)
+                wv = a_words[i]
+                g0 = _fs(wv).decode("utf8") if wv != _NULL else ""
+                hi = post_handlers[a_ids[i]]
+                raw_handler = hi[0]
+                wrapped = _FM(a_matches[i], result_ref)
+                wrapped._cached_group = [g0]
+                ph = self._handler
+                self._handler = raw_handler
+                val = raw_handler(wrapped)
+                self._handler = ph
+                if _hasPostProcess:
+                    val = self.postProcess(wrapped, val)
+                sa(val)
+                continue
+
+            if t == _g:
+                # Group with handler (non-passthrough)
+                nc = ncs[i]
+                hi = post_handlers[a_ids[i]]
+                raw_handler = hi[0]
+                if nc > 0:
+                    del stack[-nc:]
+                wrapped = _FM(a_matches[i], result_ref)
+                ph = self._handler
+                self._handler = raw_handler
+                val = raw_handler(wrapped)
+                self._handler = ph
+                if _hasPostProcess:
+                    val = self.postProcess(wrapped, val)
+                sa(val)
+                continue
+
+            if t == _r:
+                # Rule handler, no slots
+                nc = ncs[i]
+                hi = post_handlers[a_ids[i]]
+                raw_handler = hi[0]
+                if nc > 0:
+                    del stack[-nc:]
+                wrapped = _FM(a_matches[i], result_ref)
+                ph = self._handler
+                self._handler = raw_handler
+                val = raw_handler(wrapped)
+                self._handler = ph
+                if _hasPostProcess:
+                    val = self.postProcess(wrapped, val)
+                sa(val)
+                continue
+
+            if t == _w:
+                # Word with handler
+                wv = a_words[i]
+                val = _fs(wv).decode("utf8") if wv != _NULL else None
+                hi = post_handlers[a_ids[i]]
+                raw_handler = hi[0]
+                wrapped = _FM(a_matches[i], result_ref)
+                ph = self._handler
+                self._handler = raw_handler
+                val = raw_handler(wrapped)
+                self._handler = ph
+                if _hasPostProcess:
+                    val = self.postProcess(wrapped, val)
+                sa(val)
+                continue
+
+            if t == _T:
+                # Token, no handler — return groups as list
+                n = ncs[i]
+                if n > 0:
+                    wv = a_words[i]
+                    g0 = _fs(wv).decode("utf8") if wv != _NULL else ""
+                    if n == 1:
+                        sa([g0])
+                    else:
+                        m = a_matches[i]
+                        sa(
+                            [g0]
+                            + [_fs(_TMgroup(m, j)).decode("utf8") for j in range(1, n)]
+                        )
+                else:
+                    sa([])
+                continue
+
+            if t == _R:
+                # Rule, no handler — collect children as list
+                nc = ncs[i]
+                if nc > 0:
+                    children = stack[-nc:]
+                    del stack[-nc:]
+                    sa(children)
+                else:
+                    sa([])
+                continue
+
+            if t == _G:
+                # Group, no handler — default wrap in list
+                nc = ncs[i]
+                if nc == 0:
+                    sa([None])
+                else:
+                    stack[-1] = [stack[-1]]
+                continue
+
+            if t == _N:
+                sa(UNMATCHED)
+                continue
+
+            if t == _L:
+                nc = ncs[i]
+                if nc > 0:
+                    items = stack[-nc:]
+                    del stack[-nc:]
+                    sa(items)
+                else:
+                    sa([])
+                continue
+
+            if t == _c or t == _p:
+                sa(True)
+                continue
+
+            # ---- Optimized Rule patterns (no handler call needed) ----
+
+            if t == _Q:
+                # Rule passthrough: single slot, equivalent to returning the slot value
+                nc = ncs[i]
+                hi = post_handlers[a_ids[i]]
+                slot_idx = hi[1][0][1]  # slots[0][1] = child index
+                if nc > 0:
+                    children = stack[-nc:]
+                    del stack[-nc:]
+                    sa(children[slot_idx] if slot_idx < nc else None)
+                else:
+                    sa(None)
+                continue
+
+            if t == _K:
+                # Rule tuple constructor: return tuple of slot values
+                nc = ncs[i]
+                hi = post_handlers[a_ids[i]]
+                slots = hi[1]
+                if nc > 0:
+                    children = stack[-nc:]
+                    del stack[-nc:]
+                    sa(tuple(children[si] if si < nc else None for _, si in slots))
+                else:
+                    sa(tuple(None for _ in slots))
+                continue
+
+            # ---- Handler paths ----
+
+            # ---- Optimized Token patterns (no _FastMatch creation needed) ----
+
+            if t == _V:
+                # Constant token handler: return pre-computed value
+                # post_handlers[id] = (constant_value,)
+                sa(post_handlers[a_ids[i]][0])
+                continue
+
+            if t == _H:
+                # Group0 transform token handler: return f(group0_string)
+                # post_handlers[id] = (transform_fn,)
+                wv = a_words[i]
+                g0 = _fs(wv).decode("utf8") if wv != _NULL else ""
+                sa(post_handlers[a_ids[i]][0](g0))
+                continue
+
+            if t == _t:
+                # Token with handler
+                # Group 0 is pre-extracted by C into a_words[i].
+                # Group count is stored in ncs[i] (repurposed from childCount).
+                # Only extract group 0 eagerly; other groups extracted lazily
+                # if the handler accesses them via match.group().
+                wv = a_words[i]
+                g0 = _fs(wv).decode("utf8") if wv != _NULL else ""
+                hi = post_handlers[a_ids[i]]
+                raw_handler = hi[0]
+                wrapped = _FM(a_matches[i], result_ref)
+                wrapped._cached_group = [g0]
+                ph = self._handler
+                self._handler = raw_handler
+                val = raw_handler(wrapped)
+                self._handler = ph
+                if _hasPostProcess:
+                    val = self.postProcess(wrapped, val)
+                sa(val)
+                continue
+
+            if t == _S:
+                # Rule with slots handler
+                nc = ncs[i]
+                hi = post_handlers[a_ids[i]]
+                raw_handler, slots = hi
+                if nc > 0:
+                    children = stack[-nc:]
+                    del stack[-nc:]
+                else:
+                    children = []
+                wrapped = _FM(a_matches[i], result_ref)
+                nc_len = len(children)
+                args = [children[si] if si < nc_len else UNMATCHED for _, si in slots]
+                ph = self._handler
+                self._handler = raw_handler
+                val = raw_handler(wrapped, *args)
+                self._handler = ph
+                if _hasPostProcess:
+                    val = self.postProcess(wrapped, val)
+                sa(val)
+                continue
+
+            if t == _g:
+                # Group with handler (non-passthrough)
+                nc = ncs[i]
+                hi = post_handlers[a_ids[i]]
+                raw_handler = hi[0]
+                if nc > 0:
+                    del stack[-nc:]
+                wrapped = _FM(a_matches[i], result_ref)
+                ph = self._handler
+                self._handler = raw_handler
+                val = raw_handler(wrapped)
+                self._handler = ph
+                if _hasPostProcess:
+                    val = self.postProcess(wrapped, val)
+                sa(val)
+                continue
+
+            if t == _r:
+                # Rule handler, no slots
+                nc = ncs[i]
+                hi = post_handlers[a_ids[i]]
+                raw_handler = hi[0]
+                if nc > 0:
+                    del stack[-nc:]
+                wrapped = _FM(a_matches[i], result_ref)
+                ph = self._handler
+                self._handler = raw_handler
+                val = raw_handler(wrapped)
+                self._handler = ph
+                if _hasPostProcess:
+                    val = self.postProcess(wrapped, val)
+                sa(val)
+                continue
+
+            if t == _w:
+                # Word with handler
+                wv = a_words[i]
+                val = _fs(wv).decode("utf8") if wv != _NULL else None
+                hi = post_handlers[a_ids[i]]
+                raw_handler = hi[0]
+                wrapped = _FM(a_matches[i], result_ref)
+                ph = self._handler
+                self._handler = raw_handler
+                val = raw_handler(wrapped)
+                self._handler = ph
+                if _hasPostProcess:
+                    val = self.postProcess(wrapped, val)
+                sa(val)
+                continue
+
+            if t == _T:
+                # Token, no handler — return groups as list
+                # Group 0 is pre-extracted by C into a_words[i].
+                # Group count is in ncs[i].
+                n = ncs[i]
+                if n > 0:
+                    wv = a_words[i]
+                    g0 = _fs(wv).decode("utf8") if wv != _NULL else ""
+                    if n == 1:
+                        sa([g0])
+                    else:
+                        m = a_matches[i]
+                        sa(
+                            [g0]
+                            + [_fs(_TMgroup(m, j)).decode("utf8") for j in range(1, n)]
+                        )
+                else:
+                    sa([])
+                continue
+
+            if t == _R:
+                # Rule, no handler — collect children as list
+                nc = ncs[i]
+                if nc > 0:
+                    children = stack[-nc:]
+                    del stack[-nc:]
+                    sa(children)
+                else:
+                    sa([])
+                continue
+
+            if t == _G:
+                # Group, no handler — default wrap in list
+                nc = ncs[i]
+                if nc == 0:
+                    sa([None])
+                else:
+                    stack[-1] = [stack[-1]]
+                continue
+
+        return stack[0] if stack else None
+
+    # =========================================================================
     # FAST PATH: Process raw C match pointers without creating Match wrappers
     # =========================================================================
 
     def _fastProcess(self, cobj, result_ref):
-        """Process a raw C match pointer, dispatching by element type."""
-        elem = cobj.element
-        t = elem.type
+        """Process a raw C match pointer, dispatching by element type.
 
-        # Inline reference handling (most common type, ~47% of calls)
+        Uses _elemCache to consolidate all per-element metadata into a single
+        dict lookup, eliminating multiple FFI field reads per node."""
+        # Single FFI read + single dict lookup replaces:
+        # elem.type, elem.id, Reference_IsMany, handlerByID.get, _fastByID.get, _passthroughIDs check
+        elem = cobj.element
+        info = self._elemCache[elem.id]
+        # info = (type, handler, fast_handler, is_many, is_passthrough)
+        t = info[0]
+
+        # Inline reference handling (most common type, ~48% of calls)
         # References never have handlers, so skip handler lookup entirely
         if t == b"#":
-            if not lib.Reference_IsMany(elem):
+            if not info[3]:  # not is_many
                 child = cobj.children
                 if child != ffi.NULL:
                     return self._fastProcess(child, result_ref)
-                return None
+                return UNMATCHED
             else:
                 result = []
                 child = cobj.children
@@ -2360,7 +3244,7 @@ class Processor:
         # For Groups detected as pass-throughs, skip handler entirely
         # and return child result directly (same as what the handler does).
         # Clear _handler to allow nested handlers of the same type to fire.
-        if t == b"G" and elem.id in self._passthroughIDs:
+        if info[4]:  # is_passthrough (only Groups)
             child = cobj.children
             if child != ffi.NULL:
                 saved_handler = self._handler
@@ -2368,15 +3252,15 @@ class Processor:
                 r = self._fastProcess(child, result_ref)
                 self._handler = saved_handler
                 return r
-            return None
+            return UNMATCHED
 
-        h = self.handlerByID.get(elem.id)
+        h = info[1]  # handler
 
         if h and self._handler != h:
             # Handler registered — inline handler dispatch
             ph = self._handler
             self._handler = h
-            fast = self._fastByID.get(elem.id)
+            fast = info[2]  # fast_handler
             if fast is not None:
                 res = fast(cobj, result_ref)
             else:

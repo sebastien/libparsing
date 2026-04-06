@@ -23,6 +23,8 @@
 
 static Grammar* createGrammar() {
 	Grammar* g = Grammar_new();
+	Grammar_setNoMemo(g);  // JSON grammar doesn't benefit from memoization
+	g->skipWhitespace = TRUE; // Use fast hand-coded whitespace skip
 
 	/* Tokens */
 	SYMBOL(WS,      TOKEN("\\s+"));

@@ -242,6 +242,8 @@ typedef struct Grammar {
  int skipCount;
  Element** elements;
  bool isVerbose;
+ bool noMemo;
+ bool skipWhitespace;
 } Grammar;
 
 
@@ -255,6 +257,9 @@ void Grammar_prepare ( Grammar* this );
 
 
 void Grammar_setVerbose ( Grammar* this );
+
+
+void Grammar_setNoMemo ( Grammar* this );
 
 
 void Grammar_setSilent ( Grammar* this );
@@ -498,6 +503,8 @@ const char* Word_word(ParsingElement* this);
 const char* WordMatch_group(Match* match);
 typedef struct TokenConfig {
  char* expr;
+ const char* literal;
+ int literalLen;
 
  pcre* regexp;
  pcre_extra* extra;
@@ -875,6 +882,45 @@ typedef struct MatchFlatNode {
 
 
 int Match_flatten(Match* this, MatchFlatNode* buffer, int bufferSize);
+
+
+
+
+
+
+typedef struct MatchPostNode {
+    char type;
+    int id;
+    int numChildren;
+    const char* wordValue;
+    Match* match;
+} MatchPostNode;
+
+
+
+
+
+
+
+int Match_flattenPost(Match* this, MatchPostNode* buffer, int bufferSize);
+
+
+
+
+
+
+int Match_flattenPostArrays(Match* this, char* types, int* ids, int* nchildren,
+                            const char** words, Match** matches, int bufferSize);
+
+
+
+
+
+
+
+int Match_flattenPostArraysEx(Match* this, char* types, int* ids, int* nchildren,
+                              const char** words, Match** matches,
+                              const char* action_codes, int max_id, int bufferSize);
 typedef struct gc_Reference {
  char guard;
  size_t size;
@@ -1343,11 +1389,17 @@ Grammar* Grammar_new(void) {
  this->skipCount = 0;
  this->elements = NULL;
  this->isVerbose = 0;
+ this->noMemo = 0;
+ this->skipWhitespace = 0;
  return this;
 }
 
 void Grammar_setVerbose ( Grammar* this ) {
  this->isVerbose = 1;
+}
+
+void Grammar_setNoMemo ( Grammar* this ) {
+ this->noMemo = 1;
 }
 
 void Grammar_setSilent ( Grammar* this ) {
@@ -2009,8 +2061,22 @@ size_t ParsingElement_skipFast( const ParsingElement* this, ParsingContext* cont
 
 
 
+ if (context->grammar->skipWhitespace) {
+  const unsigned char* p = (const unsigned char*)context->iterator->current;
+  const unsigned char* end = (const unsigned char*)context->iterator->buffer + context->iterator->available;
+  while (p < end && (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r')) {
+   p++;
+  }
+  size_t n = p - (const unsigned char*)context->iterator->current;
+  if (n > 0) {
+   context->iterator->move(context->iterator, n);
+   skipped = n;
+  }
+ }
 
- if (skip->type == 'T' && skip->config != NULL) {
+
+
+ else if (skip->type == 'T' && skip->config != NULL) {
   TokenConfig* config = (TokenConfig*)skip->config;
   int vector[30];
   const char* line = (const char*)context->iterator->current;
@@ -2025,9 +2091,9 @@ size_t ParsingElement_skipFast( const ParsingElement* this, ParsingContext* cont
    context->iterator->move(context->iterator, vector[1]);
    skipped = vector[1];
   }
- } else
+ }
 
- {
+ else {
 
   Match* match = skip->recognize(skip, context);
   match = Match_free(match);
@@ -2414,6 +2480,30 @@ ParsingElement* Token_new(const char* expr) {
 
  config->expr = gc_strdup(expr) ; assert (config->expr!=NULL); ;
 
+
+ {
+  const char* p = expr;
+  bool is_literal = 1;
+  while (*p) {
+   char c = *p;
+   if (c == '[' || c == ']' || c == '(' || c == ')' ||
+       c == '|' || c == '*' || c == '+' || c == '?' ||
+       c == '.' || c == '^' || c == '$' || c == '{' ||
+       c == '}' || c == '\\') {
+    is_literal = 0;
+    break;
+   }
+   p++;
+  }
+  if (is_literal && (p - expr) > 0) {
+   config->literal = config->expr;
+   config->literalLen = (int)(p - expr);
+  } else {
+   config->literal = NULL;
+   config->literalLen = 0;
+  }
+ }
+
  const char* pcre_error;
  int pcre_error_offset = -1;
  config->regexp = pcre_compile(config->expr, PCRE_UTF8, &pcre_error, &pcre_error_offset, NULL);
@@ -2462,8 +2552,35 @@ Match* Token_recognize(ParsingElement* this, ParsingContext* context) {
  assert(this->config);
  if(this->config == NULL) {return FAILURE;}
  Match* result = NULL;
-
  TokenConfig* config = (TokenConfig*)this->config;
+
+
+ if (config->literal != NULL) {
+  if (config->literalLen <= (int)context->iterator->available &&
+      strncmp(config->literal, (const char*)context->iterator->current, config->literalLen) == 0) {
+   result = Match_Success(config->literalLen, this, context);
+
+   TokenMatch* data = (TokenMatch*)Arena_alloc(context->arena, sizeof(TokenMatch));
+   data->count = 1;
+   data->groups = NULL;
+   data->extracted = 0;
+   data->ovector = (int*)Arena_alloc(context->arena, sizeof(int) * 2);
+   data->ovector[0] = 0;
+   data->ovector[1] = config->literalLen;
+   data->input = (const char*)context->iterator->current;
+   result->data = data;
+   context->iterator->move(context->iterator, result->length);
+   assert(result->data != NULL);
+   assert(Match_isSuccess(result));
+   if(context->grammar->isVerbose && !(context->flags & 0x1)){fprintf(stdout, "[✓] %s└ Token " "\033[1m\033[32m" "%s" "\033[0m" "#%d:" "\033[36m" "`%s`" "\033[0m" " literal-matched %zu:%zu-%zu", context->indent, this->name, this->id, config->expr, context->iterator->lines, context->iterator->offset - result->length, context->iterator->offset);fprintf(stdout, "\n");;};
+  } else {
+   result = FAILURE;
+   if(context->grammar->isVerbose && !(context->flags & 0x1)){fprintf(stdout, " !  %s└ Token %s#%d:" "\033[36m" "`%s`" "\033[0m" " literal-failed at %zu:%zu", context->indent, this->name, this->id, config->expr, context->iterator->lines, context->iterator->offset);fprintf(stdout, "\n");;};
+  }
+  return ParsingContext_registerMatch(context, (Element*)this, result);
+ }
+
+
 
  int vector_length = 30;
  int vector[vector_length];
@@ -2998,21 +3115,28 @@ ParsingContext* ParsingContext_new( Grammar* g, Iterator* iterator ) {
  this->arena = Arena_new();
 
 
-
- this->inputLength = iterator != NULL ? iterator->available : 0;
- size_t symbolCount = g != NULL ? (size_t)(g->axiomCount + g->skipCount) : 0;
-
- size_t memoSize = symbolCount > 0 ? (this->inputLength * symbolCount < 1024 * 1024 ? this->inputLength * symbolCount : 1024 * 1024) : 0;
-
- if (memoSize < 4096) { memoSize = 4096; }
- size_t power = 1;
- while (power < memoSize) { power <<= 1; }
- this->memoCapacity = power;
- if (this->memoCapacity > 0) {
-  this->memoTable = (MemoEntry*)calloc(this->memoCapacity, sizeof(MemoEntry));
-  assert(this->memoTable != NULL);
- } else {
+ if (g != NULL && g->noMemo) {
   this->memoTable = NULL;
+  this->memoCapacity = 0;
+  this->inputLength = 0;
+ } else {
+
+
+  this->inputLength = iterator != NULL ? iterator->available : 0;
+  size_t symbolCount = g != NULL ? (size_t)(g->axiomCount + g->skipCount) : 0;
+
+  size_t memoSize = symbolCount > 0 ? (this->inputLength * symbolCount < 1024 * 1024 ? this->inputLength * symbolCount : 1024 * 1024) : 0;
+
+  if (memoSize < 4096) { memoSize = 4096; }
+  size_t power = 1;
+  while (power < memoSize) { power <<= 1; }
+  this->memoCapacity = power;
+  if (this->memoCapacity > 0) {
+   this->memoTable = (MemoEntry*)calloc(this->memoCapacity, sizeof(MemoEntry));
+   assert(this->memoTable != NULL);
+  } else {
+   this->memoTable = NULL;
+  }
  }
  return this;
 }
@@ -3514,4 +3638,286 @@ static int Match_flatten_recursive(Match* match, MatchFlatNode* buffer, int offs
 int Match_flatten(Match* this, MatchFlatNode* buffer, int bufferSize) {
  if (!this || !buffer || bufferSize <= 0) { return 0; }
  return Match_flatten_recursive(this, buffer, 0, bufferSize);
+}
+static int Match_flattenPost_recursive(Match* match, MatchPostNode* buffer, int offset, int bufferSize) {
+ if (!match || offset >= bufferSize) { return offset; }
+
+ Element* element = match->element;
+ char type = element->type;
+
+
+ if (type == '#') {
+  bool isMany = Reference_isMany((Reference*)element);
+  if (!isMany) {
+
+   Match* child = match->children;
+   if (child) {
+    return Match_flattenPost_recursive(child, buffer, offset, bufferSize);
+   } else {
+
+    if (offset < bufferSize) {
+     MatchPostNode* node = &buffer[offset];
+     node->type = 'N';
+     node->id = element->id;
+     node->numChildren = 0;
+     node->wordValue = NULL;
+     node->match = NULL;
+     offset++;
+    }
+    return offset;
+   }
+  } else {
+
+   int childCount = 0;
+   Match* child = match->children;
+   while (child) {
+    offset = Match_flattenPost_recursive(child, buffer, offset, bufferSize);
+    childCount++;
+    child = child->next;
+   }
+
+   if (offset < bufferSize) {
+    MatchPostNode* node = &buffer[offset];
+    node->type = 'L';
+    node->id = element->id;
+    node->numChildren = childCount;
+    node->wordValue = NULL;
+    node->match = NULL;
+    offset++;
+   }
+   return offset;
+  }
+ }
+
+
+ int childCount = 0;
+ Match* child = match->children;
+ while (child) {
+  offset = Match_flattenPost_recursive(child, buffer, offset, bufferSize);
+  childCount++;
+  child = child->next;
+ }
+
+
+ if (offset < bufferSize) {
+  MatchPostNode* node = &buffer[offset];
+  node->type = type;
+  node->id = element->id;
+  node->numChildren = childCount;
+  node->match = match;
+  node->wordValue = NULL;
+
+
+  if (type == 'W') {
+   if (match->data) {
+    node->wordValue = (const char*)match->data;
+   }
+  }
+  offset++;
+ }
+
+ return offset;
+}
+
+int Match_flattenPost(Match* this, MatchPostNode* buffer, int bufferSize) {
+ if (!this || !buffer || bufferSize <= 0) { return 0; }
+ return Match_flattenPost_recursive(this, buffer, 0, bufferSize);
+}
+
+
+
+
+
+static int Match_flattenPostArrays_recursive(Match* match,
+    char* types, int* ids, int* nchildren, const char** words, Match** matches,
+    int offset, int bufferSize) {
+ if (!match || offset >= bufferSize) { return offset; }
+
+ Element* element = match->element;
+ char type = element->type;
+
+ if (type == '#') {
+  bool isMany = Reference_isMany((Reference*)element);
+  if (!isMany) {
+   Match* child = match->children;
+   if (child) {
+    return Match_flattenPostArrays_recursive(child,
+     types, ids, nchildren, words, matches, offset, bufferSize);
+   } else {
+    if (offset < bufferSize) {
+     types[offset] = 'N';
+     ids[offset] = element->id;
+     nchildren[offset] = 0;
+     words[offset] = NULL;
+     matches[offset] = NULL;
+     offset++;
+    }
+    return offset;
+   }
+  } else {
+   int childCount = 0;
+   Match* child = match->children;
+   while (child) {
+    offset = Match_flattenPostArrays_recursive(child,
+     types, ids, nchildren, words, matches, offset, bufferSize);
+    childCount++;
+    child = child->next;
+   }
+   if (offset < bufferSize) {
+    types[offset] = 'L';
+    ids[offset] = element->id;
+    nchildren[offset] = childCount;
+    words[offset] = NULL;
+    matches[offset] = NULL;
+    offset++;
+   }
+   return offset;
+  }
+ }
+
+ int childCount = 0;
+ Match* child = match->children;
+ while (child) {
+  offset = Match_flattenPostArrays_recursive(child,
+   types, ids, nchildren, words, matches, offset, bufferSize);
+  childCount++;
+  child = child->next;
+ }
+
+ if (offset < bufferSize) {
+  types[offset] = type;
+  ids[offset] = element->id;
+  nchildren[offset] = childCount;
+  matches[offset] = match;
+  words[offset] = NULL;
+  if (type == 'W' && match->data) {
+   words[offset] = (const char*)match->data;
+  }
+  offset++;
+ }
+ return offset;
+}
+
+int Match_flattenPostArrays(Match* this, char* types, int* ids, int* nchildren,
+                            const char** words, Match** matches, int bufferSize) {
+ if (!this || !types || bufferSize <= 0) { return 0; }
+ return Match_flattenPostArrays_recursive(this, types, ids, nchildren, words, matches, 0, bufferSize);
+}
+static int Match_flattenPostArraysEx_recursive(Match* match,
+    char* types, int* ids, int* nchildren, const char** words, Match** matches,
+    const char* action_codes, int max_id,
+    int offset, int bufferSize) {
+ if (!match || offset >= bufferSize) { return offset; }
+
+ Element* element = match->element;
+ char type = element->type;
+ int eid = element->id;
+
+ if (type == '#') {
+  bool isMany = Reference_isMany((Reference*)element);
+  if (!isMany) {
+   Match* child = match->children;
+   if (child) {
+    return Match_flattenPostArraysEx_recursive(child,
+     types, ids, nchildren, words, matches,
+     action_codes, max_id, offset, bufferSize);
+   } else {
+    if (offset < bufferSize) {
+     types[offset] = 'N';
+     ids[offset] = eid;
+     nchildren[offset] = 0;
+     words[offset] = NULL;
+     matches[offset] = NULL;
+     offset++;
+    }
+    return offset;
+   }
+  } else {
+   int childCount = 0;
+   Match* child = match->children;
+   while (child) {
+    offset = Match_flattenPostArraysEx_recursive(child,
+     types, ids, nchildren, words, matches,
+     action_codes, max_id, offset, bufferSize);
+    childCount++;
+    child = child->next;
+   }
+   if (offset < bufferSize) {
+    types[offset] = 'L';
+    ids[offset] = eid;
+    nchildren[offset] = childCount;
+    words[offset] = NULL;
+    matches[offset] = NULL;
+    offset++;
+   }
+   return offset;
+  }
+ }
+
+
+ char emitted = type;
+ if (eid >= 0 && eid <= max_id && action_codes[eid] != 0) {
+  emitted = action_codes[eid];
+ }
+
+
+
+
+ if (emitted == 'P') {
+  Match* child = match->children;
+  if (child) {
+   return Match_flattenPostArraysEx_recursive(child,
+    types, ids, nchildren, words, matches,
+    action_codes, max_id, offset, bufferSize);
+  }
+
+  if (offset < bufferSize) {
+   types[offset] = 'N';
+   ids[offset] = eid;
+   nchildren[offset] = 0;
+   words[offset] = NULL;
+   matches[offset] = NULL;
+   offset++;
+  }
+  return offset;
+ }
+
+ int childCount = 0;
+ Match* child = match->children;
+ while (child) {
+  offset = Match_flattenPostArraysEx_recursive(child,
+   types, ids, nchildren, words, matches,
+   action_codes, max_id, offset, bufferSize);
+  childCount++;
+  child = child->next;
+ }
+
+ if (offset < bufferSize) {
+  types[offset] = emitted;
+  ids[offset] = eid;
+  nchildren[offset] = childCount;
+  matches[offset] = match;
+  words[offset] = NULL;
+  if (type == 'W' && match->data) {
+   words[offset] = (const char*)match->data;
+  } else if (type == 'T' && match->data) {
+
+
+
+   words[offset] = TokenMatch_group(match, 0);
+
+
+   nchildren[offset] = TokenMatch_count(match);
+  }
+  offset++;
+ }
+ return offset;
+}
+
+int Match_flattenPostArraysEx(Match* this, char* types, int* ids, int* nchildren,
+                              const char** words, Match** matches,
+                              const char* action_codes, int max_id, int bufferSize) {
+ if (!this || !types || bufferSize <= 0) { return 0; }
+ return Match_flattenPostArraysEx_recursive(this, types, ids, nchildren,
+  words, matches, action_codes, max_id, 0, bufferSize);
 }

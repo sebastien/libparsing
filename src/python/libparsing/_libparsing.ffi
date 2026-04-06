@@ -230,11 +230,14 @@ typedef struct Grammar {
 	int              skipCount;   // The count of parsing elements in skip
 	Element**        elements;    // The set of all elements in the grammar
 	bool             isVerbose;
+	bool             noMemo;      // Disable packrat memoization when true
+	bool             skipWhitespace; // Use hand-coded whitespace skip instead of PCRE
 } Grammar;
 Grammar* Grammar_new(void);
 void Grammar_free(Grammar* this);
 void Grammar_prepare ( Grammar* this );
 void Grammar_setVerbose ( Grammar* this );
+void Grammar_setNoMemo ( Grammar* this );
 void Grammar_setSilent ( Grammar* this );
 int Grammar_symbolsCount ( const Grammar* this );
 ParsingResult* Grammar_parseIterator( Grammar* this, Iterator* iterator );
@@ -250,3 +253,16 @@ typedef struct MatchFlatNode {
     Match*      match;
 } MatchFlatNode;
 int Match_flatten(Match* this, MatchFlatNode* buffer, int bufferSize);
+typedef struct MatchPostNode {
+    char        type;
+    int         id;
+    int         numChildren;
+    const char* wordValue;
+    Match*      match;
+} MatchPostNode;
+int Match_flattenPost(Match* this, MatchPostNode* buffer, int bufferSize);
+int Match_flattenPostArrays(Match* this, char* types, int* ids, int* nchildren,
+                            const char** words, Match** matches, int bufferSize);
+int Match_flattenPostArraysEx(Match* this, char* types, int* ids, int* nchildren,
+                              const char** words, Match** matches,
+                              const char* action_codes, int max_id, int bufferSize);

@@ -20,7 +20,7 @@ import re
 sys.path.insert(
     0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + "/src/python"
 )
-from libparsing import Grammar, Processor
+from libparsing import Grammar, Processor, UNMATCHED
 
 
 # --
@@ -30,6 +30,8 @@ from libparsing import Grammar, Processor
 def grammar(isVerbose=False):
     """Defines a PEG grammar for JSON."""
     g = Grammar(isVerbose=isVerbose)
+    g.setNoMemo()  # JSON grammar doesn't benefit from memoization
+    g.setSkipWhitespace()  # Use fast hand-coded whitespace skip
     s = g.symbols
 
     # -- Tokens
@@ -148,9 +150,10 @@ class TreeToJson(Processor):
 
     def onObject(self, match, first, rest):
         pairs = []
-        f = self.process(first)
-        if f is not None:
-            pairs.append(f)
+        if first is not UNMATCHED:
+            f = self.process(first)
+            if f is not None:
+                pairs.append(f)
         r = self.process(rest)
         if r:
             pairs.extend(r)
@@ -161,9 +164,8 @@ class TreeToJson(Processor):
 
     def onArray(self, match, first, rest):
         items = []
-        f = self.process(first)
-        if f is not None:
-            items.append(f)
+        if first is not UNMATCHED:
+            items.append(self.process(first))
         r = self.process(rest)
         if r:
             items.extend(r)

@@ -483,11 +483,17 @@ Grammar* Grammar_new(void) {
 	this->skipCount  = 0;
 	this->elements   = NULL;
 	this->isVerbose  = FALSE;
+	this->noMemo     = FALSE;
+	this->skipWhitespace = FALSE;
 	return this;
 }
 
 void Grammar_setVerbose ( Grammar* this ) {
 	this->isVerbose = TRUE;
+}
+
+void Grammar_setNoMemo ( Grammar* this ) {
+	this->noMemo = TRUE;
 }
 
 void Grammar_setSilent ( Grammar* this ) {
@@ -1166,10 +1172,24 @@ size_t ParsingElement_skipFast( const ParsingElement* this, ParsingContext* cont
 	size_t offset        = context->iterator->offset;
 	size_t skipped       = 0;
 
+	// Ultra-fast path: if grammar has skipWhitespace flag, use hand-coded
+	// ASCII whitespace scanning instead of PCRE. This is ~10x faster.
+	if (context->grammar->skipWhitespace) {
+		const unsigned char* p = (const unsigned char*)context->iterator->current;
+		const unsigned char* end = (const unsigned char*)context->iterator->buffer + context->iterator->available;
+		while (p < end && (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r')) {
+			p++;
+		}
+		size_t n = p - (const unsigned char*)context->iterator->current;
+		if (n > 0) {
+			context->iterator->move(context->iterator, n);
+			skipped = n;
+		}
+	}
 #ifdef WITH_PCRE
 	// Fast path for token-based skip: call pcre_exec directly without
 	// creating any Match or TokenMatch objects.
-	if (skip->type == TYPE_TOKEN && skip->config != NULL) {
+	else if (skip->type == TYPE_TOKEN && skip->config != NULL) {
 		TokenConfig* config = (TokenConfig*)skip->config;
 		int vector[30];
 		const char* line = (const char*)context->iterator->current;
@@ -1184,9 +1204,9 @@ size_t ParsingElement_skipFast( const ParsingElement* this, ParsingContext* cont
 			context->iterator->move(context->iterator, vector[1]);
 			skipped = vector[1];
 		}
-	} else
+	}
 #endif
-	{
+	else {
 		// Fallback for non-token skip elements
 		Match* match = skip->recognize(skip, context);
 		match = Match_free(match);
@@ -1572,6 +1592,30 @@ ParsingElement* Token_new(const char* expr) {
 	// causing problems with PyPy, hinting at potential allocation issues
 	// elsewhere.
 	__STRING_COPY(config->expr, expr);
+	// Detect if the expression is a pure literal (no regex metacharacters).
+	// If so, we can use strncmp instead of PCRE for a significant speedup.
+	{
+		const char* p = expr;
+		bool is_literal = TRUE;
+		while (*p) {
+			char c = *p;
+			if (c == '[' || c == ']' || c == '(' || c == ')' ||
+			    c == '|' || c == '*' || c == '+' || c == '?' ||
+			    c == '.' || c == '^' || c == '$' || c == '{' ||
+			    c == '}' || c == '\\') {
+				is_literal = FALSE;
+				break;
+			}
+			p++;
+		}
+		if (is_literal && (p - expr) > 0) {
+			config->literal    = config->expr;
+			config->literalLen = (int)(p - expr);
+		} else {
+			config->literal    = NULL;
+			config->literalLen = 0;
+		}
+	}
 #ifdef WITH_PCRE
 	const char* pcre_error;
 	int         pcre_error_offset = -1;
@@ -1621,8 +1665,35 @@ Match* Token_recognize(ParsingElement* this, ParsingContext* context) {
 	assert(this->config);
 	if(this->config == NULL) {return FAILURE;}
 	Match* result = NULL;
-#ifdef WITH_PCRE
 	TokenConfig* config = (TokenConfig*)this->config;
+
+	// Fast path: literal tokens (no regex metacharacters) use strncmp
+	if (config->literal != NULL) {
+		if (config->literalLen <= (int)context->iterator->available &&
+		    strncmp(config->literal, (const char*)context->iterator->current, config->literalLen) == 0) {
+			result = Match_Success(config->literalLen, this, context);
+			// Create minimal TokenMatch data for compatibility
+			TokenMatch* data = (TokenMatch*)Arena_alloc(context->arena, sizeof(TokenMatch));
+			data->count     = 1;
+			data->groups    = NULL;
+			data->extracted = FALSE;
+			data->ovector   = (int*)Arena_alloc(context->arena, sizeof(int) * 2);
+			data->ovector[0] = 0;
+			data->ovector[1] = config->literalLen;
+			data->input     = (const char*)context->iterator->current;
+			result->data    = data;
+			context->iterator->move(context->iterator, result->length);
+			assert(result->data != NULL);
+			assert(Match_isSuccess(result));
+			OUT_STEP("[✓] %s└ Token " BOLDGREEN "%s" RESET "#%d:" CYAN "`%s`" RESET " literal-matched %zu:%zu-%zu", context->indent, this->name, this->id, config->expr, context->iterator->lines, context->iterator->offset - result->length, context->iterator->offset);
+		} else {
+			result = FAILURE;
+			OUT_STEP(" !  %s└ Token %s#%d:" CYAN "`%s`" RESET " literal-failed at %zu:%zu", context->indent, this->name, this->id, config->expr, context->iterator->lines, context->iterator->offset);
+		}
+		return MATCH_STATS(result);
+	}
+
+#ifdef WITH_PCRE
 	// NOTE: This has to be a multiple of 3, according to `man pcre_exec`
 	int vector_length = 30;
 	int vector[vector_length];
@@ -2164,22 +2235,29 @@ ParsingContext* ParsingContext_new( Grammar* g, Iterator* iterator ) {
 	// Initialize arena allocator
 	this->arena     = Arena_new();
 	// Initialize packrat memoization table
-	// Use a hash table sized to ~2x the expected number of entries.
-	// For typical grammars, (input_length * symbol_count) is the max entries.
-	this->inputLength  = iterator != NULL ? iterator->available : 0;
-	size_t symbolCount = g != NULL ? (size_t)(g->axiomCount + g->skipCount) : 0;
-	// Cap memo table size to avoid excessive memory usage
-	size_t memoSize    = symbolCount > 0 ? MIN(this->inputLength * symbolCount, 1024 * 1024) : 0;
-	// Use next power of 2 for efficient modulo via bitmask
-	if (memoSize < 4096) { memoSize = 4096; }
-	size_t power = 1;
-	while (power < memoSize) { power <<= 1; }
-	this->memoCapacity = power;
-	if (this->memoCapacity > 0) {
-		this->memoTable = (MemoEntry*)calloc(this->memoCapacity, sizeof(MemoEntry));
-		assert(this->memoTable != NULL);
+	// Skip memo table if grammar has noMemo flag set
+	if (g != NULL && g->noMemo) {
+		this->memoTable    = NULL;
+		this->memoCapacity = 0;
+		this->inputLength  = 0;
 	} else {
-		this->memoTable = NULL;
+		// Use a hash table sized to ~2x the expected number of entries.
+		// For typical grammars, (input_length * symbol_count) is the max entries.
+		this->inputLength  = iterator != NULL ? iterator->available : 0;
+		size_t symbolCount = g != NULL ? (size_t)(g->axiomCount + g->skipCount) : 0;
+		// Cap memo table size to avoid excessive memory usage
+		size_t memoSize    = symbolCount > 0 ? MIN(this->inputLength * symbolCount, 1024 * 1024) : 0;
+		// Use next power of 2 for efficient modulo via bitmask
+		if (memoSize < 4096) { memoSize = 4096; }
+		size_t power = 1;
+		while (power < memoSize) { power <<= 1; }
+		this->memoCapacity = power;
+		if (this->memoCapacity > 0) {
+			this->memoTable = (MemoEntry*)calloc(this->memoCapacity, sizeof(MemoEntry));
+			assert(this->memoTable != NULL);
+		} else {
+			this->memoTable = NULL;
+		}
 	}
 	return this;
 }
@@ -2703,6 +2781,308 @@ static int Match_flatten_recursive(Match* match, MatchFlatNode* buffer, int offs
 int Match_flatten(Match* this, MatchFlatNode* buffer, int bufferSize) {
 	if (!this || !buffer || bufferSize <= 0) { return 0; }
 	return Match_flatten_recursive(this, buffer, 0, bufferSize);
+}
+
+// ----------------------------------------------------------------------------
+// Match_flattenPost: post-order traversal with references resolved
+// Children appear BEFORE their parent. References are inlined:
+// - Non-MANY ref: replaced by its single child
+// - MANY ref: replaced by its children, followed by a synthetic list node (type='L')
+// - Empty ref (no children): replaced by a sentinel node (type='N' for NULL)
+// ----------------------------------------------------------------------------
+
+static int Match_flattenPost_recursive(Match* match, MatchPostNode* buffer, int offset, int bufferSize) {
+	if (!match || offset >= bufferSize) { return offset; }
+
+	Element* element = match->element;
+	char type = element->type;
+
+	// Handle references by inlining
+	if (type == TYPE_REFERENCE) {
+		bool isMany = Reference_isMany((Reference*)element);
+		if (!isMany) {
+			// Non-MANY reference: pass through to single child
+			Match* child = match->children;
+			if (child) {
+				return Match_flattenPost_recursive(child, buffer, offset, bufferSize);
+			} else {
+				// Empty optional reference: emit NULL sentinel
+				if (offset < bufferSize) {
+					MatchPostNode* node = &buffer[offset];
+					node->type = 'N';
+					node->id = element->id;
+					node->numChildren = 0;
+					node->wordValue = NULL;
+					node->match = NULL;
+					offset++;
+				}
+				return offset;
+			}
+		} else {
+			// MANY reference: emit each child, then a list marker
+			int childCount = 0;
+			Match* child = match->children;
+			while (child) {
+				offset = Match_flattenPost_recursive(child, buffer, offset, bufferSize);
+				childCount++;
+				child = child->next;
+			}
+			// Emit synthetic list marker
+			if (offset < bufferSize) {
+				MatchPostNode* node = &buffer[offset];
+				node->type = 'L';
+				node->id = element->id;
+				node->numChildren = childCount;
+				node->wordValue = NULL;
+				node->match = NULL;
+				offset++;
+			}
+			return offset;
+		}
+	}
+
+	// Non-reference node: emit children first (post-order), then self
+	int childCount = 0;
+	Match* child = match->children;
+	while (child) {
+		offset = Match_flattenPost_recursive(child, buffer, offset, bufferSize);
+		childCount++;
+		child = child->next;
+	}
+
+	// Emit self
+	if (offset < bufferSize) {
+		MatchPostNode* node = &buffer[offset];
+		node->type = type;
+		node->id = element->id;
+		node->numChildren = childCount;
+		node->match = match;
+		node->wordValue = NULL;
+
+		// Set word value for Word matches
+		if (type == TYPE_WORD) {
+			if (match->data) {
+				node->wordValue = (const char*)match->data;
+			}
+		}
+		offset++;
+	}
+
+	return offset;
+}
+
+int Match_flattenPost(Match* this, MatchPostNode* buffer, int bufferSize) {
+	if (!this || !buffer || bufferSize <= 0) { return 0; }
+	return Match_flattenPost_recursive(this, buffer, 0, bufferSize);
+}
+
+// ----------------------------------------------------------------------------
+// Match_flattenPostArrays: same as Match_flattenPost but writes to separate arrays
+// ----------------------------------------------------------------------------
+
+static int Match_flattenPostArrays_recursive(Match* match,
+    char* types, int* ids, int* nchildren, const char** words, Match** matches,
+    int offset, int bufferSize) {
+	if (!match || offset >= bufferSize) { return offset; }
+
+	Element* element = match->element;
+	char type = element->type;
+
+	if (type == TYPE_REFERENCE) {
+		bool isMany = Reference_isMany((Reference*)element);
+		if (!isMany) {
+			Match* child = match->children;
+			if (child) {
+				return Match_flattenPostArrays_recursive(child,
+					types, ids, nchildren, words, matches, offset, bufferSize);
+			} else {
+				if (offset < bufferSize) {
+					types[offset] = 'N';
+					ids[offset] = element->id;
+					nchildren[offset] = 0;
+					words[offset] = NULL;
+					matches[offset] = NULL;
+					offset++;
+				}
+				return offset;
+			}
+		} else {
+			int childCount = 0;
+			Match* child = match->children;
+			while (child) {
+				offset = Match_flattenPostArrays_recursive(child,
+					types, ids, nchildren, words, matches, offset, bufferSize);
+				childCount++;
+				child = child->next;
+			}
+			if (offset < bufferSize) {
+				types[offset] = 'L';
+				ids[offset] = element->id;
+				nchildren[offset] = childCount;
+				words[offset] = NULL;
+				matches[offset] = NULL;
+				offset++;
+			}
+			return offset;
+		}
+	}
+
+	int childCount = 0;
+	Match* child = match->children;
+	while (child) {
+		offset = Match_flattenPostArrays_recursive(child,
+			types, ids, nchildren, words, matches, offset, bufferSize);
+		childCount++;
+		child = child->next;
+	}
+
+	if (offset < bufferSize) {
+		types[offset] = type;
+		ids[offset] = element->id;
+		nchildren[offset] = childCount;
+		matches[offset] = match;
+		words[offset] = NULL;
+		if (type == TYPE_WORD && match->data) {
+			words[offset] = (const char*)match->data;
+		}
+		offset++;
+	}
+	return offset;
+}
+
+int Match_flattenPostArrays(Match* this, char* types, int* ids, int* nchildren,
+                            const char** words, Match** matches, int bufferSize) {
+	if (!this || !types || bufferSize <= 0) { return 0; }
+	return Match_flattenPostArrays_recursive(this, types, ids, nchildren, words, matches, 0, bufferSize);
+}
+
+// ----------------------------------------------------------------------------
+// Match_flattenPostArraysEx: like flattenPostArrays but remaps type bytes
+// using a caller-provided action_codes array indexed by element ID.
+// action_codes[element_id] replaces the default type byte for non-structural
+// nodes (W, T, G, R). Structural nodes (N, L) keep their type bytes.
+// If action_codes[id] == 0, the default type byte is used.
+// This allows the caller to encode handler/passthrough info directly into
+// the type byte, eliminating runtime dict lookups in the processing loop.
+// ----------------------------------------------------------------------------
+
+static int Match_flattenPostArraysEx_recursive(Match* match,
+    char* types, int* ids, int* nchildren, const char** words, Match** matches,
+    const char* action_codes, int max_id,
+    int offset, int bufferSize) {
+	if (!match || offset >= bufferSize) { return offset; }
+
+	Element* element = match->element;
+	char type = element->type;
+	int eid = element->id;
+
+	if (type == TYPE_REFERENCE) {
+		bool isMany = Reference_isMany((Reference*)element);
+		if (!isMany) {
+			Match* child = match->children;
+			if (child) {
+				return Match_flattenPostArraysEx_recursive(child,
+					types, ids, nchildren, words, matches,
+					action_codes, max_id, offset, bufferSize);
+			} else {
+				if (offset < bufferSize) {
+					types[offset] = 'N';
+					ids[offset] = eid;
+					nchildren[offset] = 0;
+					words[offset] = NULL;
+					matches[offset] = NULL;
+					offset++;
+				}
+				return offset;
+			}
+		} else {
+			int childCount = 0;
+			Match* child = match->children;
+			while (child) {
+				offset = Match_flattenPostArraysEx_recursive(child,
+					types, ids, nchildren, words, matches,
+					action_codes, max_id, offset, bufferSize);
+				childCount++;
+				child = child->next;
+			}
+			if (offset < bufferSize) {
+				types[offset] = 'L';
+				ids[offset] = eid;
+				nchildren[offset] = childCount;
+				words[offset] = NULL;
+				matches[offset] = NULL;
+				offset++;
+			}
+			return offset;
+		}
+	}
+
+	// Determine the remapped type byte
+	char emitted = type;
+	if (eid >= 0 && eid <= max_id && action_codes[eid] != 0) {
+		emitted = action_codes[eid];
+	}
+
+	// Passthrough groups ('P'): skip this node entirely.
+	// The child's value passes through to the parent transparently.
+	// This reduces the flat array size and eliminates Python loop iterations.
+	if (emitted == 'P') {
+		Match* child = match->children;
+		if (child) {
+			return Match_flattenPostArraysEx_recursive(child,
+				types, ids, nchildren, words, matches,
+				action_codes, max_id, offset, bufferSize);
+		}
+		// No child: emit as null
+		if (offset < bufferSize) {
+			types[offset] = 'N';
+			ids[offset] = eid;
+			nchildren[offset] = 0;
+			words[offset] = NULL;
+			matches[offset] = NULL;
+			offset++;
+		}
+		return offset;
+	}
+
+	int childCount = 0;
+	Match* child = match->children;
+	while (child) {
+		offset = Match_flattenPostArraysEx_recursive(child,
+			types, ids, nchildren, words, matches,
+			action_codes, max_id, offset, bufferSize);
+		childCount++;
+		child = child->next;
+	}
+
+	if (offset < bufferSize) {
+		types[offset] = emitted;
+		ids[offset] = eid;
+		nchildren[offset] = childCount;
+		matches[offset] = match;
+		words[offset] = NULL;
+		if (type == TYPE_WORD && match->data) {
+			words[offset] = (const char*)match->data;
+		} else if (type == TYPE_TOKEN && match->data) {
+			// Extract group 0 (full match text) for tokens, making it
+			// available via the words array. This eliminates per-token
+			// FFI round-trips from Python (TokenMatch_count + TokenMatch_group).
+			words[offset] = TokenMatch_group(match, 0);
+			// Store group count in nchildren (tokens have no match children,
+			// so childCount is always 0 — we repurpose this field).
+			nchildren[offset] = TokenMatch_count(match);
+		}
+		offset++;
+	}
+	return offset;
+}
+
+int Match_flattenPostArraysEx(Match* this, char* types, int* ids, int* nchildren,
+                              const char** words, Match** matches,
+                              const char* action_codes, int max_id, int bufferSize) {
+	if (!this || !types || bufferSize <= 0) { return 0; }
+	return Match_flattenPostArraysEx_recursive(this, types, ids, nchildren,
+		words, matches, action_codes, max_id, 0, bufferSize);
 }
 
 // EOF
