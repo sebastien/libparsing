@@ -44,6 +44,8 @@ sys.path.insert(0, os.path.join(_ROOT, "deps", "lark"))
 _C_BINARY = os.path.join(_ROOT, "dist", "json_parser")
 # Bench runner script (for subprocess-based benchmarks)
 _BENCH_RUNNER = os.path.join(_HERE, "_bench_runner.py")
+# TypeScript bench runner (for Bun)
+_BENCH_RUNNER_TS = os.path.join(_HERE, "_bench_runner.ts")
 
 
 # ---------------------------------------------------------------------------
@@ -212,6 +214,20 @@ def bench_subprocess(interpreter, parser_name, filepath, iterations):
     return _parse_runner_output(result.stdout)
 
 
+def bench_bun(bun_bin, filepath, iterations):
+    """Run _bench_runner.ts under Bun."""
+    result = subprocess.run(
+        [bun_bin, _BENCH_RUNNER_TS, "libparsing", filepath, str(iterations)],
+        capture_output=True,
+        text=True,
+        cwd=_ROOT,
+        timeout=600,
+    )
+    if result.returncode != 0:
+        raise RuntimeError("bun ts failed: {}".format(result.stderr.strip()[:200]))
+    return _parse_runner_output(result.stdout)
+
+
 # ---------------------------------------------------------------------------
 # In-process benchmarking
 # ---------------------------------------------------------------------------
@@ -351,6 +367,23 @@ def main():
         else:
             print("  PyPy3 not found, skipping PyPy benchmarks")
 
+    # Detect Bun (for TypeScript benchmarks)
+    bun_bin = None
+    for name in ("bun", os.path.expanduser("~/.bun/bin/bun")):
+        path = shutil.which(name) or (name if os.path.isfile(name) else None)
+        if path:
+            try:
+                bun_ver = subprocess.check_output(
+                    [path, "--version"], text=True, timeout=10
+                ).strip()
+                bun_bin = path
+                print("  Bun detected: {} (v{})".format(path, bun_ver))
+            except Exception as e:
+                print("  WARNING: Bun check failed ({}), skipping".format(e))
+            break
+    if not bun_bin:
+        print("  Bun not found, skipping TypeScript benchmarks")
+
     # -- Import CPython parsers (in-process)
     sys.path.insert(0, _ROOT)
 
@@ -416,6 +449,28 @@ def main():
             print("  WARNING: PyPy check failed ({}), skipping".format(e))
             pypy_bin = None
 
+    if bun_bin:
+        # Quick correctness check for TS parser
+        try:
+            r = subprocess.run(
+                [bun_bin, os.path.join(_HERE, "json_parser.ts"), "--test"],
+                capture_output=True,
+                text=True,
+                cwd=_ROOT,
+                timeout=30,
+            )
+            if r.returncode == 0:
+                print("  Bun/TS parser: OK")
+            else:
+                print(
+                    "  WARNING: Bun/TS parser failed, skipping: "
+                    + r.stderr.strip()[:120]
+                )
+                bun_bin = None
+        except Exception as e:
+            print("  WARNING: Bun/TS check failed ({}), skipping".format(e))
+            bun_bin = None
+
     print()
 
     # -- Write datasets to temp files (needed for subprocess-based parsers)
@@ -474,13 +529,22 @@ def main():
             except Exception as e:
                 print("  WARNING: C benchmark failed: {}".format(e))
 
-        # 3) libparsing/py (CPython, in-process)
+        # 3) libparsing/ts (Bun, subprocess)
+        if bun_bin:
+            try:
+                results.append(
+                    ("libparsing/ts", bench_bun(bun_bin, temp_files[di], iterations))
+                )
+            except Exception as e:
+                print("  WARNING: Bun/TS benchmark failed: {}".format(e))
+
+        # 4) libparsing/py (CPython, in-process)
         results.append(("libparsing/py", bench(lp_parse, data, iterations)))
 
-        # 4) lark (CPython, in-process)
+        # 5) lark (CPython, in-process)
         results.append(("lark/py", bench(lark_parse, data, iterations)))
 
-        # 5) libparsing/pypy (subprocess)
+        # 6) libparsing/pypy (subprocess)
         if pypy_bin:
             try:
                 results.append(
@@ -494,7 +558,7 @@ def main():
             except Exception as e:
                 print("  WARNING: PyPy libparsing failed: {}".format(e))
 
-        # 6) lark/pypy (subprocess)
+        # 7) lark/pypy (subprocess)
         if pypy_bin:
             try:
                 results.append(
@@ -556,6 +620,8 @@ def main():
                 sys.version_info.major, sys.version_info.minor
             )
         )
+    if bun_bin:
+        print("  libparsing/ts uses Bun via subprocess")
 
 
 if __name__ == "__main__":
