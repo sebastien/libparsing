@@ -683,6 +683,12 @@ const char* WordMatch_group(Match* match);
  *
 */
 
+// @type TokenCustomRecognize
+// Custom recognizer function pointer for tokens. Returns the match length
+// (>0 on success, 0 on failure). On success, ovector[0..count*2-1] must be
+// set with group offsets. *out_count must be set to the number of groups.
+typedef int (*TokenCustomRecognize)(const char* input, int available, int* ovector, int* out_count);
+
 // @type TokenConfig
 // The parsing element configuration information that is used by the
 // `Token` methods.
@@ -690,6 +696,7 @@ typedef struct TokenConfig {
 	char* expr;
 	const char* literal;   // Non-NULL if expr is a pure literal (no regex metacharacters)
 	int         literalLen; // Length of literal string
+	TokenCustomRecognize customRecognize; // Optional hand-coded recognizer (bypasses PCRE)
 #ifdef WITH_PCRE
 	pcre*       regexp;
 	pcre_extra* extra;
@@ -712,6 +719,18 @@ ParsingElement* Token_new(const char* expr);
 
 // @destructor
 void Token_free(ParsingElement*);
+
+// @method
+// Sets a custom recognizer function on a token, bypassing PCRE.
+void Token_setCustomRecognize(ParsingElement* this, TokenCustomRecognize recognizer);
+
+// @method
+// Built-in hand-coded recognizer for JSON strings: "([^"\\]|\\.)*"
+int Token_recognizeJSONString(const char* input, int available, int* ovector, int* out_count);
+
+// @method
+// Built-in hand-coded recognizer for JSON numbers: [+\-]?(\d+(\.\d*)?|\.\d+)([eE][+\-]?\d+)?
+int Token_recognizeJSONNumber(const char* input, int available, int* ovector, int* out_count);
 
 // @method
 // The specialized match function for token parsing elements.
@@ -1446,7 +1465,10 @@ int Match_flattenPostArrays(Match* this, char* types, int* ids, int* nchildren,
 // This allows encoding handler/passthrough info directly into the type byte.
 int Match_flattenPostArraysEx(Match* this, char* types, int* ids, int* nchildren,
                               const char** words, Match** matches,
-                              const char* action_codes, int max_id, int bufferSize);
+                              const char* action_codes, int max_id,
+                              char* strbuf, int strbufSize,
+                              int* out_strbuf_used,
+                              int bufferSize);
 
 #ifdef __cplusplus
 }

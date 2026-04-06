@@ -212,8 +212,12 @@ typedef struct TokenMatch {
 	const char*     input;       // Pointer to input at match time
 	bool            extracted;   // Whether groups have been extracted from ovector
 } TokenMatch;
+typedef int (*TokenCustomRecognize)(const char* input, int available, int* ovector, int* out_count);
 ParsingElement* Token_new(const char* expr);
 void Token_free(ParsingElement*);
+void Token_setCustomRecognize(ParsingElement* this, TokenCustomRecognize recognizer);
+int Token_recognizeJSONString(const char* input, int available, int* ovector, int* out_count);
+int Token_recognizeJSONNumber(const char* input, int available, int* ovector, int* out_count);
 Match* Token_recognize(ParsingElement* this, ParsingContext* context);
 const char* Token_expr(ParsingElement* this);
 void TokenMatch_free(Match* match);
@@ -265,4 +269,7 @@ int Match_flattenPostArrays(Match* this, char* types, int* ids, int* nchildren,
                             const char** words, Match** matches, int bufferSize);
 int Match_flattenPostArraysEx(Match* this, char* types, int* ids, int* nchildren,
                               const char** words, Match** matches,
-                              const char* action_codes, int max_id, int bufferSize);
+                              const char* action_codes, int max_id,
+                              char* strbuf, int strbufSize,
+                              int* out_strbuf_used,
+                              int bufferSize);

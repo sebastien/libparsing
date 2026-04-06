@@ -29,7 +29,9 @@ static Grammar* createGrammar() {
 	/* Tokens */
 	SYMBOL(WS,      TOKEN("\\s+"));
 	SYMBOL(NUMBER,  TOKEN("[+\\-]?(\\d+(\\.\\d*)?|\\.\\d+)([eE][+\\-]?\\d+)?"));
+	Token_setCustomRecognize(s_NUMBER, Token_recognizeJSONNumber);
 	SYMBOL(STRING,  TOKEN("\"([^\"\\\\]|\\\\.)*\""));
+	Token_setCustomRecognize(s_STRING, Token_recognizeJSONString);
 	SYMBOL(TRUE,    TOKEN("true"));
 	SYMBOL(FALSE,   TOKEN("false"));
 	SYMBOL(NULL,    TOKEN("null"));

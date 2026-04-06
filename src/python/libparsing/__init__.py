@@ -690,6 +690,22 @@ class Token(ParsingElement):
         self._token = ensure_bytes(token)
         return lib.Token_new(self._token)
 
+    def setCustomRecognize(self, recognizer):
+        """Set a custom C recognizer function on this token, bypassing PCRE.
+        `recognizer` must be a C function pointer (TokenCustomRecognize)."""
+        lib.Token_setCustomRecognize(self._cobject, recognizer)
+        return self
+
+    def setJSONStringRecognizer(self):
+        """Use hand-coded JSON string recognizer instead of PCRE."""
+        lib.Token_setCustomRecognize(self._cobject, lib.Token_recognizeJSONString)
+        return self
+
+    def setJSONNumberRecognizer(self):
+        """Use hand-coded JSON number recognizer instead of PCRE."""
+        lib.Token_setCustomRecognize(self._cobject, lib.Token_recognizeJSONNumber)
+        return self
+
 
 # -----------------------------------------------------------------------------
 #
@@ -2707,6 +2723,20 @@ class Processor:
         a_words = ffi.new("const char*[]", nodeCount)
         a_matches = ffi.new("Match*[]", nodeCount)
 
+        # Allocate string buffer for zero-alloc token group0 extraction.
+        # The total token text can't exceed the input size. We use the input
+        # length plus some slack for null terminators.
+        if result_ref is not None and result_ref != ffi.NULL:
+            try:
+                input_len = result_ref._cobject.context.inputLength
+            except (AttributeError, TypeError):
+                input_len = 0
+        else:
+            input_len = 0
+        strbuf_size = input_len + nodeCount + 1 if input_len > 0 else nodeCount * 64
+        a_strbuf = ffi.new("char[]", strbuf_size)
+        a_strbuf_used = ffi.new("int[1]")
+
         actual = lib.Match_flattenPostArraysEx(
             cobj,
             a_types,
@@ -2716,6 +2746,9 @@ class Processor:
             a_matches,
             self._postActionCodes,
             self._postMaxID,
+            a_strbuf,
+            strbuf_size,
+            a_strbuf_used,
             nodeCount,
         )
         if actual <= 0:
@@ -2723,12 +2756,32 @@ class Processor:
 
         # Batch-read ALL integer arrays into Python lists.
         # bytes() on ffi.buffer is near-instant; indexing returns int.
+        # Python list indexing is ~15% faster than CFFI array indexing.
         types_bytes = bytes(ffi.buffer(a_types, actual))
         ncs = ffi.unpack(a_nc, actual)
+        ids = ffi.unpack(a_ids, actual)
+
+        # Bulk-decode all token strings at once.
+        # The strbuf contains null-terminated token strings written sequentially
+        # during the C flatten. We decode the entire buffer as UTF-8 in one call,
+        # then split by null bytes. This is ~5x faster than per-token ffi.string+decode.
+        strbuf_used = a_strbuf_used[0]
+        if strbuf_used > 0:
+            _all_token_strs = (
+                bytes(ffi.buffer(a_strbuf, strbuf_used)).decode("utf8").split("\0")
+            )
+            # Last entry is empty (trailing null), remove it
+            if _all_token_strs and _all_token_strs[-1] == "":
+                _all_token_strs.pop()
+        else:
+            _all_token_strs = []
+        _n_tok_strs = len(_all_token_strs)
 
         # Cache lookups as locals for tight loop
+        import _cffi_backend
+
+        _fs = _cffi_backend.string  # for rare paths needing raw FFI string extraction
         _NULL = ffi.NULL
-        _fs = ffi.string
         _TMgroup = lib.TokenMatch_group
         _hasPostProcess = self._hasPostProcess
         # Direct handler lookup by ID — O(1) list indexing, no dict
@@ -2762,6 +2815,7 @@ class Processor:
         sa = stack.append
         _FM = _FastMatch
         _wc = self._wordCache
+        tok_idx = 0
 
         for i in range(actual):
             t = types_bytes[i]
@@ -2770,22 +2824,22 @@ class Processor:
 
             if t == _W:
                 # Word, no handler: use pre-cached Python string
-                sa(_wc[a_ids[i]])
+                sa(_wc[ids[i]])
                 continue
 
             if t == _H:
                 # Group0 transform token handler: return f(group0_string)
                 # post_handlers[id] = (transform_fn,)
-                wv = a_words[i]
-                g0 = _fs(wv).decode("utf8") if wv != _NULL else ""
-                sa(post_handlers[a_ids[i]][0](g0))
+                g0 = _all_token_strs[tok_idx] if tok_idx < _n_tok_strs else ""
+                tok_idx += 1
+                sa(post_handlers[ids[i]][0](g0))
                 continue
 
             if t == _Q:
                 # Rule passthrough: single slot, equivalent to returning the slot value
                 # post_handlers[id] = slot_index (int)
                 nc = ncs[i]
-                slot_idx = post_handlers[a_ids[i]]
+                slot_idx = post_handlers[ids[i]]
                 if nc == 1:
                     # Most common case: single child. If slot_idx is 0,
                     # value is already on stack. Otherwise replace.
@@ -2803,11 +2857,25 @@ class Processor:
                 # Rule tuple constructor: return tuple of slot values
                 # post_handlers[id] = tuple of slot indices
                 nc = ncs[i]
-                slot_indices = post_handlers[a_ids[i]]
+                slot_indices = post_handlers[ids[i]]
                 if nc > 0:
                     children = stack[-nc:]
                     del stack[-nc:]
-                    sa(tuple(children[si] if si < nc else None for si in slot_indices))
+                    n_slots = len(slot_indices)
+                    if n_slots == 2:
+                        s0, s1 = slot_indices
+                        sa(
+                            (
+                                children[s0] if s0 < nc else None,
+                                children[s1] if s1 < nc else None,
+                            )
+                        )
+                    else:
+                        sa(
+                            tuple(
+                                children[si] if si < nc else None for si in slot_indices
+                            )
+                        )
                 else:
                     sa(tuple(None for _ in slot_indices))
                 continue
@@ -2829,7 +2897,7 @@ class Processor:
                 # Dict collector: collect first+rest into dict
                 # post_handlers[id] = (first_idx, rest_idx)
                 nc = ncs[i]
-                first_idx, rest_idx = post_handlers[a_ids[i]]
+                first_idx, rest_idx = post_handlers[ids[i]]
                 if nc > 0:
                     children = stack[-nc:]
                     del stack[-nc:]
@@ -2838,19 +2906,22 @@ class Processor:
                 else:
                     first = UNMATCHED
                     rest = UNMATCHED
-                pairs = []
                 if first is not UNMATCHED:
-                    pairs.append(first)
-                if rest and rest is not UNMATCHED:
-                    pairs.extend(rest)
-                sa(dict(pairs))
+                    if rest and rest is not UNMATCHED:
+                        sa(dict([first] + rest))
+                    else:
+                        sa(dict([first]))
+                elif rest and rest is not UNMATCHED:
+                    sa(dict(rest))
+                else:
+                    sa({})
                 continue
 
             if t == _A:
                 # List collector: collect first+rest into list
                 # post_handlers[id] = (first_idx, rest_idx)
                 nc = ncs[i]
-                first_idx, rest_idx = post_handlers[a_ids[i]]
+                first_idx, rest_idx = post_handlers[ids[i]]
                 if nc > 0:
                     children = stack[-nc:]
                     del stack[-nc:]
@@ -2859,18 +2930,21 @@ class Processor:
                 else:
                     first = UNMATCHED
                     rest = UNMATCHED
-                items = []
                 if first is not UNMATCHED:
-                    items.append(first)
-                if rest and rest is not UNMATCHED:
-                    items.extend(rest)
-                sa(items)
+                    if rest and rest is not UNMATCHED:
+                        sa([first] + rest)
+                    else:
+                        sa([first])
+                elif rest and rest is not UNMATCHED:
+                    sa(list(rest))
+                else:
+                    sa([])
                 continue
 
             if t == _S:
                 # Rule with slots handler
                 nc = ncs[i]
-                hi = post_handlers[a_ids[i]]
+                hi = post_handlers[ids[i]]
                 raw_handler, slots = hi
                 if nc > 0:
                     children = stack[-nc:]
@@ -2897,7 +2971,8 @@ class Processor:
 
             if t == _V:
                 # Constant token handler: return pre-computed value
-                sa(post_handlers[a_ids[i]][0])
+                tok_idx += 1  # skip the token string in strbuf
+                sa(post_handlers[ids[i]][0])
                 continue
 
             if t == _c or t == _p:
@@ -2906,9 +2981,9 @@ class Processor:
 
             if t == _t:
                 # Token with handler (general, not optimized by V/H)
-                wv = a_words[i]
-                g0 = _fs(wv).decode("utf8") if wv != _NULL else ""
-                hi = post_handlers[a_ids[i]]
+                g0 = _all_token_strs[tok_idx] if tok_idx < _n_tok_strs else ""
+                tok_idx += 1
+                hi = post_handlers[ids[i]]
                 raw_handler = hi[0]
                 wrapped = _FM(a_matches[i], result_ref)
                 wrapped._cached_group = [g0]
@@ -2924,7 +2999,7 @@ class Processor:
             if t == _g:
                 # Group with handler (non-passthrough)
                 nc = ncs[i]
-                hi = post_handlers[a_ids[i]]
+                hi = post_handlers[ids[i]]
                 raw_handler = hi[0]
                 if nc > 0:
                     del stack[-nc:]
@@ -2941,7 +3016,7 @@ class Processor:
             if t == _r:
                 # Rule handler, no slots
                 nc = ncs[i]
-                hi = post_handlers[a_ids[i]]
+                hi = post_handlers[ids[i]]
                 raw_handler = hi[0]
                 if nc > 0:
                     del stack[-nc:]
@@ -2957,9 +3032,7 @@ class Processor:
 
             if t == _w:
                 # Word with handler
-                wv = a_words[i]
-                val = _fs(wv).decode("utf8") if wv != _NULL else None
-                hi = post_handlers[a_ids[i]]
+                hi = post_handlers[ids[i]]
                 raw_handler = hi[0]
                 wrapped = _FM(a_matches[i], result_ref)
                 ph = self._handler
@@ -2975,8 +3048,8 @@ class Processor:
                 # Token, no handler — return groups as list
                 n = ncs[i]
                 if n > 0:
-                    wv = a_words[i]
-                    g0 = _fs(wv).decode("utf8") if wv != _NULL else ""
+                    g0 = _all_token_strs[tok_idx] if tok_idx < _n_tok_strs else ""
+                    tok_idx += 1
                     if n == 1:
                         sa([g0])
                     else:
@@ -3032,7 +3105,7 @@ class Processor:
             if t == _Q:
                 # Rule passthrough: single slot, equivalent to returning the slot value
                 nc = ncs[i]
-                hi = post_handlers[a_ids[i]]
+                hi = post_handlers[ids[i]]
                 slot_idx = hi[1][0][1]  # slots[0][1] = child index
                 if nc > 0:
                     children = stack[-nc:]
@@ -3045,7 +3118,7 @@ class Processor:
             if t == _K:
                 # Rule tuple constructor: return tuple of slot values
                 nc = ncs[i]
-                hi = post_handlers[a_ids[i]]
+                hi = post_handlers[ids[i]]
                 slots = hi[1]
                 if nc > 0:
                     children = stack[-nc:]
@@ -3062,7 +3135,7 @@ class Processor:
             if t == _V:
                 # Constant token handler: return pre-computed value
                 # post_handlers[id] = (constant_value,)
-                sa(post_handlers[a_ids[i]][0])
+                sa(post_handlers[ids[i]][0])
                 continue
 
             if t == _H:
@@ -3070,7 +3143,7 @@ class Processor:
                 # post_handlers[id] = (transform_fn,)
                 wv = a_words[i]
                 g0 = _fs(wv).decode("utf8") if wv != _NULL else ""
-                sa(post_handlers[a_ids[i]][0](g0))
+                sa(post_handlers[ids[i]][0](g0))
                 continue
 
             if t == _t:
@@ -3081,7 +3154,7 @@ class Processor:
                 # if the handler accesses them via match.group().
                 wv = a_words[i]
                 g0 = _fs(wv).decode("utf8") if wv != _NULL else ""
-                hi = post_handlers[a_ids[i]]
+                hi = post_handlers[ids[i]]
                 raw_handler = hi[0]
                 wrapped = _FM(a_matches[i], result_ref)
                 wrapped._cached_group = [g0]
@@ -3097,7 +3170,7 @@ class Processor:
             if t == _S:
                 # Rule with slots handler
                 nc = ncs[i]
-                hi = post_handlers[a_ids[i]]
+                hi = post_handlers[ids[i]]
                 raw_handler, slots = hi
                 if nc > 0:
                     children = stack[-nc:]
@@ -3119,7 +3192,7 @@ class Processor:
             if t == _g:
                 # Group with handler (non-passthrough)
                 nc = ncs[i]
-                hi = post_handlers[a_ids[i]]
+                hi = post_handlers[ids[i]]
                 raw_handler = hi[0]
                 if nc > 0:
                     del stack[-nc:]
@@ -3136,7 +3209,7 @@ class Processor:
             if t == _r:
                 # Rule handler, no slots
                 nc = ncs[i]
-                hi = post_handlers[a_ids[i]]
+                hi = post_handlers[ids[i]]
                 raw_handler = hi[0]
                 if nc > 0:
                     del stack[-nc:]
@@ -3154,7 +3227,7 @@ class Processor:
                 # Word with handler
                 wv = a_words[i]
                 val = _fs(wv).decode("utf8") if wv != _NULL else None
-                hi = post_handlers[a_ids[i]]
+                hi = post_handlers[ids[i]]
                 raw_handler = hi[0]
                 wrapped = _FM(a_matches[i], result_ref)
                 ph = self._handler

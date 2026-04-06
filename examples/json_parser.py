@@ -38,9 +38,11 @@ def grammar(isVerbose=False):
     g.token("WS", r"\s+")
     # Matches JSON numbers: optional sign, integer or decimal, optional exponent
     # This matches lark's SIGNED_NUMBER = ["+"|"-"] (FLOAT | INT)
-    g.token("NUMBER", r"[+\-]?(\d+(\.\d*)?|\.\d+)([eE][+\-]?\d+)?")
+    g.token(
+        "NUMBER", r"[+\-]?(\d+(\.\d*)?|\.\d+)([eE][+\-]?\d+)?"
+    ).setJSONNumberRecognizer()
     # Matches JSON strings: double-quoted with backslash escape sequences
-    g.token("STRING", r'"([^"\\]|\\.)*"')
+    g.token("STRING", r'"([^"\\]|\\.)*"').setJSONStringRecognizer()
     g.token("TRUE", r"true")
     g.token("FALSE", r"false")
     g.token("NULL", r"null")
@@ -115,6 +117,9 @@ def decode_json_string(s):
     """Strip quotes and decode escape sequences from a JSON string token."""
     # Remove surrounding quotes
     inner = s[1:-1]
+    # Fast path: most JSON strings have no escape sequences
+    if "\\" not in inner:
+        return inner
     return _ESCAPE_RE.sub(_decode_escape, inner)
 
 

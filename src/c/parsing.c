@@ -1592,6 +1592,7 @@ ParsingElement* Token_new(const char* expr) {
 	// causing problems with PyPy, hinting at potential allocation issues
 	// elsewhere.
 	__STRING_COPY(config->expr, expr);
+	config->customRecognize = NULL;
 	// Detect if the expression is a pure literal (no regex metacharacters).
 	// If so, we can use strncmp instead of PCRE for a significant speedup.
 	{
@@ -1657,6 +1658,96 @@ void Token_free(ParsingElement* this) {
 	__FREE(this);
 }
 
+void Token_setCustomRecognize(ParsingElement* this, TokenCustomRecognize recognizer) {
+	if (this && this->config) {
+		((TokenConfig*)this->config)->customRecognize = recognizer;
+	}
+}
+
+// Hand-coded recognizer for JSON strings: "([^"\\]|\\.)*"
+// Returns match length (including quotes) or 0 on failure.
+// Sets ovector with 2 groups: group 0 = full match, group 1 = content without quotes.
+int Token_recognizeJSONString(const char* input, int available, int* ovector, int* out_count) {
+	if (available < 2 || input[0] != '"') return 0;
+	int i = 1;
+	while (i < available) {
+		char c = input[i];
+		if (c == '"') {
+			// End of string
+			int len = i + 1;
+			ovector[0] = 0;
+			ovector[1] = len;
+			ovector[2] = 1;       // group 1 start (after opening quote)
+			ovector[3] = i;       // group 1 end (before closing quote)
+			*out_count = 2;       // 2 groups: full match + content
+			return len;
+		}
+		if (c == '\\') {
+			// Escape sequence: skip next char
+			i += 2;
+			if (i > available) return 0;  // Unterminated escape
+		} else {
+			i++;
+		}
+	}
+	return 0;  // Unterminated string
+}
+
+// Hand-coded recognizer for JSON numbers: [+\-]?(\d+(\.\d*)?|\.\d+)([eE][+\-]?\d+)?
+// Returns match length or 0 on failure.
+int Token_recognizeJSONNumber(const char* input, int available, int* ovector, int* out_count) {
+	if (available <= 0) return 0;
+	int i = 0;
+
+	// Optional sign
+	if (i < available && (input[i] == '+' || input[i] == '-')) {
+		i++;
+	}
+
+	int has_digits = 0;
+	int has_dot = 0;
+
+	if (i < available && input[i] == '.') {
+		// .digits form
+		has_dot = 1;
+		i++;
+		if (i >= available || input[i] < '0' || input[i] > '9') return 0;
+		while (i < available && input[i] >= '0' && input[i] <= '9') { i++; has_digits = 1; }
+	} else if (i < available && input[i] >= '0' && input[i] <= '9') {
+		// digits[.digits] form
+		while (i < available && input[i] >= '0' && input[i] <= '9') { i++; has_digits = 1; }
+		if (i < available && input[i] == '.') {
+			has_dot = 1;
+			i++;
+			while (i < available && input[i] >= '0' && input[i] <= '9') { i++; }
+		}
+	} else {
+		return 0;
+	}
+
+	if (!has_digits) return 0;
+
+	// Optional exponent
+	if (i < available && (input[i] == 'e' || input[i] == 'E')) {
+		i++;
+		if (i < available && (input[i] == '+' || input[i] == '-')) {
+			i++;
+		}
+		if (i >= available || input[i] < '0' || input[i] > '9') return 0;
+		while (i < available && input[i] >= '0' && input[i] <= '9') { i++; }
+	}
+
+	if (i == 0) return 0;
+
+	// The original regex has capture groups, set compatible ovector
+	// Group 0: full match
+	ovector[0] = 0;
+	ovector[1] = i;
+	// We report 1 group (just group 0) for simplicity
+	*out_count = 1;
+	return i;
+}
+
 const char* Token_expr(ParsingElement* this) {
 	return ((TokenConfig*)this->config)->expr;
 }
@@ -1689,6 +1780,36 @@ Match* Token_recognize(ParsingElement* this, ParsingContext* context) {
 		} else {
 			result = FAILURE;
 			OUT_STEP(" !  %s└ Token %s#%d:" CYAN "`%s`" RESET " literal-failed at %zu:%zu", context->indent, this->name, this->id, config->expr, context->iterator->lines, context->iterator->offset);
+		}
+		return MATCH_STATS(result);
+	}
+
+	// Custom recognizer fast path (hand-coded scanners for STRING, NUMBER, etc.)
+	if (config->customRecognize != NULL) {
+		int vector[30];
+		int count = 0;
+		const char* line = (const char*)context->iterator->current;
+		int match_len = config->customRecognize(line, (int)context->iterator->available, vector, &count);
+		if (match_len > 0) {
+			result = Match_Success(match_len, this, context);
+			TokenMatch* data = (TokenMatch*)Arena_alloc(context->arena, sizeof(TokenMatch));
+			data->count     = count;
+			data->groups    = NULL;
+			data->extracted = FALSE;
+			int ovector_size = count * 2;
+			data->ovector = (int*)Arena_alloc(context->arena, sizeof(int) * ovector_size);
+			for (int j = 0; j < ovector_size; j++) {
+				data->ovector[j] = vector[j];
+			}
+			data->input   = line;
+			result->data  = data;
+			context->iterator->move(context->iterator, result->length);
+			assert(result->data != NULL);
+			assert(Match_isSuccess(result));
+			OUT_STEP("[✓] %s└ Token " BOLDGREEN "%s" RESET "#%d:" CYAN "`%s`" RESET " custom-matched %zu:%zu-%zu", context->indent, this->name, this->id, config->expr, context->iterator->lines, context->iterator->offset - result->length, context->iterator->offset);
+		} else {
+			result = FAILURE;
+			OUT_STEP(" !  %s└ Token %s#%d:" CYAN "`%s`" RESET " custom-failed at %zu:%zu", context->indent, this->name, this->id, config->expr, context->iterator->lines, context->iterator->offset);
 		}
 		return MATCH_STATS(result);
 	}
@@ -2969,6 +3090,7 @@ int Match_flattenPostArrays(Match* this, char* types, int* ids, int* nchildren,
 static int Match_flattenPostArraysEx_recursive(Match* match,
     char* types, int* ids, int* nchildren, const char** words, Match** matches,
     const char* action_codes, int max_id,
+    char* strbuf, int strbufSize, int* strbufOffset,
     int offset, int bufferSize) {
 	if (!match || offset >= bufferSize) { return offset; }
 
@@ -2983,7 +3105,8 @@ static int Match_flattenPostArraysEx_recursive(Match* match,
 			if (child) {
 				return Match_flattenPostArraysEx_recursive(child,
 					types, ids, nchildren, words, matches,
-					action_codes, max_id, offset, bufferSize);
+					action_codes, max_id, strbuf, strbufSize, strbufOffset,
+					offset, bufferSize);
 			} else {
 				if (offset < bufferSize) {
 					types[offset] = 'N';
@@ -3001,7 +3124,8 @@ static int Match_flattenPostArraysEx_recursive(Match* match,
 			while (child) {
 				offset = Match_flattenPostArraysEx_recursive(child,
 					types, ids, nchildren, words, matches,
-					action_codes, max_id, offset, bufferSize);
+					action_codes, max_id, strbuf, strbufSize, strbufOffset,
+					offset, bufferSize);
 				childCount++;
 				child = child->next;
 			}
@@ -3031,7 +3155,8 @@ static int Match_flattenPostArraysEx_recursive(Match* match,
 		if (child) {
 			return Match_flattenPostArraysEx_recursive(child,
 				types, ids, nchildren, words, matches,
-				action_codes, max_id, offset, bufferSize);
+				action_codes, max_id, strbuf, strbufSize, strbufOffset,
+				offset, bufferSize);
 		}
 		// No child: emit as null
 		if (offset < bufferSize) {
@@ -3050,7 +3175,8 @@ static int Match_flattenPostArraysEx_recursive(Match* match,
 	while (child) {
 		offset = Match_flattenPostArraysEx_recursive(child,
 			types, ids, nchildren, words, matches,
-			action_codes, max_id, offset, bufferSize);
+			action_codes, max_id, strbuf, strbufSize, strbufOffset,
+			offset, bufferSize);
 		childCount++;
 		child = child->next;
 	}
@@ -3064,13 +3190,29 @@ static int Match_flattenPostArraysEx_recursive(Match* match,
 		if (type == TYPE_WORD && match->data) {
 			words[offset] = (const char*)match->data;
 		} else if (type == TYPE_TOKEN && match->data) {
-			// Extract group 0 (full match text) for tokens, making it
-			// available via the words array. This eliminates per-token
-			// FFI round-trips from Python (TokenMatch_count + TokenMatch_group).
-			words[offset] = TokenMatch_group(match, 0);
-			// Store group count in nchildren (tokens have no match children,
-			// so childCount is always 0 — we repurpose this field).
-			nchildren[offset] = TokenMatch_count(match);
+			// Zero-alloc token group 0 extraction: copy substring directly
+			// from input buffer using ovector offsets into the string buffer.
+			// This avoids pcre_get_substring/calloc allocation per token,
+			// and means Match_free doesn't need to clean up extracted strings.
+			TokenMatch* m = (TokenMatch*)match->data;
+			if (m && m->ovector && m->count > 0) {
+				int start = m->ovector[0];
+				int end   = m->ovector[1];
+				int len   = end - start;
+				int soff  = *strbufOffset;
+				if (len > 0 && soff + len + 1 <= strbufSize) {
+					memcpy(strbuf + soff, m->input + start, len);
+					strbuf[soff + len] = '\0';
+					words[offset] = strbuf + soff;
+					*strbufOffset = soff + len + 1;
+				} else if (len == 0) {
+					// Empty match: point to a static empty string
+					words[offset] = "";
+				}
+				// Store group count in nchildren (tokens have no match children,
+				// so childCount is always 0 — we repurpose this field).
+				nchildren[offset] = m->count;
+			}
 		}
 		offset++;
 	}
@@ -3079,10 +3221,20 @@ static int Match_flattenPostArraysEx_recursive(Match* match,
 
 int Match_flattenPostArraysEx(Match* this, char* types, int* ids, int* nchildren,
                               const char** words, Match** matches,
-                              const char* action_codes, int max_id, int bufferSize) {
+                              const char* action_codes, int max_id,
+                              char* strbuf, int strbufSize,
+                              int* out_strbuf_used,
+                              int bufferSize) {
 	if (!this || !types || bufferSize <= 0) { return 0; }
-	return Match_flattenPostArraysEx_recursive(this, types, ids, nchildren,
-		words, matches, action_codes, max_id, 0, bufferSize);
+	int strbufOffset = 0;
+	int result = Match_flattenPostArraysEx_recursive(this, types, ids, nchildren,
+		words, matches, action_codes, max_id,
+		strbuf, strbufSize, &strbufOffset,
+		0, bufferSize);
+	if (out_strbuf_used) {
+		*out_strbuf_used = strbufOffset;
+	}
+	return result;
 }
 
 // EOF

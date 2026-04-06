@@ -501,10 +501,16 @@ const char* Word_word(ParsingElement* this);
 
 
 const char* WordMatch_group(Match* match);
+typedef int (*TokenCustomRecognize)(const char* input, int available, int* ovector, int* out_count);
+
+
+
+
 typedef struct TokenConfig {
  char* expr;
  const char* literal;
  int literalLen;
+ TokenCustomRecognize customRecognize;
 
  pcre* regexp;
  pcre_extra* extra;
@@ -527,6 +533,18 @@ ParsingElement* Token_new(const char* expr);
 
 
 void Token_free(ParsingElement*);
+
+
+
+void Token_setCustomRecognize(ParsingElement* this, TokenCustomRecognize recognizer);
+
+
+
+int Token_recognizeJSONString(const char* input, int available, int* ovector, int* out_count);
+
+
+
+int Token_recognizeJSONNumber(const char* input, int available, int* ovector, int* out_count);
 
 
 
@@ -920,7 +938,10 @@ int Match_flattenPostArrays(Match* this, char* types, int* ids, int* nchildren,
 
 int Match_flattenPostArraysEx(Match* this, char* types, int* ids, int* nchildren,
                               const char** words, Match** matches,
-                              const char* action_codes, int max_id, int bufferSize);
+                              const char* action_codes, int max_id,
+                              char* strbuf, int strbufSize,
+                              int* out_strbuf_used,
+                              int bufferSize);
 typedef struct gc_Reference {
  char guard;
  size_t size;
@@ -2479,6 +2500,7 @@ ParsingElement* Token_new(const char* expr) {
 
 
  config->expr = gc_strdup(expr) ; assert (config->expr!=NULL); ;
+ config->customRecognize = NULL;
 
 
  {
@@ -2544,6 +2566,96 @@ void Token_free(ParsingElement* this) {
  if (this!=NULL) {; gc_free(this); } ;
 }
 
+void Token_setCustomRecognize(ParsingElement* this, TokenCustomRecognize recognizer) {
+ if (this && this->config) {
+  ((TokenConfig*)this->config)->customRecognize = recognizer;
+ }
+}
+
+
+
+
+int Token_recognizeJSONString(const char* input, int available, int* ovector, int* out_count) {
+ if (available < 2 || input[0] != '"') return 0;
+ int i = 1;
+ while (i < available) {
+  char c = input[i];
+  if (c == '"') {
+
+   int len = i + 1;
+   ovector[0] = 0;
+   ovector[1] = len;
+   ovector[2] = 1;
+   ovector[3] = i;
+   *out_count = 2;
+   return len;
+  }
+  if (c == '\\') {
+
+   i += 2;
+   if (i > available) return 0;
+  } else {
+   i++;
+  }
+ }
+ return 0;
+}
+
+
+
+int Token_recognizeJSONNumber(const char* input, int available, int* ovector, int* out_count) {
+ if (available <= 0) return 0;
+ int i = 0;
+
+
+ if (i < available && (input[i] == '+' || input[i] == '-')) {
+  i++;
+ }
+
+ int has_digits = 0;
+ int has_dot = 0;
+
+ if (i < available && input[i] == '.') {
+
+  has_dot = 1;
+  i++;
+  if (i >= available || input[i] < '0' || input[i] > '9') return 0;
+  while (i < available && input[i] >= '0' && input[i] <= '9') { i++; has_digits = 1; }
+ } else if (i < available && input[i] >= '0' && input[i] <= '9') {
+
+  while (i < available && input[i] >= '0' && input[i] <= '9') { i++; has_digits = 1; }
+  if (i < available && input[i] == '.') {
+   has_dot = 1;
+   i++;
+   while (i < available && input[i] >= '0' && input[i] <= '9') { i++; }
+  }
+ } else {
+  return 0;
+ }
+
+ if (!has_digits) return 0;
+
+
+ if (i < available && (input[i] == 'e' || input[i] == 'E')) {
+  i++;
+  if (i < available && (input[i] == '+' || input[i] == '-')) {
+   i++;
+  }
+  if (i >= available || input[i] < '0' || input[i] > '9') return 0;
+  while (i < available && input[i] >= '0' && input[i] <= '9') { i++; }
+ }
+
+ if (i == 0) return 0;
+
+
+
+ ovector[0] = 0;
+ ovector[1] = i;
+
+ *out_count = 1;
+ return i;
+}
+
 const char* Token_expr(ParsingElement* this) {
  return ((TokenConfig*)this->config)->expr;
 }
@@ -2576,6 +2688,36 @@ Match* Token_recognize(ParsingElement* this, ParsingContext* context) {
   } else {
    result = FAILURE;
    if(context->grammar->isVerbose && !(context->flags & 0x1)){fprintf(stdout, " !  %s└ Token %s#%d:" "\033[36m" "`%s`" "\033[0m" " literal-failed at %zu:%zu", context->indent, this->name, this->id, config->expr, context->iterator->lines, context->iterator->offset);fprintf(stdout, "\n");;};
+  }
+  return ParsingContext_registerMatch(context, (Element*)this, result);
+ }
+
+
+ if (config->customRecognize != NULL) {
+  int vector[30];
+  int count = 0;
+  const char* line = (const char*)context->iterator->current;
+  int match_len = config->customRecognize(line, (int)context->iterator->available, vector, &count);
+  if (match_len > 0) {
+   result = Match_Success(match_len, this, context);
+   TokenMatch* data = (TokenMatch*)Arena_alloc(context->arena, sizeof(TokenMatch));
+   data->count = count;
+   data->groups = NULL;
+   data->extracted = 0;
+   int ovector_size = count * 2;
+   data->ovector = (int*)Arena_alloc(context->arena, sizeof(int) * ovector_size);
+   for (int j = 0; j < ovector_size; j++) {
+    data->ovector[j] = vector[j];
+   }
+   data->input = line;
+   result->data = data;
+   context->iterator->move(context->iterator, result->length);
+   assert(result->data != NULL);
+   assert(Match_isSuccess(result));
+   if(context->grammar->isVerbose && !(context->flags & 0x1)){fprintf(stdout, "[✓] %s└ Token " "\033[1m\033[32m" "%s" "\033[0m" "#%d:" "\033[36m" "`%s`" "\033[0m" " custom-matched %zu:%zu-%zu", context->indent, this->name, this->id, config->expr, context->iterator->lines, context->iterator->offset - result->length, context->iterator->offset);fprintf(stdout, "\n");;};
+  } else {
+   result = FAILURE;
+   if(context->grammar->isVerbose && !(context->flags & 0x1)){fprintf(stdout, " !  %s└ Token %s#%d:" "\033[36m" "`%s`" "\033[0m" " custom-failed at %zu:%zu", context->indent, this->name, this->id, config->expr, context->iterator->lines, context->iterator->offset);fprintf(stdout, "\n");;};
   }
   return ParsingContext_registerMatch(context, (Element*)this, result);
  }
@@ -3806,6 +3948,7 @@ int Match_flattenPostArrays(Match* this, char* types, int* ids, int* nchildren,
 static int Match_flattenPostArraysEx_recursive(Match* match,
     char* types, int* ids, int* nchildren, const char** words, Match** matches,
     const char* action_codes, int max_id,
+    char* strbuf, int strbufSize, int* strbufOffset,
     int offset, int bufferSize) {
  if (!match || offset >= bufferSize) { return offset; }
 
@@ -3820,7 +3963,8 @@ static int Match_flattenPostArraysEx_recursive(Match* match,
    if (child) {
     return Match_flattenPostArraysEx_recursive(child,
      types, ids, nchildren, words, matches,
-     action_codes, max_id, offset, bufferSize);
+     action_codes, max_id, strbuf, strbufSize, strbufOffset,
+     offset, bufferSize);
    } else {
     if (offset < bufferSize) {
      types[offset] = 'N';
@@ -3838,7 +3982,8 @@ static int Match_flattenPostArraysEx_recursive(Match* match,
    while (child) {
     offset = Match_flattenPostArraysEx_recursive(child,
      types, ids, nchildren, words, matches,
-     action_codes, max_id, offset, bufferSize);
+     action_codes, max_id, strbuf, strbufSize, strbufOffset,
+     offset, bufferSize);
     childCount++;
     child = child->next;
    }
@@ -3868,7 +4013,8 @@ static int Match_flattenPostArraysEx_recursive(Match* match,
   if (child) {
    return Match_flattenPostArraysEx_recursive(child,
     types, ids, nchildren, words, matches,
-    action_codes, max_id, offset, bufferSize);
+    action_codes, max_id, strbuf, strbufSize, strbufOffset,
+    offset, bufferSize);
   }
 
   if (offset < bufferSize) {
@@ -3887,7 +4033,8 @@ static int Match_flattenPostArraysEx_recursive(Match* match,
  while (child) {
   offset = Match_flattenPostArraysEx_recursive(child,
    types, ids, nchildren, words, matches,
-   action_codes, max_id, offset, bufferSize);
+   action_codes, max_id, strbuf, strbufSize, strbufOffset,
+   offset, bufferSize);
   childCount++;
   child = child->next;
  }
@@ -3904,10 +4051,26 @@ static int Match_flattenPostArraysEx_recursive(Match* match,
 
 
 
-   words[offset] = TokenMatch_group(match, 0);
+
+   TokenMatch* m = (TokenMatch*)match->data;
+   if (m && m->ovector && m->count > 0) {
+    int start = m->ovector[0];
+    int end = m->ovector[1];
+    int len = end - start;
+    int soff = *strbufOffset;
+    if (len > 0 && soff + len + 1 <= strbufSize) {
+     memcpy(strbuf + soff, m->input + start, len);
+     strbuf[soff + len] = '\0';
+     words[offset] = strbuf + soff;
+     *strbufOffset = soff + len + 1;
+    } else if (len == 0) {
+
+     words[offset] = "";
+    }
 
 
-   nchildren[offset] = TokenMatch_count(match);
+    nchildren[offset] = m->count;
+   }
   }
   offset++;
  }
@@ -3916,8 +4079,18 @@ static int Match_flattenPostArraysEx_recursive(Match* match,
 
 int Match_flattenPostArraysEx(Match* this, char* types, int* ids, int* nchildren,
                               const char** words, Match** matches,
-                              const char* action_codes, int max_id, int bufferSize) {
+                              const char* action_codes, int max_id,
+                              char* strbuf, int strbufSize,
+                              int* out_strbuf_used,
+                              int bufferSize) {
  if (!this || !types || bufferSize <= 0) { return 0; }
- return Match_flattenPostArraysEx_recursive(this, types, ids, nchildren,
-  words, matches, action_codes, max_id, 0, bufferSize);
+ int strbufOffset = 0;
+ int result = Match_flattenPostArraysEx_recursive(this, types, ids, nchildren,
+  words, matches, action_codes, max_id,
+  strbuf, strbufSize, &strbufOffset,
+  0, bufferSize);
+ if (out_strbuf_used) {
+  *out_strbuf_used = strbufOffset;
+ }
+ return result;
 }
