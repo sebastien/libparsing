@@ -26,15 +26,16 @@ static Grammar* createGrammar() {
 	Grammar_setNoMemo(g);  // JSON grammar doesn't benefit from memoization
 	g->skipWhitespace = TRUE; // Use fast hand-coded whitespace skip
 
-	/* Tokens */
-	SYMBOL(WS,      TOKEN("\\s+"));
-	SYMBOL(NUMBER,  TOKEN("[+\\-]?(\\d+(\\.\\d*)?|\\.\\d+)([eE][+\\-]?\\d+)?"));
-	Token_setCustomRecognize(s_NUMBER, Token_recognizeJSONNumber);
-	SYMBOL(STRING,  TOKEN("\"([^\"\\\\]|\\\\.)*\""));
-	Token_setCustomRecognize(s_STRING, Token_recognizeJSONString);
-	SYMBOL(TRUE,    TOKEN("true"));
-	SYMBOL(FALSE,   TOKEN("false"));
-	SYMBOL(NULL,    TOKEN("null"));
+	/* Tokens - using range-based patterns (PCRE-free) */
+	SYMBOL(WS,      RANGE_TOKEN(tp_many(tp_space())));
+	/* NUMBER and STRING use hand-coded recognizers for complex patterns */
+	SYMBOL(NUMBER,  RANGE_TOKEN(tp_many(tp_digit())));
+	RangeToken_setCustomRecognize(s_NUMBER, Token_recognizeJSONNumber);
+	SYMBOL(STRING,  RANGE_TOKEN(tp_char('"')));
+	RangeToken_setCustomRecognize(s_STRING, Token_recognizeJSONString);
+	SYMBOL(TRUE,    RANGE_TOKEN(tp_literal("true")));
+	SYMBOL(FALSE,   RANGE_TOKEN(tp_literal("false")));
+	SYMBOL(NULL,    RANGE_TOKEN(tp_literal("null")));
 
 	/* Words (literal delimiters) */
 	SYMBOL(LBRACE,   WORD("{"));

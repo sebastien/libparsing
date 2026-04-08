@@ -20,7 +20,7 @@ import re
 sys.path.insert(
     0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + "/src/python"
 )
-from libparsing import Grammar, Processor, UNMATCHED
+from libparsing import Grammar, Processor, RangeToken, tp, UNMATCHED
 
 
 # --
@@ -28,24 +28,20 @@ from libparsing import Grammar, Processor, UNMATCHED
 
 
 def grammar(isVerbose=False):
-    """Defines a PEG grammar for JSON."""
+    """Defines a PEG grammar for JSON using range-based tokens (PCRE-free)."""
     g = Grammar(isVerbose=isVerbose)
     g.setNoMemo()  # JSON grammar doesn't benefit from memoization
     g.setSkipWhitespace()  # Use fast hand-coded whitespace skip
     s = g.symbols
 
-    # -- Tokens
-    g.token("WS", r"\s+")
-    # Matches JSON numbers: optional sign, integer or decimal, optional exponent
-    # This matches lark's SIGNED_NUMBER = ["+"|"-"] (FLOAT | INT)
-    g.token(
-        "NUMBER", r"[+\-]?(\d+(\.\d*)?|\.\d+)([eE][+\-]?\d+)?"
-    ).setJSONNumberRecognizer()
-    # Matches JSON strings: double-quoted with backslash escape sequences
-    g.token("STRING", r'"([^"\\]|\\.)*"').setJSONStringRecognizer()
-    g.token("TRUE", r"true")
-    g.token("FALSE", r"false")
-    g.token("NULL", r"null")
+    # -- Tokens (range-based, no PCRE dependency)
+    g.range_token("WS", tp.many(tp.space()))
+    # NUMBER and STRING use hand-coded recognizers for complex patterns
+    g.range_token("NUMBER", tp.many(tp.digit())).setJSONNumberRecognizer()
+    g.range_token("STRING", tp.char('"')).setJSONStringRecognizer()
+    g.range_token("TRUE", tp.literal("true"))
+    g.range_token("FALSE", tp.literal("false"))
+    g.range_token("NULL", tp.literal("null"))
 
     # -- Words (literal delimiters)
     g.word("LBRACE", "{")
