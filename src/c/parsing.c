@@ -15,6 +15,22 @@
 #define MATCH_STATS(m) ParsingContext_registerMatch(context, (Element*)this, m)
 #define ANONYMOUS      "unnamed"
 
+int Parsing_hasPCRE(void) {
+#ifdef WITH_PCRE
+	return 1;
+#else
+	return 0;
+#endif
+}
+
+int Parsing_hasGC(void) {
+#ifdef WITH_GC
+	return 1;
+#else
+	return 0;
+#endif
+}
+
 // SEE: https://en.wikipedia.org/wiki/C_data_types
 // SEE: http://stackoverflow.com/questions/18329532/pcre-is-not-matching-utf8-characters
 // HASH: search.h, hcreate, hsearch, etc
@@ -1063,7 +1079,12 @@ void ParsingElement_free(ParsingElement* this) {
 	if (this == NULL) {return;}
 	switch (this->type) {
 		case TYPE_TOKEN:
-			Token_free(this);
+			// Distinguish RangeToken from RegexToken by the recognize function
+			if (this->recognize == RangeToken_recognize) {
+				RangeToken_free(this);
+			} else {
+				Token_free(this);
+			}
 			break;
 		case TYPE_WORD:
 			Word_free(this);
@@ -1163,7 +1184,7 @@ size_t ParsingElement_skip( const ParsingElement* this, ParsingContext* context)
 }
 
 // Fast skip that computes match length without allocating a Match object.
-// For Token-based skip elements, this calls pcre_exec directly.
+// For Token-based skip elements, this calls the pattern matcher or pcre_exec directly.
 // For other skip elements, falls back to recognize + free.
 size_t ParsingElement_skipFast( const ParsingElement* this, ParsingContext* context) {
 	if (this == NULL || context == NULL || context->grammar->skip == NULL || context->flags & FLAG_SKIPPING) {return 0;}
@@ -1186,8 +1207,19 @@ size_t ParsingElement_skipFast( const ParsingElement* this, ParsingContext* cont
 			skipped = n;
 		}
 	}
+	// Fast path for RangeToken-based skip: call TokenPattern_match directly.
+	else if (skip->type == TYPE_TOKEN && skip->recognize == RangeToken_recognize && skip->config != NULL) {
+		RangeTokenConfig* config = (RangeTokenConfig*)skip->config;
+		const char* line = (const char*)context->iterator->current;
+		int available = (int)(context->iterator->available - (context->iterator->current - context->iterator->buffer));
+		int r = TokenPattern_match(config->pattern, line, available);
+		if (r > 0) {
+			context->iterator->move(context->iterator, r);
+			skipped = r;
+		}
+	}
 #ifdef WITH_PCRE
-	// Fast path for token-based skip: call pcre_exec directly without
+	// Fast path for PCRE token-based skip: call pcre_exec directly without
 	// creating any Match or TokenMatch objects.
 	else if (skip->type == TYPE_TOKEN && skip->config != NULL) {
 		TokenConfig* config = (TokenConfig*)skip->config;
@@ -1892,13 +1924,39 @@ const char* TokenMatch_group(Match* match, int index) {
 		// Lazy extraction: extract substrings from ovector on first access
 		if (!m->extracted && m->ovector != NULL) {
 #ifdef WITH_PCRE
-			m->groups = (const char**)calloc(m->count, sizeof(const char*));
-			assert(m->groups != NULL);
-			for (int j = 0; j < m->count; j++) {
-				pcre_get_substring(m->input, m->ovector, m->count, j, &(m->groups[j]));
-			}
+			// When built with PCRE, use pcre_get_substring for PCRE-originated matches.
+			// For RangeToken/literal matches, the ovector-based path below works too,
+			// but pcre_get_substring handles edge cases (e.g. unset groups = -1 offsets).
+			if (match->element && ((ParsingElement*)match->element)->recognize != RangeToken_recognize) {
+				m->groups = (const char**)calloc(m->count, sizeof(const char*));
+				assert(m->groups != NULL);
+				for (int j = 0; j < m->count; j++) {
+					pcre_get_substring(m->input, m->ovector, m->count, j, &(m->groups[j]));
+				}
+				m->extracted = TRUE;
+			} else {
+#else
+			{
 #endif
-			m->extracted = TRUE;
+				// Non-PCRE path: extract substrings from ovector + input pointer.
+				// Used by RangeToken, literal Token, and customRecognize matches.
+				m->groups = (const char**)calloc(m->count, sizeof(const char*));
+				assert(m->groups != NULL);
+				for (int j = 0; j < m->count; j++) {
+					int start = m->ovector[j * 2];
+					int end   = m->ovector[j * 2 + 1];
+					if (start >= 0 && end >= start) {
+						int len = end - start;
+						char* s = (char*)malloc(len + 1);
+						memcpy(s, m->input + start, len);
+						s[len] = '\0';
+						m->groups[j] = s;
+					} else {
+						m->groups[j] = NULL;
+					}
+				}
+				m->extracted = TRUE;
+			}
 		}
 		return m->groups != NULL ? m->groups[index] : NULL;
 	} else {
@@ -1947,6 +2005,470 @@ void TokenMatch_free(Match* match) {
 #endif
 	// NOTE: match->data (TokenMatch*) is arena-allocated, don't free it.
 	match->data = NULL;
+}
+
+// ----------------------------------------------------------------------------
+//
+// RANGE TOKEN (PCRE-free pattern matching)
+//
+// ----------------------------------------------------------------------------
+
+// === Bitmap helpers ===
+
+// Sets bit `b` in the 256-bit bitmap.
+static inline void bitmap_set(unsigned char bitmap[32], unsigned char b) {
+	bitmap[b >> 3] |= (1 << (b & 7));
+}
+
+// Tests bit `b` in the 256-bit bitmap.
+static inline int bitmap_test(const unsigned char bitmap[32], unsigned char b) {
+	return bitmap[b >> 3] & (1 << (b & 7));
+}
+
+// === Pattern builder: primitives ===
+
+static TokenPattern* TokenPattern_new_bitmap(void) {
+	TokenPattern* p = (TokenPattern*)calloc(1, sizeof(TokenPattern));
+	p->type       = TP_TYPE_BITMAP;
+	p->quantifier = TP_ONE;
+	return p;
+}
+
+TokenPattern* tp_char(char c) {
+	TokenPattern* p = TokenPattern_new_bitmap();
+	bitmap_set(p->bitmap, (unsigned char)c);
+	return p;
+}
+
+TokenPattern* tp_range(char lo, char hi) {
+	TokenPattern* p = TokenPattern_new_bitmap();
+	for (int i = (unsigned char)lo; i <= (unsigned char)hi; i++) {
+		bitmap_set(p->bitmap, (unsigned char)i);
+	}
+	return p;
+}
+
+TokenPattern* tp_set(const char* chars) {
+	TokenPattern* p = TokenPattern_new_bitmap();
+	while (*chars) {
+		bitmap_set(p->bitmap, (unsigned char)*chars);
+		chars++;
+	}
+	return p;
+}
+
+TokenPattern* tp_not_set(const char* chars) {
+	TokenPattern* p = TokenPattern_new_bitmap();
+	// Set all bits first
+	memset(p->bitmap, 0xFF, 32);
+	// Clear the excluded characters
+	while (*chars) {
+		p->bitmap[(unsigned char)*chars >> 3] &= ~(1 << ((unsigned char)*chars & 7));
+		chars++;
+	}
+	// Never match NUL (byte 0)
+	p->bitmap[0] &= ~1;
+	return p;
+}
+
+TokenPattern* tp_any(void) {
+	TokenPattern* p = TokenPattern_new_bitmap();
+	memset(p->bitmap, 0xFF, 32);
+	// Never match NUL (byte 0)
+	p->bitmap[0] &= ~1;
+	return p;
+}
+
+TokenPattern* tp_digit(void) {
+	return tp_range('0', '9');
+}
+
+TokenPattern* tp_alpha(void) {
+	TokenPattern* p = TokenPattern_new_bitmap();
+	for (int i = 'a'; i <= 'z'; i++) { bitmap_set(p->bitmap, i); }
+	for (int i = 'A'; i <= 'Z'; i++) { bitmap_set(p->bitmap, i); }
+	return p;
+}
+
+TokenPattern* tp_word(void) {
+	TokenPattern* p = TokenPattern_new_bitmap();
+	for (int i = 'a'; i <= 'z'; i++) { bitmap_set(p->bitmap, i); }
+	for (int i = 'A'; i <= 'Z'; i++) { bitmap_set(p->bitmap, i); }
+	for (int i = '0'; i <= '9'; i++) { bitmap_set(p->bitmap, i); }
+	bitmap_set(p->bitmap, '_');
+	return p;
+}
+
+TokenPattern* tp_space(void) {
+	TokenPattern* p = TokenPattern_new_bitmap();
+	bitmap_set(p->bitmap, ' ');
+	bitmap_set(p->bitmap, '\t');
+	bitmap_set(p->bitmap, '\n');
+	bitmap_set(p->bitmap, '\r');
+	return p;
+}
+
+// === Pattern builder: combinators ===
+
+TokenPattern* tp_seq(TokenPattern* children[]) {
+	// Count children
+	int count = 0;
+	while (children[count] != NULL) { count++; }
+	// Unwrap single-child sequence
+	if (count == 1) { return children[0]; }
+	TokenPattern* p = (TokenPattern*)calloc(1, sizeof(TokenPattern));
+	p->type       = TP_TYPE_SEQ;
+	p->quantifier = TP_ONE;
+	p->childCount = count;
+	p->children   = (TokenPattern**)malloc(sizeof(TokenPattern*) * count);
+	for (int i = 0; i < count; i++) {
+		p->children[i] = children[i];
+	}
+	return p;
+}
+
+TokenPattern* tp_alt(TokenPattern* children[]) {
+	// Count children
+	int count = 0;
+	while (children[count] != NULL) { count++; }
+	// Unwrap single-child alternation
+	if (count == 1) { return children[0]; }
+	TokenPattern* p = (TokenPattern*)calloc(1, sizeof(TokenPattern));
+	p->type       = TP_TYPE_ALT;
+	p->quantifier = TP_ONE;
+	p->childCount = count;
+	p->children   = (TokenPattern**)malloc(sizeof(TokenPattern*) * count);
+	for (int i = 0; i < count; i++) {
+		p->children[i] = children[i];
+	}
+	return p;
+}
+
+// === Pattern builder: quantifiers ===
+
+// Wraps a pattern in a GROUP node with the given quantifier.
+// If the pattern is already a bare BITMAP with quantifier '1', we can
+// set the quantifier directly on it instead of wrapping.
+static TokenPattern* tp_quantify(TokenPattern* p, char q) {
+	if (p->type == TP_TYPE_BITMAP && p->quantifier == TP_ONE) {
+		p->quantifier = q;
+		return p;
+	}
+	if (p->type == TP_TYPE_LITERAL && p->quantifier == TP_ONE) {
+		p->quantifier = q;
+		return p;
+	}
+	// Wrap in a GROUP node
+	TokenPattern* g = (TokenPattern*)calloc(1, sizeof(TokenPattern));
+	g->type       = TP_TYPE_GROUP;
+	g->quantifier = q;
+	g->childCount = 1;
+	g->children   = (TokenPattern**)malloc(sizeof(TokenPattern*));
+	g->children[0] = p;
+	return g;
+}
+
+TokenPattern* tp_many(TokenPattern* p) {
+	return tp_quantify(p, TP_MANY);
+}
+
+TokenPattern* tp_optional(TokenPattern* p) {
+	return tp_quantify(p, TP_OPTIONAL);
+}
+
+TokenPattern* tp_many_optional(TokenPattern* p) {
+	return tp_quantify(p, TP_MANY_OPTIONAL);
+}
+
+// === Pattern builder: literal ===
+
+TokenPattern* tp_literal(const char* str) {
+	TokenPattern* p = (TokenPattern*)calloc(1, sizeof(TokenPattern));
+	p->type       = TP_TYPE_LITERAL;
+	p->quantifier = TP_ONE;
+	int len = (int)strlen(str);
+	char* copy = (char*)malloc(len + 1);
+	memcpy(copy, str, len + 1);
+	p->literal    = copy;
+	p->literalLen = len;
+	return p;
+}
+
+// === Pattern lifecycle ===
+
+void TokenPattern_free(TokenPattern* this) {
+	if (this == NULL) { return; }
+	switch (this->type) {
+		case TP_TYPE_SEQ:
+		case TP_TYPE_ALT:
+		case TP_TYPE_GROUP:
+			if (this->children != NULL) {
+				for (int i = 0; i < this->childCount; i++) {
+					TokenPattern_free(this->children[i]);
+				}
+				free(this->children);
+			}
+			break;
+		case TP_TYPE_LITERAL:
+			if (this->literal != NULL) {
+				free((void*)this->literal);
+			}
+			break;
+		case TP_TYPE_BITMAP:
+		default:
+			break;
+	}
+	free(this);
+}
+
+// === Pattern matching engine ===
+
+// Forward declaration for recursion
+static int TokenPattern_matchInternal(const TokenPattern* pattern, const char* input, int available);
+
+// Match a single occurrence of a BITMAP pattern.
+// Returns 1 if the byte matches the bitmap, 0 otherwise.
+static inline int TokenPattern_matchBitmapOnce(const unsigned char bitmap[32], const char* input, int available) {
+	if (available <= 0) { return 0; }
+	return bitmap_test(bitmap, (unsigned char)*input) ? 1 : 0;
+}
+
+// Match a BITMAP pattern with its quantifier.
+// Returns number of bytes consumed, or -1 on failure.
+static int TokenPattern_matchBitmap(const TokenPattern* p, const char* input, int available) {
+	switch (p->quantifier) {
+		case TP_ONE: {
+			return TokenPattern_matchBitmapOnce(p->bitmap, input, available) ? 1 : -1;
+		}
+		case TP_OPTIONAL: {
+			return TokenPattern_matchBitmapOnce(p->bitmap, input, available) ? 1 : 0;
+		}
+		case TP_MANY: {
+			if (!TokenPattern_matchBitmapOnce(p->bitmap, input, available)) { return -1; }
+			int n = 1;
+			while (n < available && bitmap_test(p->bitmap, (unsigned char)input[n])) { n++; }
+			return n;
+		}
+		case TP_MANY_OPTIONAL: {
+			int n = 0;
+			while (n < available && bitmap_test(p->bitmap, (unsigned char)input[n])) { n++; }
+			return n;
+		}
+	}
+	return -1;
+}
+
+// Match a LITERAL pattern.
+// Returns number of bytes consumed, or -1 on failure.
+static int TokenPattern_matchLiteral(const TokenPattern* p, const char* input, int available) {
+	if (p->quantifier == TP_ONE || p->quantifier == TP_MANY) {
+		// Must match at least once
+		if (p->literalLen > available) { return -1; }
+		if (strncmp(p->literal, input, p->literalLen) != 0) { return -1; }
+		if (p->quantifier == TP_ONE) { return p->literalLen; }
+		// TP_MANY: keep matching
+		int total = p->literalLen;
+		while (total + p->literalLen <= available &&
+		       strncmp(p->literal, input + total, p->literalLen) == 0) {
+			total += p->literalLen;
+		}
+		return total;
+	}
+	if (p->quantifier == TP_OPTIONAL) {
+		if (p->literalLen <= available && strncmp(p->literal, input, p->literalLen) == 0) {
+			return p->literalLen;
+		}
+		return 0;
+	}
+	if (p->quantifier == TP_MANY_OPTIONAL) {
+		int total = 0;
+		while (total + p->literalLen <= available &&
+		       strncmp(p->literal, input + total, p->literalLen) == 0) {
+			total += p->literalLen;
+		}
+		return total;
+	}
+	return -1;
+}
+
+// Match a SEQ pattern: all children must match in order.
+// Returns total bytes consumed, or -1 on failure.
+static int TokenPattern_matchSeq(const TokenPattern* p, const char* input, int available) {
+	int total = 0;
+	for (int i = 0; i < p->childCount; i++) {
+		int r = TokenPattern_matchInternal(p->children[i], input + total, available - total);
+		if (r < 0) { return -1; }
+		total += r;
+	}
+	return total;
+}
+
+// Match an ALT pattern: first child that matches wins (PEG ordered choice).
+// Returns bytes consumed, or -1 if no child matches.
+static int TokenPattern_matchAlt(const TokenPattern* p, const char* input, int available) {
+	for (int i = 0; i < p->childCount; i++) {
+		int r = TokenPattern_matchInternal(p->children[i], input, available);
+		if (r >= 0) { return r; }
+	}
+	return -1;
+}
+
+// Match a GROUP pattern (sub-pattern with quantifier).
+// Returns bytes consumed, or -1 on failure.
+static int TokenPattern_matchGroup(const TokenPattern* p, const char* input, int available) {
+	// The group has exactly one child (the sub-pattern) and a quantifier applied to it.
+	const TokenPattern* child = p->children[0];
+	switch (p->quantifier) {
+		case TP_ONE: {
+			return TokenPattern_matchInternal(child, input, available);
+		}
+		case TP_OPTIONAL: {
+			int r = TokenPattern_matchInternal(child, input, available);
+			return (r < 0) ? 0 : r;
+		}
+		case TP_MANY: {
+			int r = TokenPattern_matchInternal(child, input, available);
+			if (r < 0) { return -1; }
+			int total = r;
+			while (total < available) {
+				r = TokenPattern_matchInternal(child, input + total, available - total);
+				if (r <= 0) { break; }
+				total += r;
+			}
+			return total;
+		}
+		case TP_MANY_OPTIONAL: {
+			int total = 0;
+			while (total < available) {
+				int r = TokenPattern_matchInternal(child, input + total, available - total);
+				if (r <= 0) { break; }
+				total += r;
+			}
+			return total;
+		}
+	}
+	return -1;
+}
+
+// Main recursive dispatch.
+// Returns bytes consumed (>= 0), or -1 on failure.
+static int TokenPattern_matchInternal(const TokenPattern* pattern, const char* input, int available) {
+	switch (pattern->type) {
+		case TP_TYPE_BITMAP:
+			return TokenPattern_matchBitmap(pattern, input, available);
+		case TP_TYPE_LITERAL:
+			return TokenPattern_matchLiteral(pattern, input, available);
+		case TP_TYPE_SEQ:
+			return TokenPattern_matchSeq(pattern, input, available);
+		case TP_TYPE_ALT:
+			return TokenPattern_matchAlt(pattern, input, available);
+		case TP_TYPE_GROUP:
+			return TokenPattern_matchGroup(pattern, input, available);
+	}
+	return -1;
+}
+
+// Public API: Returns number of bytes matched, or 0 on failure.
+int TokenPattern_match(const TokenPattern* pattern, const char* input, int available) {
+	int r = TokenPattern_matchInternal(pattern, input, available);
+	return (r < 0) ? 0 : r;
+}
+
+// === RangeToken: ParsingElement implementation ===
+
+ParsingElement* RangeToken_new(TokenPattern* pattern) {
+	__NEW(RangeTokenConfig, config);
+	ParsingElement* this = ParsingElement_new(NULL);
+	this->type           = TYPE_TOKEN;
+	this->recognize      = RangeToken_recognize;
+	this->freeMatch      = TokenMatch_free;
+	config->pattern          = pattern;
+	config->expr             = NULL;
+	config->customRecognize  = NULL;
+	this->config = config;
+	return this;
+}
+
+void RangeToken_free(ParsingElement* this) {
+	RangeTokenConfig* config = (RangeTokenConfig*)this->config;
+	if (config != NULL) {
+		if (config->pattern != NULL) { TokenPattern_free(config->pattern); }
+		if (config->expr    != NULL) { free(config->expr); }
+		free(config);
+	}
+	if (this != NULL) { __FREE(this->name); }
+	__FREE(this);
+}
+
+void RangeToken_setCustomRecognize(ParsingElement* this, TokenCustomRecognize recognizer) {
+	if (this && this->config) {
+		((RangeTokenConfig*)this->config)->customRecognize = recognizer;
+	}
+}
+
+Match* RangeToken_recognize(ParsingElement* this, ParsingContext* context) {
+	assert(this->config);
+	if (this->config == NULL) { return FAILURE; }
+	Match* result = NULL;
+	RangeTokenConfig* config = (RangeTokenConfig*)this->config;
+
+	// Custom recognizer fast path (hand-coded scanners)
+	if (config->customRecognize != NULL) {
+		int vector[30];
+		int count = 0;
+		const char* line = (const char*)context->iterator->current;
+		int available = (int)(context->iterator->available - (context->iterator->current - context->iterator->buffer));
+		int match_len = config->customRecognize(line, available, vector, &count);
+		if (match_len > 0) {
+			result = Match_Success(match_len, this, context);
+			TokenMatch* data = (TokenMatch*)Arena_alloc(context->arena, sizeof(TokenMatch));
+			data->count     = count;
+			data->groups    = NULL;
+			data->extracted = FALSE;
+			int ovector_size = count * 2;
+			data->ovector = (int*)Arena_alloc(context->arena, sizeof(int) * ovector_size);
+			for (int j = 0; j < ovector_size; j++) {
+				data->ovector[j] = vector[j];
+			}
+			data->input   = line;
+			result->data  = data;
+			context->iterator->move(context->iterator, result->length);
+			assert(result->data != NULL);
+			assert(Match_isSuccess(result));
+			OUT_STEP("[✓] %s└ RangeToken " BOLDGREEN "%s" RESET "#%d custom-matched %zu:%zu-%zu", context->indent, this->name, this->id, context->iterator->lines, context->iterator->offset - result->length, context->iterator->offset);
+		} else {
+			result = FAILURE;
+			OUT_STEP(" !  %s└ RangeToken %s#%d custom-failed at %zu:%zu", context->indent, this->name, this->id, context->iterator->lines, context->iterator->offset);
+		}
+		return MATCH_STATS(result);
+	}
+
+	// Range-based pattern matching
+	const char* line = (const char*)context->iterator->current;
+	int available = (int)(context->iterator->available - (context->iterator->current - context->iterator->buffer));
+	int match_len = TokenPattern_match(config->pattern, line, available);
+
+	if (match_len > 0) {
+		result = Match_Success(match_len, this, context);
+		// Create TokenMatch with group(0) = full match
+		TokenMatch* data = (TokenMatch*)Arena_alloc(context->arena, sizeof(TokenMatch));
+		data->count     = 1;
+		data->groups    = NULL;
+		data->extracted = FALSE;
+		data->ovector   = (int*)Arena_alloc(context->arena, sizeof(int) * 2);
+		data->ovector[0] = 0;
+		data->ovector[1] = match_len;
+		data->input     = line;
+		result->data    = data;
+		context->iterator->move(context->iterator, result->length);
+		assert(result->data != NULL);
+		assert(Match_isSuccess(result));
+		OUT_STEP("[✓] %s└ RangeToken " BOLDGREEN "%s" RESET "#%d matched %zu:%zu-%zu", context->indent, this->name, this->id, context->iterator->lines, context->iterator->offset - result->length, context->iterator->offset);
+	} else {
+		result = FAILURE;
+		OUT_STEP(" !  %s└ RangeToken %s#%d failed at %zu:%zu", context->indent, this->name, this->id, context->iterator->lines, context->iterator->offset);
+	}
+	return MATCH_STATS(result);
 }
 
 // ----------------------------------------------------------------------------
