@@ -23,6 +23,21 @@ PY_VERSION = "{0}_{1}_{2}".format(
 )
 FFI_BUILDER = None
 
+# Detect whether PCRE is available by checking for the library
+WITH_PCRE = os.environ.get("LIBPARSING_WITH_PCRE", "").lower() in ("1", "yes", "true")
+if not WITH_PCRE:
+    # Auto-detect: check if libpcre is installed
+    import subprocess
+
+    try:
+        subprocess.check_output(
+            ["pkg-config", "--exists", "libpcre"], stderr=subprocess.DEVNULL
+        )
+        # If user hasn't explicitly disabled it, don't auto-enable
+        # PCRE is now opt-in via LIBPARSING_WITH_PCRE=1
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        pass
+
 
 def name():
     """Returns the name of the Python module to be built"""
@@ -40,12 +55,17 @@ def builder():
     # SEE: http://cffi.readthedocs.io/en/latest/embedding.html
     if FFI_BUILDER:
         return FFI_BUILDER
+    compile_args = ["-O3", "-flto", "-DNDEBUG"]
+    link_args = ["-Wl,--export-dynamic", "-flto"]
+    if WITH_PCRE:
+        compile_args.append("-DWITH_PCRE")
+        link_args.insert(0, "-lpcre")
     ffibuilder = cffi.FFI()
     ffibuilder.set_source(
         "{0}".format(name()),
         H_SOURCE + C_SOURCE,
-        extra_compile_args=["-O3", "-flto", "-DNDEBUG"],
-        extra_link_args=["-Wl,-lpcre,--export-dynamic", "-flto"],
+        extra_compile_args=compile_args,
+        extra_link_args=link_args,
     )
     ffibuilder.cdef(FFI_SOURCE)
     ffibuilder.embedding_init_code(

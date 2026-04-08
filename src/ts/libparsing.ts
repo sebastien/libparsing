@@ -23,6 +23,13 @@
 
 export const VERSION = "0.9.3";
 
+// -- Feature flags -----------------------------------------------------------
+// The TypeScript port uses native JS RegExp (always available) and JS GC
+// (always available), so both feature flags are always true.
+
+export const HAS_PCRE = true;
+export const HAS_GC = true;
+
 // -- Match / Iterator status codes -------------------------------------------
 
 export const STATUS_INIT = "-";

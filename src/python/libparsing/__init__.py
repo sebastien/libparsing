@@ -149,6 +149,12 @@ if not lib:
 C = ffi
 LIB = lib
 
+# Runtime detection of PCRE support in the compiled C library.
+HAS_PCRE = bool(lib.Parsing_hasPCRE()) if lib else False
+
+# Runtime detection of GC (garbage collection) support in the compiled C library.
+HAS_GC = bool(lib.Parsing_hasGC()) if lib else False
+
 # symbols points to lib for backwards compatibility
 symbols = lib
 
@@ -380,6 +386,8 @@ __all__ = [
     "ParsingElement",
     "Word",
     "Token",
+    "RangeToken",
+    "tp",
     "Group",
     "Rule",
     "Condition",
@@ -414,6 +422,8 @@ __all__ = [
     "STATUS_ENDED",
     "NOTHING",
     "UNMATCHED",
+    "HAS_PCRE",
+    "HAS_GC",
     # Type aliases
     "RuleMatch",
     "TokenMatch",
@@ -704,6 +714,139 @@ class Token(ParsingElement):
     def setJSONNumberRecognizer(self):
         """Use hand-coded JSON number recognizer instead of PCRE."""
         lib.Token_setCustomRecognize(self._cobject, lib.Token_recognizeJSONNumber)
+        return self
+
+
+# -----------------------------------------------------------------------------
+#
+# TOKEN PATTERN (range-based, PCRE-free)
+#
+# -----------------------------------------------------------------------------
+
+
+class tp:
+    """Token pattern builder for range-based tokens (PCRE-free).
+
+    Usage::
+
+        # \\d+(\\.\\d+)?
+        number = tp.seq(tp.many(tp.digit()), tp.optional(tp.seq(tp.char('.'), tp.many(tp.digit()))))
+        g.range_token("NUMBER", number)
+
+        # \\s+
+        g.range_token("WS", tp.many(tp.space()))
+
+        # [a-zA-Z_][a-zA-Z0-9_]*
+        ident = tp.seq(
+            tp.alt(tp.alpha(), tp.char('_')),
+            tp.many_optional(tp.word())
+        )
+    """
+
+    @staticmethod
+    def char(c):
+        """Match exact character."""
+        return lib.tp_char(c.encode("utf-8") if isinstance(c, str) else c)
+
+    @staticmethod
+    def range(lo, hi):
+        """Match byte range [lo..hi]."""
+        if isinstance(lo, str):
+            lo = lo.encode("utf-8")
+        if isinstance(hi, str):
+            hi = hi.encode("utf-8")
+        return lib.tp_range(lo, hi)
+
+    @staticmethod
+    def set(chars):
+        """Match any character in the given string."""
+        return lib.tp_set(ensure_bytes(chars))
+
+    @staticmethod
+    def not_set(chars):
+        """Match any character NOT in the given string."""
+        return lib.tp_not_set(ensure_bytes(chars))
+
+    @staticmethod
+    def any():
+        """Match any byte."""
+        return lib.tp_any()
+
+    @staticmethod
+    def digit():
+        """Shorthand for [0-9]."""
+        return lib.tp_digit()
+
+    @staticmethod
+    def alpha():
+        """Shorthand for [a-zA-Z]."""
+        return lib.tp_alpha()
+
+    @staticmethod
+    def word():
+        """Shorthand for [a-zA-Z0-9_]."""
+        return lib.tp_word()
+
+    @staticmethod
+    def space():
+        """Shorthand for [ \\t\\n\\r]."""
+        return lib.tp_space()
+
+    @staticmethod
+    def seq(*children):
+        """Sequence: match all children in order."""
+        arr = ffi.new("TokenPattern*[]", list(children) + [ffi.NULL])
+        return lib.tp_seq(arr)
+
+    @staticmethod
+    def alt(*children):
+        """Alternation: match first child that succeeds."""
+        arr = ffi.new("TokenPattern*[]", list(children) + [ffi.NULL])
+        return lib.tp_alt(arr)
+
+    @staticmethod
+    def many(p):
+        """One-or-more (+)."""
+        return lib.tp_many(p)
+
+    @staticmethod
+    def optional(p):
+        """Zero-or-one (?)."""
+        return lib.tp_optional(p)
+
+    @staticmethod
+    def many_optional(p):
+        """Zero-or-more (*)."""
+        return lib.tp_many_optional(p)
+
+    @staticmethod
+    def literal(s):
+        """Literal string match."""
+        return lib.tp_literal(ensure_bytes(s))
+
+
+class RangeToken(ParsingElement):
+    """A range-based token that uses TokenPattern for matching (no PCRE)."""
+
+    __slots__ = ("_pattern",)
+
+    def _new(self, pattern):
+        self._pattern = pattern  # prevent GC of the pattern pointer
+        return lib.RangeToken_new(pattern)
+
+    def setCustomRecognize(self, recognizer):
+        """Set a custom C recognizer function on this token."""
+        lib.RangeToken_setCustomRecognize(self._cobject, recognizer)
+        return self
+
+    def setJSONStringRecognizer(self):
+        """Use hand-coded JSON string recognizer."""
+        lib.RangeToken_setCustomRecognize(self._cobject, lib.Token_recognizeJSONString)
+        return self
+
+    def setJSONNumberRecognizer(self):
+        """Use hand-coded JSON number recognizer."""
+        lib.RangeToken_setCustomRecognize(self._cobject, lib.Token_recognizeJSONNumber)
         return self
 
 
@@ -1681,6 +1824,28 @@ class Grammar(CObject):
     def atoken(self, token):
         self._prepared = False
         return self._registerAnonymous(Token(token))
+
+    def range_token(self, name, pattern):
+        """Create a range-based token (PCRE-free) using a TokenPattern.
+
+        Usage::
+
+            g.range_token("WS", tp.many(tp.space()))
+            g.range_token("NUMBER", tp.seq(
+                tp.many(tp.digit()),
+                tp.optional(tp.seq(tp.char('.'), tp.many(tp.digit())))
+            ))
+        """
+        self._prepared = False
+        r = RangeToken(pattern)
+        r.name = name
+        self.symbols[name] = r
+        return r
+
+    def arange_token(self, pattern):
+        """Create an anonymous range-based token."""
+        self._prepared = False
+        return self._registerAnonymous(RangeToken(pattern))
 
     def procedure(self, name, callback):
         self._prepared = False

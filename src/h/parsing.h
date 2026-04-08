@@ -5,15 +5,21 @@
 // License           : BSD License
 // ----------------------------------------------------------------------------
 // Creation date     : 12-Dec-2014
-// Last modification : 08-Mar-2019
+// Last modification : 08-Apr-2026
 // ----------------------------------------------------------------------------
 
 #ifndef __PARSING_H__
 #define __PARSING_H__
-#define __PARSING_VERSION__ "0.9.3"
+#define __PARSING_VERSION__ "1.0.0"
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+// Returns 1 if this build includes PCRE support, 0 otherwise.
+int Parsing_hasPCRE(void);
+
+// Returns 1 if this build includes GC (garbage collection) support, 0 otherwise.
+int Parsing_hasGC(void);
 
  /* Enable certain library functions (strdup) on linux.  See feature_test_macros(7) */
 #ifdef _XOPEN_SOURCE
@@ -703,6 +709,76 @@ typedef struct TokenConfig {
 #endif
 } TokenConfig;
 
+/**
+ * ### Range-Based Token Patterns
+ *
+ * TokenPattern provides a PCRE-free way to define token matching using
+ * composable character-class patterns compiled to 256-bit bitmaps.
+ * Each bitmap step matches a single byte via a direct table lookup,
+ * making this approach extremely fast.
+ *
+ * Patterns are built using the `tp_*` family of functions:
+ *
+ * ```c
+ * // \d+(\.\d+)?
+ * TokenPattern* number = TP_SEQ(
+ *     tp_many(tp_digit()),
+ *     tp_optional(TP_SEQ(tp_char('.'), tp_many(tp_digit())))
+ * );
+ * ParsingElement* e = RangeToken_new(number);
+ * ```
+ */
+
+// @define
+// Token pattern node types
+#define TP_TYPE_BITMAP   'B'
+// @define
+#define TP_TYPE_SEQ      'S'
+// @define
+#define TP_TYPE_ALT      'A'
+// @define
+#define TP_TYPE_GROUP    'G'
+// @define
+#define TP_TYPE_LITERAL  'L'
+
+// @define
+// Token pattern quantifiers (reuses Reference cardinality values)
+#define TP_ONE           '1'
+// @define
+#define TP_OPTIONAL      '?'
+// @define
+#define TP_MANY          '+'
+// @define
+#define TP_MANY_OPTIONAL '*'
+
+// @type TokenPattern
+// A node in a composable pattern tree for range-based token matching.
+// Leaf nodes are TP_TYPE_BITMAP (256-bit character class) or TP_TYPE_LITERAL.
+// Interior nodes are TP_TYPE_SEQ, TP_TYPE_ALT, or TP_TYPE_GROUP.
+typedef struct TokenPattern {
+	char  type;            // One of TP_TYPE_BITMAP, TP_TYPE_SEQ, etc.
+	char  quantifier;      // One of TP_ONE, TP_OPTIONAL, TP_MANY, TP_MANY_OPTIONAL
+	union {
+		unsigned char bitmap[32];  // TP_TYPE_BITMAP: 256-bit lookup table
+		struct {                   // TP_TYPE_SEQ, TP_TYPE_ALT, TP_TYPE_GROUP
+			struct TokenPattern** children;
+			int childCount;
+		};
+		struct {                   // TP_TYPE_LITERAL
+			const char* literal;
+			int literalLen;
+		};
+	};
+} TokenPattern;
+
+// @type RangeTokenConfig
+// Configuration for a range-based token (no PCRE dependency).
+typedef struct RangeTokenConfig {
+	TokenPattern*        pattern;         // The compiled pattern tree
+	char*                expr;            // Human-readable description (for debug/error output)
+	TokenCustomRecognize customRecognize; // Optional hand-coded recognizer (same as TokenConfig)
+} RangeTokenConfig;
+
 // @type
 typedef struct TokenMatch {
 	int             count;
@@ -714,7 +790,8 @@ typedef struct TokenMatch {
 
 
 // @method
-// Creates a new token with the given POSIX extended regular expression
+// Creates a new token with the given POSIX extended regular expression.
+// Requires WITH_PCRE. Use RangeToken_new() for a PCRE-free alternative.
 ParsingElement* Token_new(const char* expr);
 
 // @destructor
@@ -748,6 +825,116 @@ const char* TokenMatch_group(Match* match, int index);
 
 // @method
 int TokenMatch_count(Match* match);
+
+/**
+ * ### Range-Based Tokens (PCRE-free)
+ *
+ * Range tokens use the `TokenPattern` builder API for matching.
+ * They produce the same `TokenMatch` data as PCRE-based tokens
+ * (with group(0) = full match), so downstream code is unaffected.
+ */
+
+// --- Pattern builder: primitives ---
+
+// @operation
+// Creates a bitmap pattern matching a single exact character.
+TokenPattern* tp_char(char c);
+
+// @operation
+// Creates a bitmap pattern matching any byte in [lo..hi] inclusive.
+TokenPattern* tp_range(char lo, char hi);
+
+// @operation
+// Creates a bitmap pattern matching any character in the given string.
+// E.g. tp_set("+-*/") matches '+', '-', '*', or '/'.
+TokenPattern* tp_set(const char* chars);
+
+// @operation
+// Creates a bitmap pattern matching any character NOT in the given string.
+TokenPattern* tp_not_set(const char* chars);
+
+// @operation
+// Creates a bitmap pattern matching any byte (equivalent to '.').
+TokenPattern* tp_any(void);
+
+// @operation
+// Shorthand for tp_range('0', '9').
+TokenPattern* tp_digit(void);
+
+// @operation
+// Shorthand for [a-zA-Z].
+TokenPattern* tp_alpha(void);
+
+// @operation
+// Shorthand for [a-zA-Z0-9_].
+TokenPattern* tp_word(void);
+
+// @operation
+// Shorthand for [ \t\n\r].
+TokenPattern* tp_space(void);
+
+// --- Pattern builder: combinators ---
+
+// @operation
+// Creates a sequence pattern from a NULL-terminated array of children.
+// Use the TP_SEQ(...) macro for convenience.
+TokenPattern* tp_seq(TokenPattern* children[]);
+
+// @operation
+// Creates an alternation pattern from a NULL-terminated array of children.
+// Use the TP_ALT(...) macro for convenience.
+TokenPattern* tp_alt(TokenPattern* children[]);
+
+// --- Pattern builder: quantifiers ---
+
+// @operation
+// Wraps a pattern with one-or-more (+) quantifier.
+TokenPattern* tp_many(TokenPattern* p);
+
+// @operation
+// Wraps a pattern with zero-or-one (?) quantifier.
+TokenPattern* tp_optional(TokenPattern* p);
+
+// @operation
+// Wraps a pattern with zero-or-more (*) quantifier.
+TokenPattern* tp_many_optional(TokenPattern* p);
+
+// --- Pattern builder: literal ---
+
+// @operation
+// Creates a literal string pattern (fast path using strncmp).
+TokenPattern* tp_literal(const char* str);
+
+// --- Pattern lifecycle ---
+
+// @destructor
+// Frees a pattern tree recursively.
+void TokenPattern_free(TokenPattern* this);
+
+// --- Pattern matching ---
+
+// @method
+// Matches a TokenPattern against input. Returns number of bytes matched,
+// or 0 on failure.
+int TokenPattern_match(const TokenPattern* pattern, const char* input, int available);
+
+// --- RangeToken creation ---
+
+// @constructor
+// Creates a new range-based token from a TokenPattern.
+// The pattern is owned by the token and freed when the token is freed.
+ParsingElement* RangeToken_new(TokenPattern* pattern);
+
+// @destructor
+void RangeToken_free(ParsingElement* this);
+
+// @method
+// The specialized recognize function for range-based tokens.
+Match* RangeToken_recognize(ParsingElement* this, ParsingContext* context);
+
+// @method
+// Sets a custom recognizer function on a range token, bypassing the pattern matcher.
+void RangeToken_setCustomRecognize(ParsingElement* this, TokenCustomRecognize recognizer);
 
 /**
  * ### References
@@ -1267,6 +1454,20 @@ bool Utilites_checkIndent( ParsingElement* this, ParsingContext* context );
 // @macro
 // Creates a `Token` parsing element with the given regular expression
 #define TOKEN(v)          Token_new(v)
+
+// @macro
+// Creates a `RangeToken` parsing element from a TokenPattern
+#define RANGE_TOKEN(p)    RangeToken_new(p)
+
+// @macro
+// Creates a sequence TokenPattern from its arguments (variadic).
+// Example: TP_SEQ(tp_many(tp_digit()), tp_optional(tp_char('.')))
+#define TP_SEQ(...)       tp_seq((TokenPattern*[(VA_ARGS_COUNT(__VA_ARGS__)+1)]){__VA_ARGS__,NULL})
+
+// @macro
+// Creates an alternation TokenPattern from its arguments (variadic).
+// Example: TP_ALT(tp_literal("true"), tp_literal("false"))
+#define TP_ALT(...)       tp_alt((TokenPattern*[(VA_ARGS_COUNT(__VA_ARGS__)+1)]){__VA_ARGS__,NULL})
 
 // @macro
 // Creates a `Rule` parsing element with the references or parsing elements

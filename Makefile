@@ -13,7 +13,7 @@
 
 PROJECT        :=parsing
 PYMODULE       :=lib$(PROJECT)
-FEATURES       :=pcre gc
+FEATURES       :=gc
 ALL_FEATURES   :=pcre memcheck debug trace fortify gc assert
 
 # === FEATURES ================================================================
@@ -248,9 +248,22 @@ fmt: ## Formats C and Python source code
 	@echo "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
 
 clean: ## Cleans the build files
-	@find . -name __pycache__ -exec rm -rf '{}' ';' ; true
-	@echo $(PRODUCTS) $(BUILD_ALL) | xargs -n1 rm 2> /dev/null ; true
-	@test -d $(DIST) && rm -rf $(DIST) ; true
+	@echo "Cleaning build artifacts..."
+	@# Clean Python cache files
+	@find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+	@# Clean Python build directory
+	@test -d build && rm -rf build 2>/dev/null || true
+	@# Clean build directory (object files and dependency files)
+	@test -d $(BUILD) && rm -rf $(BUILD) 2>/dev/null || true
+	@# Clean dist directory (test binaries and shared libraries)
+	@test -d $(DIST) && rm -rf $(DIST) 2>/dev/null || true
+	@# Clean individual build artifacts (Python SO files and generated C)
+	@echo $(BUILD_PY_SO) $(BUILD_PY_C) | xargs -n1 rm -f 2>/dev/null || true
+	@# Clean any generated .so files in Python module directory
+	@rm -f $(SOURCES)/python/lib$(PROJECT)/*.so 2>/dev/null || true
+	@# Clean root-level Python shared object files and any generated .so files
+	@rm -f _libparsing*.so _libparsing*.abi3.so libparsing*.so 2>/dev/null || true
+	@echo "Clean complete."
 
 help: ## Displays a description of the different Makefile rules
 	@echo "$(CYAN)★★★ $(PROJECT) makefile ★★★$(RESET)"

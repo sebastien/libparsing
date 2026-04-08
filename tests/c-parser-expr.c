@@ -6,15 +6,24 @@
  *
  * - No argument: proper deallocation of a grammar on `Grammar_free`
  * - With argument: proper deallocation of matches, result and context
+ *
+ * Uses RangeToken (PCRE-free) for all token definitions.
 */
 Grammar* createGrammar() {
 	Grammar* g = Grammar_new();
 	// Grammar_setVerbose(g);
 
-	SYMBOL (WS,             TOKEN("\\s+"));
-	SYMBOL (NUMBER,         TOKEN("\\d+(\\.\\d+)?"));
-	SYMBOL (VARIABLE,       TOKEN("\\w+"));
-	SYMBOL (OPERATOR,       TOKEN("[\\+\\-\\*/]"));
+	// \s+
+	SYMBOL (WS,             RANGE_TOKEN(tp_many(tp_space())));
+	// \d+(\.\d+)?
+	SYMBOL (NUMBER,         RANGE_TOKEN(TP_SEQ(
+		tp_many(tp_digit()),
+		tp_optional(TP_SEQ(tp_char('.'), tp_many(tp_digit())))
+	)));
+	// \w+
+	SYMBOL (VARIABLE,       RANGE_TOKEN(tp_many(tp_word())));
+	// [+\-*/]
+	SYMBOL (OPERATOR,       RANGE_TOKEN(tp_set("+-*/")));
 
 	SYMBOL (Value,         GROUP( _S(NUMBER), _S(VARIABLE)));
 	SYMBOL (Suffix,        RULE (_AS(_S(OPERATOR), "operator"), _AS(_S(Value), "value")));

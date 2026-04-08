@@ -222,9 +222,9 @@ class TestCollection(unittest.TestCase):
     def testGrammarSymbols(self):
         g = Grammar(isVerbose=False)
         s = g.symbols
-        g.token("NUMBER", r"\d+")
-        g.token("VARIABLE", r"\w+")
-        g.token("OPERATOR", r"[\+\-*\/]")
+        g.range_token("NUMBER", tp.many(tp.digit()))
+        g.range_token("VARIABLE", tp.many(tp.word()))
+        g.range_token("OPERATOR", tp.set("+-*/"))
         g.group("Value", s.NUMBER, s.VARIABLE)
         g.rule(
             "Operation", s.Value._as("left"), s.OPERATOR._as("op"), s.Value._as("right")
@@ -235,6 +235,100 @@ class TestCollection(unittest.TestCase):
         r = g.parseString("1+10")
         self.assertTrue(r.isSuccess())
         self.assertTrue(r.isComplete())
+
+    def testRangeTokenExprGrammar(self):
+        """Test a full expression grammar using range-based tokens (PCRE-free)."""
+        g = Grammar(isVerbose=False)
+        s = g.symbols
+        # \s+
+        g.range_token("WS", tp.many(tp.space()))
+        # \d+(\.\d+)?
+        g.range_token(
+            "NUMBER",
+            tp.seq(
+                tp.many(tp.digit()),
+                tp.optional(tp.seq(tp.char("."), tp.many(tp.digit()))),
+            ),
+        )
+        # \w+
+        g.range_token("VARIABLE", tp.many(tp.word()))
+        # [+-*/]
+        g.range_token("OPERATOR", tp.set("+-*/"))
+        g.group("Value", s.NUMBER, s.VARIABLE)
+        g.rule("Suffix", s.OPERATOR._as("operator"), s.Value._as("value"))
+        g.rule("Expression", s.Value, s.Suffix.zeroOrMore())
+        g.axiom = s.Expression
+        g.skip = s.WS
+
+        # Simple integer expression
+        r = g.parseString("10 + 20 / 5")
+        self.assertTrue(r.isSuccess())
+        self.assertTrue(r.isComplete())
+
+        # Decimal numbers
+        r = g.parseString("3.14 + 2.71")
+        self.assertTrue(r.isSuccess())
+        self.assertTrue(r.isComplete())
+
+        # Single number
+        r = g.parseString("42")
+        self.assertTrue(r.isSuccess())
+        self.assertTrue(r.isComplete())
+
+        # Variable names
+        r = g.parseString("x + y")
+        self.assertTrue(r.isSuccess())
+        self.assertTrue(r.isComplete())
+
+    def testRangeTokenLiteral(self):
+        """Test range-based tokens with tp.literal()."""
+        g = Grammar(isVerbose=False)
+        s = g.symbols
+        g.range_token("WS", tp.many(tp.space()))
+        g.range_token("TRUE", tp.literal("true"))
+        g.range_token("FALSE", tp.literal("false"))
+        g.range_token("NULL", tp.literal("null"))
+        g.group("Value", s.TRUE, s.FALSE, s.NULL)
+        g.axiom = s.Value
+
+        r = g.parseString("true")
+        self.assertTrue(r.isSuccess())
+        self.assertTrue(r.isComplete())
+
+        r = g.parseString("false")
+        self.assertTrue(r.isSuccess())
+        self.assertTrue(r.isComplete())
+
+        r = g.parseString("null")
+        self.assertTrue(r.isSuccess())
+        self.assertTrue(r.isComplete())
+
+    def testRangeTokenAlternation(self):
+        """Test range-based tokens with tp.alt()."""
+        g = Grammar(isVerbose=False)
+        s = g.symbols
+        # Match identifiers that start with alpha or underscore
+        g.range_token(
+            "IDENT",
+            tp.seq(tp.alt(tp.alpha(), tp.char("_")), tp.many_optional(tp.word())),
+        )
+        g.axiom = s.IDENT
+
+        r = g.parseString("hello")
+        self.assertTrue(r.isSuccess())
+        self.assertTrue(r.isComplete())
+
+        r = g.parseString("_private")
+        self.assertTrue(r.isSuccess())
+        self.assertTrue(r.isComplete())
+
+        r = g.parseString("var123")
+        self.assertTrue(r.isSuccess())
+        self.assertTrue(r.isComplete())
+
+        # Should fail on number-starting input
+        r = g.parseString("123abc")
+        self.assertTrue(r.isFailure())
 
     @unittest.skip("Test has issues that need to be fixed")
     def testProcessor(self):
