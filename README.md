@@ -128,6 +128,7 @@ git clone http://github.com/sebastien/libparsing
 cd libparsing
 make
 make install               # You can set PREFIX
+make install-link          # Symlink Python module into ~/.local/share/python
 ```
 
 `libparsing` works with GCC4 and Clang and is written following the `c11`
@@ -136,5 +137,4 @@ standard.
 # Documentation
 
 For the complete C API documentation, see [docs/libparsing.md](docs/libparsing.md).
-
 

@@ -516,8 +516,8 @@ typedef struct TokenConfig {
  int literalLen;
  TokenCustomRecognize customRecognize;
 
- pcre* regexp;
- pcre_extra* extra;
+
+
 
 } TokenConfig;
 typedef struct TokenPattern {
@@ -1113,9 +1113,9 @@ void gc_release( const void* ptr );
 
 int Parsing_hasPCRE(void) {
 
- return 1;
 
 
+ return 0;
 
 }
 
@@ -2259,26 +2259,6 @@ size_t ParsingElement_skipFast( const ParsingElement* this, ParsingContext* cont
    skipped = r;
   }
  }
-
-
-
- else if (skip->type == 'T' && skip->config != NULL) {
-  TokenConfig* config = (TokenConfig*)skip->config;
-  int vector[30];
-  const char* line = (const char*)context->iterator->current;
-  int r = pcre_exec(
-   config->regexp, config->extra,
-   line,
-   context->iterator->available - (context->iterator->current - context->iterator->buffer),
-   0,
-   PCRE_ANCHORED | PCRE_NO_UTF8_CHECK | PCRE_NO_UTF16_CHECK | PCRE_NO_UTF32_CHECK,
-   vector, 30);
-  if (r > 0 && vector[1] > 0) {
-   context->iterator->move(context->iterator, vector[1]);
-   skipped = vector[1];
-  }
- }
-
  else {
 
   Match* match = skip->recognize(skip, context);
@@ -2690,25 +2670,6 @@ ParsingElement* Token_new(const char* expr) {
    config->literalLen = 0;
   }
  }
-
- const char* pcre_error;
- int pcre_error_offset = -1;
- config->regexp = pcre_compile(config->expr, PCRE_UTF8, &pcre_error, &pcre_error_offset, NULL);
- if (pcre_error != NULL) {
-  fprintf(stderr, "ERR ");fprintf(stderr, "Token: cannot compile regular expression `%s` at %d: %s", config->expr, pcre_error_offset, pcre_error);fprintf(stderr, "\n");;
-  if (config!=NULL) {; gc_free(config); } ;
-  if (this!=NULL) {; gc_free(this); } ;
-  return NULL;
- }
-
- config->extra = pcre_study(config->regexp, PCRE_STUDY_JIT_COMPILE, &pcre_error);
- if (pcre_error != NULL) {
-  fprintf(stderr, "ERR ");fprintf(stderr, "Token: cannot optimize regular expression `%s` at %d: %s", config->expr, pcre_error_offset, pcre_error);fprintf(stderr, "\n");;
-  if (config!=NULL) {; gc_free(config); } ;
-  if (this!=NULL) {; gc_free(this); } ;
-  return NULL;
- }
-
  this->config = config;
  assert(strcmp(config->expr, expr) == 0);
  assert(strcmp(Token_expr(this), expr) == 0);
@@ -2721,8 +2682,8 @@ void Token_free(ParsingElement* this) {
  if (config != NULL) {
 
 
-  if (config->regexp != NULL) {pcre_free(config->regexp);}
-  if (config->extra != NULL) {pcre_free_study(config->extra);}
+
+
 
   if (config->expr!=NULL) {; gc_free(config->expr); } ;
   if (config!=NULL) {; gc_free(config); } ;
@@ -2886,71 +2847,6 @@ Match* Token_recognize(ParsingElement* this, ParsingContext* context) {
   }
   return ParsingContext_registerMatch(context, (Element*)this, result);
  }
-
-
-
- int vector_length = 30;
- int vector[vector_length];
- const char* line = (const char*)context->iterator->current;
-
- int r = pcre_exec(
-  config->regexp, config->extra,
-  line,
-  context->iterator->available,
-  0,
-    PCRE_ANCHORED
-  | PCRE_NO_UTF8_CHECK
-  | PCRE_NO_UTF16_CHECK
-  | PCRE_NO_UTF32_CHECK,
-  vector,
-  vector_length);
- if (r <= 0) {
-
-  switch(r) {
-   case PCRE_ERROR_NOMATCH : result = FAILURE; break;
-   case PCRE_ERROR_NULL : fprintf(stderr, "ERR ");fprintf(stderr, "Token:%s Something was null", config->expr);fprintf(stderr, "\n");; break;
-   case PCRE_ERROR_BADOPTION : fprintf(stderr, "ERR ");fprintf(stderr, "Token:%s A bad option was passed", config->expr);fprintf(stderr, "\n");; break;
-   case PCRE_ERROR_BADMAGIC : fprintf(stderr, "ERR ");fprintf(stderr, "Token:%s Magic number bad (compiled re corrupt?)", config->expr);fprintf(stderr, "\n");; break;
-   case PCRE_ERROR_UNKNOWN_NODE : fprintf(stderr, "ERR ");fprintf(stderr, "Token:%s Something kooky in the compiled re", config->expr);fprintf(stderr, "\n");; break;
-   case PCRE_ERROR_NOMEMORY : fprintf(stderr, "ERR ");fprintf(stderr, "Token:%s Ran out of memory", config->expr);fprintf(stderr, "\n");; break;
-   default : fprintf(stderr, "ERR ");fprintf(stderr, "Token:%s Unknown error", config->expr);fprintf(stderr, "\n");; break;
-  };
-  if(context->grammar->isVerbose && !(context->flags & 0x1)){fprintf(stdout, "    %s└✘Token " "\033[1m\033[31m" "%s" "\033[0m" "#%d:`" "\033[36m" "%s" "\033[0m" "` failed at %zu:%zu", context->indent, this->name, this->id, config->expr, context->iterator->lines, context->iterator->offset);fprintf(stdout, "\n");;};
- } else {
-  if(r == 0) {
-   fprintf(stderr, "ERR ");fprintf(stderr, "Token: %s many substrings matched\n", config->expr);fprintf(stderr, "\n");;
-
-
-
-
-
-   r = vector_length / 3;
-  }
-
-  result = Match_Success(vector[1], this, context);
-  if(context->grammar->isVerbose && !(context->flags & 0x1)){fprintf(stdout, "[✓] %s└ Token " "\033[1m\033[32m" "%s" "\033[0m" "#%d:" "\033[36m" "`%s`" "\033[0m" " matched " "\033[1m\033[32m" "%zu:%zu-%zu" "\033[0m", context->indent, this->name, this->id, config->expr, context->iterator->lines, context->iterator->offset, context->iterator->offset + result->length);fprintf(stdout, "\n");;};
-
-
-
-
-
-  TokenMatch* data = (TokenMatch*)Arena_alloc(context->arena, sizeof(TokenMatch));
-  data->count = r;
-  data->groups = NULL;
-  data->extracted = 0;
-
-  int ovector_size = r * 2;
-  data->ovector = (int*)Arena_alloc(context->arena, sizeof(int) * ovector_size);
-  for (int j = 0; j < ovector_size; j++) {
-   data->ovector[j] = vector[j];
-  }
-  data->input = line;
-  result->data = data;
-  context->iterator->move(context->iterator,result->length);
-  assert (result->data != NULL);
-  assert(Match_isSuccess(result));
- }
-
  return ParsingContext_registerMatch(context, (Element*)this, result);
 }
 
@@ -2964,20 +2860,7 @@ const char* TokenMatch_group(Match* match, int index) {
   assert (index < m->count);
 
   if (!m->extracted && m->ovector != NULL) {
-
-
-
-
-   if (match->element && ((ParsingElement*)match->element)->recognize != RangeToken_recognize) {
-    m->groups = (const char**)calloc(m->count, sizeof(const char*));
-    assert(m->groups != NULL);
-    for (int j = 0; j < m->count; j++) {
-     pcre_get_substring(m->input, m->ovector, m->count, j, &(m->groups[j]));
-    }
-    m->extracted = 1;
-   } else {
-
-
+   {
 
 
 
@@ -3027,24 +2910,6 @@ void Token_print(ParsingElement* this) {
 void TokenMatch_free(Match* match) {
  assert (match != NULL);
  assert (Match_getElementType(match) == 'T');
-
- ;;
- if (match->data != NULL) {
-  TokenMatch* m = (TokenMatch*)match->data;
-  if (m != NULL && m->extracted && m->groups != NULL) {
-
-   for (int j=0 ; j<m->count ; j++) {
-    pcre_free_substring(m->groups[j]);
-   }
-
-   free((void*)m->groups);
-   m->groups = NULL;
-  }
-
-
- }
-
-
  match->data = NULL;
 }
 static inline void bitmap_set(unsigned char bitmap[32], unsigned char b) {

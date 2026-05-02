@@ -230,7 +230,7 @@ test/
 1. Declare in header file (`src/h/parsing.h`)
 2. Implement in source file (`src/c/parsing.c`)
 3. Export in FFI definition if Python binding needed
-4. Add wrapper in Python (`src/python/libparsing/__init__.py`)
+4. Add wrapper in Python (`src/py/libparsing/__init__.py`)
 
 ### Adding a New Test
 
@@ -262,7 +262,7 @@ result = g.parseString("42")
 ## Version Management
 
 - Version defined in `src/h/parsing.h` as `VERSION`
-- Also updated in `setup.py` and `src/python/libparsing/__init__.py`
+- Also updated in `setup.py` and `src/py/libparsing/__init__.py`
 - Use `make update-python-version` to sync versions
 
 ## Troubleshooting
@@ -274,7 +274,7 @@ result = g.parseString("42")
 
 **Python import fails:**
 - Rebuild extensions: `python3 setup.py build_ext --inplace`
-- Check that `_libparsing.so` exists in `src/python/libparsing/`
+- Check that `_libparsing.so` exists in `src/py/libparsing/`
 
 **Tests fail:**
 - Ensure library is built: `make`

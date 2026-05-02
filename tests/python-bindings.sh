@@ -10,6 +10,6 @@ PROJECT_ROOT="$(dirname "$BASE")"
 
 test-step "Running python-bindings.py"
 cd "$PROJECT_ROOT"
-PYTHONPATH="$PROJECT_ROOT/src/python:$PYTHONPATH" test-cmd python3 "$BASE/python-bindings.py" >/dev/null 2>&1
+PYTHONPATH="$PROJECT_ROOT/src/py:$PYTHONPATH" test-cmd python3 "$BASE/python-bindings.py" >/dev/null 2>&1
 
 test-end

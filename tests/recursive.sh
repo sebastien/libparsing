@@ -10,6 +10,6 @@ PROJECT_ROOT="$(dirname "$BASE")"
 
 test-step "Running recursive.py"
 cd "$PROJECT_ROOT"
-PYTHONPATH="$PROJECT_ROOT/src/python:$PYTHONPATH" test-cmd python3 "$BASE/recursive.py" >/dev/null 2>&1
+PYTHONPATH="$PROJECT_ROOT/src/py:$PYTHONPATH" test-cmd python3 "$BASE/recursive.py" >/dev/null 2>&1
 
 test-end

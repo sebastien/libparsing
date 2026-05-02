@@ -68,13 +68,13 @@ TESTS_PY       =$(wildcard $(TESTS)/*.py)
 BUILD_SOURCES_O =$(SOURCES_C:$(SOURCES)/c/%.c=$(BUILD)/%.o)
 BUILD_TESTS_O   =$(TESTS_C:$(TESTS)/%.c=$(BUILD)/%.o)
 BUILD_O         =$(BUILD_SOURCES_O) $(BUILD_TESTS_O)
-BUILD_PY_SO     =$(SOURCES)/python/lib$(PROJECT)/lib$(PROJECT).so   \
-                  $(SOURCES)/python/lib$(PROJECT)/_lib$(PROJECT).so  \
+BUILD_PY_SO     =$(SOURCES)/py/lib$(PROJECT)/lib$(PROJECT).so   \
+                  $(SOURCES)/py/lib$(PROJECT)/_lib$(PROJECT).so  \
 
 # NOTE: The .ffi file is auto-generated but committed to git as a stable interface.
 # It should NOT be removed by make clean. Only the .c file is a true build artifact.
-SOURCE_PY_FFI   =$(SOURCES)/python/lib$(PROJECT)/_lib$(PROJECT).ffi
-BUILD_PY_C      =$(SOURCES)/python/lib$(PROJECT)/_lib$(PROJECT).c
+SOURCE_PY_FFI   =$(SOURCES)/py/lib$(PROJECT)/_lib$(PROJECT).ffi
+BUILD_PY_C      =$(SOURCES)/py/lib$(PROJECT)/_lib$(PROJECT).c
 BUILD_ALL       =$(BUILD_O) $(BUILD_PY_SO) $(BUILD_PY_C)
 
 # === DIST FILES ==============================================================
@@ -123,7 +123,7 @@ MAKEFILE_DIR    := $(notdir $(patsubst %/,%,$(dir $(MAKEFILE_PATH))))
 
 # From: http://marmelab.com/blog/2016/02/29/auto-documented-makefile.html
 .DEFAULT_GOAL   :=all
-.PHONY          : all info dist release tests test update-python-version check clean help fmt
+.PHONY          : all info dist release tests test update-python-version check clean help fmt install-link
 
 # =============================================================================
 # MAIN RULES
@@ -138,21 +138,13 @@ info: ## Displays information about the project
 dist: $(PRODUCT) $(DIST_FILES) ## Creates source and binary Python distributions
 	$(PYTHON) setup.py check clean sdist bdist
 
-release: $(PRODUCT) update-python-version $(SOURCES)/python/lib$(PROJECT)/_lib$(PROJECT).so
-	@echo "$(CYAN)📦  dist: $(RESET)"
-	$(PYTHON) setup.py check clean
-	git commit -a -m "Release $(VERSION)" ; true
-	git tag $(VERSION) ; true
-	git push --all ; true
-	$(PYTHON) setup.py sdist bdist register upload
-
 test: ## Runs all tests using the harness
 	@tests/harness.sh
 
 ffi: $(SOURCE_PY_FFI) ## Ensures FFI interface is available (auto-generated if missing)
 
 update-python-version: $(SOURCES)/h/parsing.h
-	sed -i 's/VERSION \+= *"[^"]\+"/VERSION            = "$(VERSION)"/' $(SOURCES)/python/$(PYMODULE)/__init__.py 
+	sed -i 's/VERSION \+= *"[^"]\+"/VERSION            = "$(VERSION)"/' $(SOURCES)/py/$(PYMODULE)/__init__.py 
 	sed -i 's/VERSION \+= *"[^"]\+"/VERSION            = "$(VERSION)"/' setup.py
 
 check: $(SOURCES_C) $(SOURCES_H) ## Runs static analysis checks on C code and Python code
@@ -247,6 +239,11 @@ fmt: ## Formats C and Python source code
 	@echo "$(CYAN)✅ Formatting complete$(RESET)"
 	@echo "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(RESET)"
 
+install-link: $(SOURCES)/py/lib$(PROJECT)/lib$(PROJECT).so $(SOURCES)/py/lib$(PROJECT)/_libparsing.so ## Symlinks Python module and native libraries to ~/.local/share/python
+	@mkdir -p "$(HOME)/.local/share/python"
+	@ln -sfn "$(abspath $(SOURCES)/py/lib$(PROJECT))" "$(HOME)/.local/share/python/lib$(PROJECT)"
+	@echo "$(GREEN)🔗 Linked $(SOURCES)/py/lib$(PROJECT) → $(HOME)/.local/share/python/lib$(PROJECT)$(RESET)"
+
 clean: ## Cleans the build files
 	@echo "Cleaning build artifacts..."
 	@# Clean Python cache files
@@ -260,7 +257,7 @@ clean: ## Cleans the build files
 	@# Clean individual build artifacts (Python SO files and generated C)
 	@echo $(BUILD_PY_SO) $(BUILD_PY_C) | xargs -n1 rm -f 2>/dev/null || true
 	@# Clean any generated .so files in Python module directory
-	@rm -f $(SOURCES)/python/lib$(PROJECT)/*.so 2>/dev/null || true
+	@rm -f $(SOURCES)/py/lib$(PROJECT)/*.so 2>/dev/null || true
 	@# Clean root-level Python shared object files and any generated .so files
 	@rm -f _libparsing*.so _libparsing*.abi3.so libparsing*.so 2>/dev/null || true
 	@echo "Clean complete."
@@ -293,20 +290,20 @@ $(DIST)/c-%: $(BUILD)/c-%.o $(SOURCES_O) $(DIST)/lib$(PROJECT).so
 # PYTHON MODULE
 # =============================================================================
 
-$(SOURCES)/python/lib$(PROJECT)/lib$(PROJECT).so: $(DIST)/lib$(PROJECT).so
+$(SOURCES)/py/lib$(PROJECT)/lib$(PROJECT).so: $(DIST)/lib$(PROJECT).so
 	@echo "$(GREEN)📝  $@ [PYTHON SO]$(RESET)"
 	@cp $< $@
 
-$(SOURCES)/python/lib$(PROJECT)/_libparsing.ffi: $(SOURCES)/h/$(PROJECT).h
+$(SOURCES)/py/lib$(PROJECT)/_libparsing.ffi: $(SOURCES)/h/$(PROJECT).h
 	@if [ -s $@ ]; then \
 		echo "$(GREEN)📝  $@ [FFI exists]$(RESET)"; \
 	else \
 		echo "$(GREEN)📝  $@ [FFI]$(RESET)"; \
 		mkdir -p `dirname $@`; \
-		PYTHONPATH=$(SOURCES)/python:bin $(PYTHON) bin/ffigen.py $< > $@ || true; \
+		PYTHONPATH=$(SOURCES)/py:bin $(PYTHON) bin/ffigen.py $< > $@ || true; \
 	fi
 
-$(SOURCES)/python/lib$(PROJECT)/_libparsing.c: $(SOURCES_C) $(SOURCES_H) $(SOURCE_PY_FFI)
+$(SOURCES)/py/lib$(PROJECT)/_libparsing.c: $(SOURCES_C) $(SOURCES_H) $(SOURCE_PY_FFI)
 	@echo "$(GREEN)📝  $@ [C SOURCE]$(RESET)"
 	@echo 'typedef struct gc_Reference { char guard; size_t size; int count; void* previous; void* next; } gc_Reference;' > $@
 	@echo 'void gc_Reference_acquire( gc_Reference* ref );' >> $@
@@ -315,9 +312,9 @@ $(SOURCES)/python/lib$(PROJECT)/_libparsing.c: $(SOURCES_C) $(SOURCES_H) $(SOURC
 	@echo 'gc_Reference* gc_ref( void* ptr );' >> $@
 	$(CC) -E -DNDEBUG -O3 -DWITH_CFFI $(CFLAGS) $(SOURCES_C) | grep -v '^#' >> $@
 
-$(SOURCES)/python/lib$(PROJECT)/_libparsing.so: $(SOURCE_PY_FFI) $(BUILD_PY_C)
+$(SOURCES)/py/lib$(PROJECT)/_libparsing.so: $(SOURCE_PY_FFI) $(BUILD_PY_C)
 	@if [ -n "$(PYTHON)" ] && [ -x "$$(command -v $(PYTHON))" ]; then \
-		$(PYTHON) $(SOURCES)/python/lib$(PROJECT)/_buildext.py $@; \
+		$(PYTHON) $(SOURCES)/py/lib$(PROJECT)/_buildext.py $@; \
 	else \
 		echo "Skipping Python extension build (Python not found)"; \
 		touch $@; \
@@ -350,5 +347,6 @@ clean-%:
 	@echo $($*) | xargs -n1 echo | sort -dr | xargs -n1 rm
 
 -include $(patsubst %,$(DEPDIR)/%.d,$(basename $(SRCS)))
+-include src/mk/rules.mk
 
 # EOF

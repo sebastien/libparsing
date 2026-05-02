@@ -13,6 +13,14 @@ import subprocess
 
 # We make sure `build_libparsing` is within the path
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "bin"))
+	sys.path.insert(
+	0,
+	os.path.join(
+		os.path.dirname(os.path.abspath(__file__)), "src", "py", "libparsing"
+	),
+)
+
+from _buildext import FFI_BUILDER
 
 VERSION = "0.9.3"
 if os.path.exists("src/h/parsing.h"):
@@ -72,7 +80,7 @@ setup(
 		"Programming Language :: Python :: 3.14",
 	],
 	packages=["libparsing"],
-	package_dir={"libparsing": "src/python/libparsing"},
+	package_dir={"libparsing": "src/py/libparsing"},
 	package_data={
 		"libparsing": [
 			"_libparsing.c",
@@ -81,9 +89,9 @@ setup(
 			"_buildext.py",
 		]
 	},
-	# SEE: http://cffi.readthedocs.io/en/latest/cdef.html?highlight=setup.py
-	setup_requires=["cffi>=1.9.1"],
-	cffi_modules=["src/python/libparsing/_buildext.py:FFI_BUILDER"],
+	# Build the CFFI extension as a native binary module when building wheels.
+	ext_modules=[FFI_BUILDER.distutils_extension()],
+	zip_safe=False,
 	install_requires=["cffi>=1.9.1"],
 )
 

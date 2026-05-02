@@ -4,7 +4,7 @@ import os
 import sys
 
 sys.path.insert(
-	0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + "/src/python"
+	0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + "/src/py"
 )
 from libparsing import *  # noqa: F403, F405
 from indent import grammarIndent
