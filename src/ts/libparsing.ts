@@ -78,8 +78,8 @@ export const FLAG_SKIPPING = 0x1;
 /** Data carried by a Token match: the regex capture groups. */
 export interface TokenMatchData {
     groups: string[];
-    input: string;
-    index: number;
+    input?: string;
+    index?: number;
 }
 
 /** A custom recognizer function for a Token, bypassing RegExp.
@@ -308,7 +308,7 @@ export class Match {
     group(index: number = 0): string[] {
         const t = this.getType();
         if (t === TYPE_TOKEN) {
-            return this.data ? [...this.data.groups] : [];
+            return this.data ? this.data.groups : [];
         }
         if (t === TYPE_WORD) {
             const v = this.value;
@@ -862,11 +862,16 @@ export class Word extends ParsingElement {
     readonly type: string = TYPE_WORD;
     readonly word: string;
     private readonly _length: number;
+    private readonly _codes: number[];
 
     constructor(word: string) {
         super();
         this.word = word;
         this._length = word.length;
+        this._codes = new Array(this._length);
+        for (let i = 0; i < this._length; i++) {
+            this._codes[i] = word.charCodeAt(i);
+        }
     }
 
     recognize(context: ParsingContext): Match {
@@ -879,7 +884,7 @@ export class Word extends ParsingElement {
 
         // Fast path: compare characters directly
         for (let i = 0; i < this._length; i++) {
-            if (context.input.charCodeAt(offset + i) !== this.word.charCodeAt(i)) {
+            if (context.input.charCodeAt(offset + i) !== this._codes[i]) {
                 return Match.fail();
             }
         }
@@ -952,7 +957,7 @@ export class Token extends ParsingElement {
             const groups = result.groups
                 ? result.groups
                 : [input.slice(offset, offset + result.length)];
-            m.data = { groups, input, index: offset };
+            m.data = { groups };
 
             // Update line counter
             context.line += _countNewlines(input, offset, offset + result.length);
@@ -975,14 +980,16 @@ export class Token extends ParsingElement {
             const m = Match.success(matched.length, this, offset, context.line);
 
             // Build groups array from regex result
-            const groups: string[] = [];
+            const groups = new Array<string>(result.length);
             for (let i = 0; i < result.length; i++) {
-                groups.push(result[i] !== undefined ? result[i] : "");
+                groups[i] = result[i] !== undefined ? result[i] : "";
             }
-            m.data = { groups, input, index: offset };
+            m.data = { groups };
 
-            // Update line counter
-            context.line += _countNewlines(input, offset, offset + matched.length);
+            // Update line counter only when the match contains a newline
+            if (matched.indexOf("\n") !== -1) {
+                context.line += _countNewlinesInString(matched);
+            }
             context.offset += matched.length;
             return m;
         }
@@ -1221,14 +1228,16 @@ export class Condition extends ParsingElement {
 // =============================================================================
 
 class VariableStack {
-    private _stack: Map<string, unknown>[];
+    private _stack: (Record<string, unknown> | null)[];
+    private _count: number;
 
     constructor() {
-        this._stack = [new Map()];
+        this._stack = [null];
+        this._count = 0;
     }
 
     push(): void {
-        this._stack.push(new Map());
+        this._stack.push(null);
     }
 
     pop(): void {
@@ -1240,21 +1249,29 @@ class VariableStack {
     get(key: string): unknown {
         // Search from top of stack downwards
         for (let i = this._stack.length - 1; i >= 0; i--) {
-            if (this._stack[i].has(key)) {
-                return this._stack[i].get(key);
+            const frame = this._stack[i];
+            if (frame && Object.prototype.hasOwnProperty.call(frame, key)) {
+                return frame[key];
             }
         }
         return undefined;
     }
 
     set(key: string, value: unknown): void {
-        this._stack[this._stack.length - 1].set(key, value);
+        const idx = this._stack.length - 1;
+        let frame = this._stack[idx];
+        if (frame === null) {
+            frame = Object.create(null) as Record<string, unknown>;
+            this._stack[idx] = frame;
+        }
+        if (!Object.prototype.hasOwnProperty.call(frame, key)) {
+            this._count++;
+        }
+        frame[key] = value;
     }
 
     count(): number {
-        let n = 0;
-        for (const frame of this._stack) n += frame.size;
-        return n;
+        return this._count;
     }
 }
 
@@ -1289,19 +1306,19 @@ export class ParsingStats {
 
     setSymbolsCount(count: number): void {
         this.symbolsCount = count;
-        this.successBySymbol = new Array(count).fill(0);
-        this.failureBySymbol = new Array(count).fill(0);
+        this.successBySymbol = [];
+        this.failureBySymbol = [];
     }
 
     totalSuccess(): number {
         let sum = 0;
-        for (let i = 0; i < this.symbolsCount; i++) sum += this.successBySymbol[i];
+        for (let i = 0; i < this.symbolsCount; i++) sum += this.successBySymbol[i] || 0;
         return sum;
     }
 
     totalFailures(): number {
         let sum = 0;
-        for (let i = 0; i < this.symbolsCount; i++) sum += this.failureBySymbol[i];
+        for (let i = 0; i < this.symbolsCount; i++) sum += this.failureBySymbol[i] || 0;
         return sum;
     }
 
@@ -1321,8 +1338,8 @@ export class ParsingStats {
         lines.push("-".repeat(80));
         if (grammar) {
             for (let i = 0; i < this.symbolsCount; i++) {
-                const s = this.successBySymbol[i];
-                const f = this.failureBySymbol[i];
+                const s = this.successBySymbol[i] || 0;
+                const f = this.failureBySymbol[i] || 0;
                 if (s === 0 && f === 0) continue;
                 let name = "";
                 try {
@@ -1360,7 +1377,10 @@ export class ParsingContext {
     depth: number;
     noMemo: boolean;
 
-    private _memoTable: Map<string, MemoEntry>;
+    private _memoTableNum: Map<number, MemoEntry>;
+    private _memoTableStr: Map<string, MemoEntry> | null;
+    private _memoSpan: number;
+    private _memoUseString: boolean;
     private _startTime: number;
 
     constructor(grammar: Grammar, input: string) {
@@ -1376,7 +1396,14 @@ export class ParsingContext {
         this.flags = 0;
         this.depth = 0;
         this.noMemo = grammar.noMemo;
-        this._memoTable = new Map();
+        this._memoTableNum = new Map();
+        this._memoTableStr = null;
+        this._memoSpan = grammar.symbolsCount() + 1;
+        const maxKey = (input.length + 1) * this._memoSpan + this._memoSpan;
+        this._memoUseString = maxKey >= Number.MAX_SAFE_INTEGER;
+        if (this._memoUseString) {
+            this._memoTableStr = new Map();
+        }
         this._startTime = _now();
     }
 
@@ -1426,8 +1453,14 @@ export class ParsingContext {
      *  A cache hit for a failure returns `Match.FAILURE`. */
     memoGet(elementId: number, offset: number): Match | null {
         if (this.noMemo) return null;
-        const key = `${elementId}:${offset}`;
-        const entry = this._memoTable.get(key);
+        let entry: MemoEntry | undefined;
+        if (this._memoUseString) {
+            const key = `${elementId}:${offset}`;
+            entry = this._memoTableStr!.get(key);
+        } else {
+            const key = offset * this._memoSpan + elementId;
+            entry = this._memoTableNum.get(key);
+        }
         if (!entry) return null;
         if (entry.match === null) {
             // Cached failure
@@ -1448,8 +1481,13 @@ export class ParsingContext {
         endLine: number
     ): void {
         if (this.noMemo) return;
-        const key = `${elementId}:${offset}`;
-        this._memoTable.set(key, { match, endOffset, endLine });
+        if (this._memoUseString) {
+            const key = `${elementId}:${offset}`;
+            this._memoTableStr!.set(key, { match, endOffset, endLine });
+        } else {
+            const key = offset * this._memoSpan + elementId;
+            this._memoTableNum.set(key, { match, endOffset, endLine });
+        }
     }
 
     // -- Skip ----------------------------------------------------------------
@@ -1510,9 +1548,11 @@ export class ParsingContext {
         }
         if (element.id >= 0 && element.id < this.stats.symbolsCount) {
             if (match.isSuccess) {
-                this.stats.successBySymbol[element.id]++;
+                this.stats.successBySymbol[element.id] =
+                    (this.stats.successBySymbol[element.id] || 0) + 1;
             } else {
-                this.stats.failureBySymbol[element.id]++;
+                this.stats.failureBySymbol[element.id] =
+                    (this.stats.failureBySymbol[element.id] || 0) + 1;
             }
         }
     }
@@ -1679,7 +1719,7 @@ export class Grammar {
         this._ensurePrepared();
 
         const context = new ParsingContext(this, text);
-        context.stats.setSymbolsCount(this._elementCount);
+        context.stats.symbolsCount = this._elementCount;
         context.stats.bytesRead = text.length;
 
         if (!this.axiom) {
@@ -2264,20 +2304,42 @@ export class Processor {
             slots.push({ name, index: idx });
         }
 
+        const slotOrder = slots
+            .map((slot, position) => ({
+                position,
+                index: slot.index,
+            }))
+            .sort((a, b) => a.index - b.index);
+
         return (match: Match, processor: Processor) => {
             const args: unknown[] = [match];
-            for (const slot of slots) {
-                const child = match.get(slot.index) as Match | null;
+
+            const resolved: (Match | null)[] = new Array(slots.length).fill(null);
+            let oi = 0;
+            let childIndex = 0;
+            let child = match.children;
+            while (child && oi < slotOrder.length) {
+                const wanted = slotOrder[oi];
+                if (childIndex === wanted.index) {
+                    resolved[wanted.position] = child;
+                    oi++;
+                }
+                child = child.next;
+                childIndex++;
+            }
+
+            for (let i = 0; i < slots.length; i++) {
+                const slotChild = resolved[i];
                 if (
-                    !child ||
-                    (child.length === 0 &&
-                     child.element &&
-                     child.element.type === TYPE_REFERENCE &&
-                     !child.hasChildren)
+                    !slotChild ||
+                    (slotChild.length === 0 &&
+                     slotChild.element &&
+                     slotChild.element.type === TYPE_REFERENCE &&
+                     slotChild.children === null)
                 ) {
                     args.push(UNMATCHED);
                 } else {
-                    args.push(child);
+                    args.push(slotChild);
                 }
             }
             return method(...args);
@@ -2317,8 +2379,10 @@ export class Processor {
     /** Eager processing: bottom-up, processes all descendants first. */
     private _processEager(match: Match): unknown {
         // Process children first
-        for (const child of match) {
+        let child = match.children;
+        while (child) {
             this._processEager(child);
+            child = child.next;
         }
         this.depth++;
         const result = this._dispatchMatch(match);
@@ -2330,11 +2394,13 @@ export class Processor {
 
     /** Dispatches a match to its handler (or default processor). */
     private _dispatchMatch(match: Match): unknown {
+        const element = match.element;
+
         // References are transparent wrappers — unwrap them before dispatch.
         // This mirrors the Python _fastProcess which never dispatches handlers
         // for Reference nodes, only for the wrapped element.
-        if (match.element && match.element.type === TYPE_REFERENCE) {
-            const ref = match.element as Reference;
+        if (element && element.type === TYPE_REFERENCE) {
+            const ref = element as Reference;
             if (!match.hasChildren) {
                 return UNMATCHED;
             }
@@ -2353,14 +2419,18 @@ export class Processor {
             }
         }
 
-        const eid = match.getElementID();
+        const eid = element && element.type === TYPE_REFERENCE
+            ? (element as Reference).element.id
+            : element.id;
         const handler = this.handlerByID.get(eid);
         if (handler) {
             return handler(match, this);
         }
 
         // Fall through to default type handlers
-        const t = match.getType();
+        const t = element && element.type === TYPE_REFERENCE
+            ? (element as Reference).element.type
+            : element.type;
         switch (t) {
             case TYPE_WORD:
                 return this.processWord(match);
@@ -2387,8 +2457,10 @@ export class Processor {
             return match.value;
         }
         const values: unknown[] = [];
-        for (const child of match) {
+        let child = match.children;
+        while (child) {
             values.push(this.process(child));
+            child = child.next;
         }
         return values.length === 1 ? values[0] : values;
     }
@@ -2525,6 +2597,15 @@ function _countNewlines(input: string, start: number, end: number): number {
     let count = 0;
     for (let i = start; i < end; i++) {
         if (input.charCodeAt(i) === 10) count++;
+    }
+    return count;
+}
+
+/** Counts newline characters in a string. */
+function _countNewlinesInString(s: string): number {
+    let count = 0;
+    for (let i = 0; i < s.length; i++) {
+        if (s.charCodeAt(i) === 10) count++;
     }
     return count;
 }

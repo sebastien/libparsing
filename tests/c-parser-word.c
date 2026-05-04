@@ -11,7 +11,7 @@
  *
  * Run this with `valgrind --leak-check=full`
 */
-Grammar* createGrammar(char* type) {
+Grammar* createGrammar(const char* type) {
 	Grammar* g = Grammar_new();
 	Grammar_setVerbose(g);
 
@@ -76,7 +76,7 @@ Grammar* createGrammar(char* type) {
 	return g;
 }
 
-const char* getText( char* type ) {
+const char* getText(const char* type) {
 	if (
 		strcmp(type, "word")  == 0 ||
 		strcmp(type, "token") == 0 ||
@@ -118,4 +118,3 @@ int main (int argc, char** argv) {
 	}
 	TEST_SUCCEED;
 }
-

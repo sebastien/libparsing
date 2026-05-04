@@ -326,7 +326,8 @@ bool String_move ( Iterator* this, int n ) {
 		size_t left = this->available - this->offset;
 		// `c` is the number of elements we're actually agoing to move, which
 		// is either `n` or the number of elements left.
-		size_t c    = n <= left ? n : left;
+		size_t requested = (size_t)n;
+		size_t c    = requested <= left ? requested : left;
 		// This iterates throught the characters and counts line separators.
 		while (c > 0) {
 			this->current++;
@@ -349,7 +350,7 @@ bool String_move ( Iterator* this, int n ) {
 	} else {
 		// --- BACKTRACKING ---------------------------------------------------
 		// We cannot backtrack further than the current offset.
-		n = MAX(n, 0 - this->offset);
+		n = MAX(n, 0 - (int)this->offset);
 		// FIXME: This is a little bit brittle, we should rather use a macro
 		// in the iterator itself.
 		this->current    = (((char*)this->current) + n);
@@ -447,7 +448,8 @@ bool FileInput_move   ( Iterator* this, int n ) {
 		// in the file input.
 		size_t left = FileInput_preload(this);
 		if (left > 0) {
-			int c = n > left ? left : n;
+			size_t requested = (size_t)n;
+			size_t c = requested > left ? left : requested;
 			// We have enough space left in the buffer to read at least one character.
 			// We increase the head, copy
 			while (c > 0) {
@@ -457,7 +459,7 @@ bool FileInput_move   ( Iterator* this, int n ) {
 				c--;
 			}
 			DEBUG("[>] %d+%d == %zu (%zu bytes left)", ((int)this->offset) - n, n, this->offset, left);
-			if (n>left) {
+			if ((size_t)n > left) {
 				this->status = STATUS_INPUT_ENDED;
 				return FALSE;
 			} else {
@@ -884,22 +886,11 @@ void Match_printJSON(Match* this) {
 #define WRITE_CDATA(s)         WRITE("<![CDATA[") ; WRITE(s) ; WRITE("]]>")
 
 void Match__childrenWriteXML(Match* match, int fd, int flags) {
-	int count = 0 ;
 	Match* child = match->children;
 	while (child != NULL) {
 		ParsingElement* element = ParsingElement_Ensure(child->element);
 		if (element->type != TYPE_PROCEDURE && element->type != TYPE_CONDITION) {
-			count += 1;
-		}
-		child = child->next;
-	}
-	child = match->children;
-	int i = 0;
-	while (child != NULL) {
-		ParsingElement* element = ParsingElement_Ensure(child->element);
-		if (element->type != TYPE_PROCEDURE && element->type != TYPE_CONDITION) {
 			Match__writeXML(child, fd, flags);
-			i += 1;
 		}
 		child = child->next;
 	}
@@ -1408,8 +1399,8 @@ Match* Reference_recognize(Reference* this, ParsingContext* context) {
 	Match* result = FAILURE;
 	Match* tail   = NULL;
 	int    count  = 0;
-	int    offset = context->iterator->offset;
-	int    match_end_offset = offset;
+	size_t offset = context->iterator->offset;
+	size_t match_end_offset = offset;
 	size_t match_end_lines  = context->iterator->lines;
 
 	// If the wrapped element is a procedure, then the cardinality can only be one or optional, as a procedure does
@@ -1429,9 +1420,9 @@ Match* Reference_recognize(Reference* this, ParsingContext* context) {
 		}
 
 		// We ask the element to recognize the current iterator's position
-		int iteration_offset = context->iterator->offset;
+		size_t iteration_offset = context->iterator->offset;
 		Match* match         = this->element->recognize(this->element, context);
-		int parsed           = context->iterator->offset - iteration_offset;
+		size_t parsed        = context->iterator->offset - iteration_offset;
 
 		// Is the match successful ?
 		if (Match_isSuccess(match)) {
@@ -1527,7 +1518,7 @@ Match* Reference_recognize(Reference* this, ParsingContext* context) {
 		// as element. The data will be NULL, but the `child` (and actually,
 		// the children) will match the cardinality and will contain parsing
 		// element matches.
-		int    length   = context->iterator->offset - offset;
+		int    length   = (int)(context->iterator->offset - offset);
 		Match* m        = Match_SuccessFromReference(length, this, context);
 		// We make sure that if we had a success, that we add
 		m->children     = result == FAILURE ? NULL : result;
@@ -1737,11 +1728,9 @@ int Token_recognizeJSONNumber(const char* input, int available, int* ovector, in
 	}
 
 	int has_digits = 0;
-	int has_dot = 0;
 
 	if (i < available && input[i] == '.') {
 		// .digits form
-		has_dot = 1;
 		i++;
 		if (i >= available || input[i] < '0' || input[i] > '9') return 0;
 		while (i < available && input[i] >= '0' && input[i] <= '9') { i++; has_digits = 1; }
@@ -1749,7 +1738,6 @@ int Token_recognizeJSONNumber(const char* input, int available, int* ovector, in
 		// digits[.digits] form
 		while (i < available && input[i] >= '0' && input[i] <= '9') { i++; has_digits = 1; }
 		if (i < available && input[i] == '.') {
-			has_dot = 1;
 			i++;
 			while (i < available && input[i] >= '0' && input[i] <= '9') { i++; }
 		}

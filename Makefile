@@ -14,18 +14,18 @@
 PROJECT        :=parsing
 PYMODULE       :=lib$(PROJECT)
 FEATURES       :=gc
+USE_PCRE       ?=1
 ALL_FEATURES   :=pcre memcheck debug trace fortify gc assert
 
 # === FEATURES ================================================================
 
 LIBS=
 ifneq (,$(findstring pcre,$(FEATURES)))
-	LIBS +=libpcre
+	USE_PCRE:=1
 endif
-ifneq (,$(findstring python2,$(FEATURES)))
-	LIBS +=python2
-	CFLAGS+=-DWITH_PYTHON
-	PYTHON=python2
+ifeq ($(USE_PCRE),1)
+	LIBS +=libpcre
+	CFLAGS+=-DWITH_PCRE
 endif
 ifneq (,$(findstring python3,$(FEATURES)))
 	LIBS +=python3
@@ -81,7 +81,7 @@ BUILD_ALL       =$(BUILD_O) $(BUILD_PY_SO) $(BUILD_PY_C)
 
 DIST_TESTS    = $(TESTS_C:$(TESTS)/%.c=$(DIST)/%)
 DIST_BIN      = $(DIST_TESTS)
-DIST_SO       = $(DIST)/lib$(PROJECT).so $(DIST)/lib$(PROJECT).so.$(VERSION) 
+DIST_SO       = $(DIST)/lib$(PROJECT).so $(DIST)/lib$(PROJECT).so.$(VERSION)
 DIST_ALL      = $(DIST_BIN) $(DIST_SO)
 PRODUCTS      = $(DIST_ALL)
 
@@ -89,9 +89,13 @@ PRODUCTS      = $(DIST_ALL)
 
 CC       ?= gcc
 CFEATURES:=$(shell echo $(FEATURES:%=-DWITH_%) | tr a-z A-Z)
+ifneq ($(strip $(LIBS)),)
 CFLAGS   +=$(shell pkg-config --cflags $(LIBS))
+endif
 CFLAGS   +=-I$(SOURCES)/h -Wall -fPIC $(CFEATURES) -g #-DMEMCHECK_ENABLED -pg # -DDEBUG_ENABLED -DTRACE_ENABLED
+ifneq ($(strip $(LIBS)),)
 LDFLAGS  +=$(shell pkg-config --cflags --libs $(LIBS))
+endif
 
 # === DEPENDENCY MANAGEMENT ===================================================
 # SEE: http://make.mad-scientist.net/papers/advanced-auto-dependency-generation/
@@ -130,7 +134,7 @@ MAKEFILE_DIR    := $(notdir $(patsubst %/,%,$(dir $(MAKEFILE_PATH))))
 # =============================================================================
 
 all: $(PRODUCTS) $(BUILD_ALL) ## Builds all the products
-	
+
 
 info: ## Displays information about the project
 	@echo libparsing: $(VERSION)
@@ -144,7 +148,7 @@ test: ## Runs all tests using the harness
 ffi: $(SOURCE_PY_FFI) ## Ensures FFI interface is available (auto-generated if missing)
 
 update-python-version: $(SOURCES)/h/parsing.h
-	sed -i 's/VERSION \+= *"[^"]\+"/VERSION            = "$(VERSION)"/' $(SOURCES)/py/$(PYMODULE)/__init__.py 
+	sed -i 's/VERSION \+= *"[^"]\+"/VERSION            = "$(VERSION)"/' $(SOURCES)/py/$(PYMODULE)/__init__.py
 	sed -i 's/VERSION \+= *"[^"]\+"/VERSION            = "$(VERSION)"/' setup.py
 
 check: $(SOURCES_C) $(SOURCES_H) ## Runs static analysis checks on C code and Python code
@@ -283,7 +287,7 @@ $(DIST)/lib$(PROJECT).so.$(VERSION): $(DIST)/lib$(PROJECT).so
 $(DIST)/c-%: $(BUILD)/c-%.o $(SOURCES_O) $(DIST)/lib$(PROJECT).so
 	@echo "$(GREEN)📝  $@ [EXE]$(RESET)"
 	@mkdir -p `dirname $@`
-	$(CC) -L$(DIST) -l$(PROJECT) $(LDFLAGS) $(OUTPUT_OPTION) $? 
+	$(CC) -L$(DIST) -l$(PROJECT) $(LDFLAGS) $(OUTPUT_OPTION) $?
 	chmod +x $@
 
 # =============================================================================

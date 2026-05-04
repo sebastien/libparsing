@@ -136,5 +136,7 @@ standard.
 
 # Documentation
 
-For the complete C API documentation, see [docs/libparsing.md](docs/libparsing.md).
+For the complete C API documentation, see [docs/c.md](docs/c.md).
+For the Python API documentation, see [docs/python.md](docs/python.md).
+For the TypeScript API documentation, see [docs/typescript.md](docs/typescript.md).
 
