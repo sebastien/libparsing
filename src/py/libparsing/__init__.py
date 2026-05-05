@@ -354,6 +354,11 @@ class _FastMatch:
                 child = child.next
                 i += 1
             raise IndexError("Index {0} out of range".format(index))
+        if isinstance(index, str):
+            i = self.indexForKey(index)
+            if i >= 0:
+                return self[i]
+            raise KeyError("Cannot find item #{0} in {1}".format(index, self))
         raise TypeError(
             "_FastMatch indices must be integers, not {0}".format(type(index).__name__)
         )
@@ -372,6 +377,68 @@ class _FastMatch:
     @property
     def element(self):
         return self._cobject.element
+
+    @property
+    def offset(self):
+        return self._cobject.offset
+
+    @property
+    def line(self):
+        return self._cobject.line
+
+    @property
+    def length(self):
+        return self._cobject.length
+
+    @property
+    def type(self):
+        return lib.Match_getType(self._cobject)
+
+    @property
+    def id(self):
+        return lib.Match_getElementID(self._cobject)
+
+    @property
+    def status(self):
+        return self._cobject.status
+
+    @property
+    def value(self):
+        t = self.type
+        if t == TYPE_REFERENCE:
+            if self.hasChildren():
+                return self[0].value
+            return None
+        elif t == TYPE_WORD:
+            v = lib.WordMatch_group(self._cobject)
+            return ensure_unicode(ffi.string(v)) if v != ffi.NULL else None
+        elif t == TYPE_TOKEN:
+            n = lib.TokenMatch_count(self._cobject)
+            if n == 0:
+                return None
+            g0 = lib.TokenMatch_group(self._cobject, 0)
+            return ensure_unicode(ffi.string(g0)) if g0 else None
+        return None
+
+    def slots(self):
+        return [child for child in self if child.name]
+
+    def indexForKey(self, name):
+        for i, child in enumerate(self):
+            if child.name == name:
+                return i
+        return -1
+
+    def hasChildren(self):
+        return lib.Match_hasChildren(self._cobject)
+
+    def countChildren(self):
+        count = 0
+        child = self._cobject.children
+        while child != ffi.NULL:
+            count += 1
+            child = child.next
+        return count
 
 
 # -----------------------------------------------------------------------------
@@ -1389,6 +1456,14 @@ class Symbols:
 class ParsingContext(CObject):
     __slots__ = ()
     _TYPE = ffi.typeof("ParsingContext*")
+
+    @classmethod
+    def Wrap(cls, cobject):
+        if cobject == ffi.NULL:
+            return None
+        obj = cls.__new__(cls)
+        obj._cobject = ffi.cast(cls._TYPE, cobject)
+        return obj
 
     def __init__(self, text=None, path=None):
         self._cobject = lib.ParsingContext_new(ffi.NULL, ffi.NULL)
